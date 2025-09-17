@@ -18,21 +18,22 @@ export default async function handler(req: NextRequest) {
     const context = loadContext();
     const systemPrompt = createSystemPrompt(context);
 
-    // Using OpenAI API (you can switch to Groq, Together AI, or Hugging Face)
-    const apiKey = process.env.OPENAI_API_KEY;
+    // Using Groq API for fast inference
+    const apiKey = process.env.GROQ_API_KEY;
+    const model = process.env.GROQ_MODEL || 'llama-3.1-70b-versatile';
     
     if (!apiKey) {
-      return new Response('API key not configured', { status: 500 });
+      return new Response('Groq API key not configured', { status: 500 });
     }
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-3.5-turbo',
+        model: model,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: message }

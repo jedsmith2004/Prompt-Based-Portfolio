@@ -4,7 +4,7 @@ A modern, AI-powered portfolio website built with Next.js, featuring real-time c
 
 ## ✨ Features
 
-- **AI-Powered Chat Widget**: Interactive chat experience powered by OpenAI GPT
+- **AI-Powered Chat Widget**: Interactive chat experience powered by Groq's lightning-fast LLaMA models
 - **Smooth Animations**: Beautiful GSAP animations and transitions
 - **Responsive Design**: Optimized for all devices with Tailwind CSS
 - **Modern UI Components**: Built with Radix UI primitives
@@ -22,14 +22,14 @@ A modern, AI-powered portfolio website built with Next.js, featuring real-time c
 - **Animations**: GSAP (GreenSock)
 - **UI Components**: Radix UI
 - **Language**: TypeScript
-- **AI Integration**: OpenAI GPT API
+- **AI Integration**: Groq LLaMA Models
 - **Icons**: Lucide React
 
 ## 📋 Prerequisites
 
 - Node.js 18+ 
 - npm or yarn
-- OpenAI API key (for chat functionality)
+- Groq API key (free tier available at groq.com)
 
 ## 🔧 Installation
 
@@ -48,7 +48,8 @@ A modern, AI-powered portfolio website built with Next.js, featuring real-time c
    
    Create a `.env.local` file in the root directory:
    ```env
-   OPENAI_API_KEY=your_openai_api_key_here
+   GROQ_API_KEY=your_groq_api_key_here
+   GROQ_MODEL=llama-3.1-70b-versatile
    ```
 
 4. **Run the development server**
@@ -117,7 +118,7 @@ Customize the AI chat behavior in:
 ### Vercel (Recommended)
 1. Push your code to GitHub
 2. Connect your repository to [Vercel](https://vercel.com)
-3. Add your `OPENAI_API_KEY` environment variable
+3. Add your `GROQ_API_KEY` environment variable
 4. Deploy!
 
 ### Other Platforms
@@ -131,7 +132,8 @@ The project can be deployed to any platform that supports Next.js:
 
 | Variable | Description | Required |
 |----------|-------------|----------|
-| `OPENAI_API_KEY` | OpenAI API key for chat functionality | Yes |
+| `GROQ_API_KEY` | Groq API key for chat functionality | Yes |
+| `GROQ_MODEL` | Model to use (default: llama-3.1-70b-versatile) | No |
 
 ## 🤝 Contributing
 
