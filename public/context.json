@@ -4,8 +4,8 @@
     "title": "AI + Graphics Enthusiast",
     "tagline": "Building Interactive Worlds",
     "description": "I'm a full-stack developer passionate about creating immersive digital experiences. With expertise in AI integration, modern web technologies, and creative design, I build applications that bridge the gap between functionality and artistry.",
-    "location": "San Francisco, CA",
-    "email": "jack@example.com",
+    "location": "Sheffield, UK and Hemel Hempstead, UK",
+    "email": "jedsmith2004@gmail.com",
     "github": "https://github.com/jacksmith",
     "linkedin": "https://linkedin.com/in/jacksmith"
   },
@@ -29,31 +29,31 @@
   ],
   "projects": [
     {
-      "id": "ai-chat-app",
-      "title": "AI-Powered Chat Platform",
-      "description": "Real-time chat application with AI assistant integration, supporting voice messages and document analysis.",
-      "tech": ["Next.js", "OpenAI API", "Socket.io", "PostgreSQL", "Redis"],
-      "github": "https://github.com/jacksmith/ai-chat",
-      "demo": "https://ai-chat-demo.vercel.app",
-      "image": "https://images.pexels.com/photos/8386440/pexels-photo-8386440.jpeg"
+      "id": "offline-ai-app",
+      "title": "Mobile Based Offline AI App",
+      "description": "A mobile based app that runs distilled models on the phone to access AI without internet. It also has personalities, offline maps and survival guides.",
+      "tech": ["Flask", "LLama.cpp", "SQLite", "GGUF", "Swift"],
+      "github": "https://github.com/jedsmith2004/OfflineAI",
+      "demo": "",
+      "image": "/Offline-AI-App.png"
     },
     {
-      "id": "3d-portfolio",
-      "title": "Interactive 3D Portfolio",
-      "description": "Immersive portfolio experience built with Three.js, featuring animated 3D models and particle systems.",
-      "tech": ["Three.js", "React", "GSAP", "WebGL", "Blender"],
-      "github": "https://github.com/jacksmith/3d-portfolio",
-      "demo": "https://3d-portfolio-demo.vercel.app",
-      "image": "https://images.pexels.com/photos/1181677/pexels-photo-1181677.jpeg"
+      "id": "language-learning-app",
+      "title": "Language Learning App",
+      "description": "A Ruby on Rails language learning app made for a real client as a university project. Through requirements and regular meetings we developed an app that met the desired standards.",
+      "tech": ["Ruby on Rails", "PostgreSQL", "ActiveStorage", "HAML", "JavaScript", "Bootstrap", "ShakerPacker", "Rake", "GSAP", "WSL", "Gitlab"],
+      "github": "https://github.com/jedsmith2004/Language-Learning-App",
+      "demo": "",
+      "image": "/language-learning-app.png"
     },
     {
-      "id": "data-viz-dashboard",
-      "title": "Real-time Analytics Dashboard", 
-      "description": "Dynamic dashboard for visualizing complex datasets with interactive charts and real-time updates.",
-      "tech": ["React", "D3.js", "Node.js", "WebSocket", "MongoDB"],
-      "github": "https://github.com/jacksmith/analytics-dashboard",
-      "demo": "https://analytics-demo.vercel.app",
-      "image": "https://images.pexels.com/photos/590020/pexels-photo-590020.jpg"
+      "id": "old-personal-portfolio",
+      "title": "Personal Portfolio",
+      "description": "A Next.js based old personal portfolio website, utilising various technologies such as a CMS, Three.js and Shaders.",
+      "tech": ["Next.js", "React", "Typescript", "Prismic CMS", "Tailwind CSS", "PostCSS", "Slice Machine", "Cloudflare", "Shaders"],
+      "github": "https://github.com/jedsmith2004/portfolio",
+      "demo": "https://jacksmith.me",
+      "image": "/old-portfolio.png"
     }
   ],
   "experience": [

@@ -92,6 +92,54 @@ export class AnimationManager {
     });
   }
 
+  // New subtle lift for All Projects page cards
+  static animateLiftCards(selector: string = '.project-card') {
+    if (typeof window === 'undefined') return;
+    document.querySelectorAll<HTMLElement>(selector).forEach(card => {
+      if (card.dataset.liftInit) return; // prevent duplicate listeners
+      card.dataset.liftInit = 'true';
+      const tl = gsap.timeline({ paused: true });
+      tl.to(card, {
+        y: -8,
+        scale: 1.02,
+        boxShadow: '0 12px 28px -12px rgba(0,0,0,0.6), 0 8px 16px -8px rgba(59,130,246,0.25)',
+        borderColor: 'rgba(59,130,246,0.5)',
+        duration: 0.35,
+        ease: 'power3.out'
+      });
+      card.addEventListener('mouseenter', () => tl.play());
+      card.addEventListener('mouseleave', () => tl.reverse());
+      card.addEventListener('focusin', () => tl.play());
+      card.addEventListener('focusout', () => tl.reverse());
+    });
+  }
+
+  // New: one-time reveal that won't reverse (fix flicker for project cards)
+  static initPersistentReveals() {
+    if (typeof window === 'undefined') return;
+    // Prevent double init
+    if ((window as any).__persistentRevealsInit) return;
+    (window as any).__persistentRevealsInit = true;
+
+    const elements = document.querySelectorAll<HTMLElement>('.reveal-once');
+    elements.forEach(el => {
+      gsap.set(el, { opacity: 0, y: 40, willChange: 'opacity, transform' });
+    });
+
+    const observer = new IntersectionObserver((entries, obs) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const el = entry.target as HTMLElement;
+          const delay = parseFloat(el.dataset.revealDelay || '0');
+          gsap.to(el, { opacity: 1, y: 0, duration: 0.8, delay, ease: 'power3.out', clearProps: 'will-change' });
+          obs.unobserve(el);
+        }
+      });
+    }, { threshold: 0.15, rootMargin: '0px 0px -5% 0px' });
+
+    elements.forEach(el => observer.observe(el));
+  }
+
   static animateChatMessage(element: HTMLElement, isUser: boolean = false) {
     gsap.fromTo(element,
       { 

@@ -18,7 +18,7 @@ export default function About() {
               <div className="w-80 h-80 mx-auto relative">
                 <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-full blur-xl" />
                 <Image
-                  src="/jack-avitar.jpg"
+                  src="/jack-avatar.jpg"
                   alt="Jack Smith"
                   width={320}
                   height={320}

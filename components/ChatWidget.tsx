@@ -21,14 +21,19 @@ export default function ChatWidget({ onActivate, isActive }: ChatWidgetProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const scrollToBottomOfChat = () => {
+    // Scroll within the chat container, not the page
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    }
   };
 
   useEffect(() => {
-    scrollToBottom();
+    // Only scroll within chat when messages change
+    scrollToBottomOfChat();
   }, [messages]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -58,7 +63,13 @@ export default function ChatWidget({ onActivate, isActive }: ChatWidgetProps) {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to get response');
+        const errorText = await response.text();
+        console.error('API Response Error:', {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorText
+        });
+        throw new Error(`API Error: ${response.status} - ${errorText}`);
       }
 
       const reader = response.body?.getReader();
@@ -95,6 +106,8 @@ export default function ChatWidget({ onActivate, isActive }: ChatWidgetProps) {
                       ? { ...msg, text: msg.text + data.content }
                       : msg
                   ));
+                  // Scroll as content is being streamed
+                  setTimeout(scrollToBottomOfChat, 10);
                 }
               } catch (e) {
                 // Skip invalid JSON
@@ -144,7 +157,11 @@ export default function ChatWidget({ onActivate, isActive }: ChatWidgetProps) {
       ) : (
         <div className="bg-black/40 backdrop-blur-md border border-white/20 rounded-3xl p-6 max-h-96 overflow-hidden">
           <div className="flex flex-col h-full">
-            <div className="flex-1 overflow-y-auto space-y-4 mb-4 max-h-64">
+            <div 
+              ref={messagesContainerRef}
+              className="flex-1 overflow-y-auto space-y-4 mb-4 max-h-64 scroll-smooth custom-scrollbar"
+              style={{ scrollBehavior: 'smooth' }}
+            >
               {messages.map((message) => (
                 <div
                   key={message.id}
@@ -157,7 +174,13 @@ export default function ChatWidget({ onActivate, isActive }: ChatWidgetProps) {
                         : 'bg-white/10 text-white rounded-bl-md border border-white/20'
                     }`}
                   >
-                    <p className="text-sm leading-relaxed">{message.text}</p>
+                    <div className="text-sm leading-relaxed">
+                      {message.text.split('\n').map((paragraph, index) => (
+                        <p key={index} className={index > 0 ? 'mt-2' : ''}>
+                          {paragraph}
+                        </p>
+                      ))}
+                    </div>
                   </div>
                 </div>
               ))}

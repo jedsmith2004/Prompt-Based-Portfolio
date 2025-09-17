@@ -3,46 +3,7 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { AnimationManager } from '../lib/animations';
-
-interface Project {
-  id: string;
-  title: string;
-  description: string;
-  tech: string[];
-  github: string;
-  demo: string;
-  image: string;
-}
-
-const projects: Project[] = [
-  {
-    id: 'ai-chat-app',
-    title: 'AI-Powered Chat Platform',
-    description: 'Real-time chat application with AI assistant integration, supporting voice messages and document analysis.',
-    tech: ['Next.js', 'OpenAI API', 'Socket.io', 'PostgreSQL', 'Redis'],
-    github: 'https://github.com/alexjohnson/ai-chat',
-    demo: 'https://ai-chat-demo.vercel.app',
-    image: 'https://images.pexels.com/photos/8386440/pexels-photo-8386440.jpeg'
-  },
-  {
-    id: '3d-portfolio',
-    title: 'Interactive 3D Portfolio',
-    description: 'Immersive portfolio experience built with Three.js, featuring animated 3D models and particle systems.',
-    tech: ['Three.js', 'React', 'GSAP', 'WebGL', 'Blender'],
-    github: 'https://github.com/alexjohnson/3d-portfolio',
-    demo: 'https://3d-portfolio-demo.vercel.app',
-    image: 'https://images.pexels.com/photos/1181677/pexels-photo-1181677.jpeg'
-  },
-  {
-    id: 'data-viz-dashboard',
-    title: 'Real-time Analytics Dashboard',
-    description: 'Dynamic dashboard for visualizing complex datasets with interactive charts and real-time updates.',
-    tech: ['React', 'D3.js', 'Node.js', 'WebSocket', 'MongoDB'],
-    github: 'https://github.com/alexjohnson/analytics-dashboard',
-    demo: 'https://analytics-demo.vercel.app',
-    image: 'https://images.pexels.com/photos/590020/pexels-photo-590020.jpg'
-  }
-];
+import { projects, Project } from '../lib/projects-data';
 
 export default function Projects() {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
@@ -63,10 +24,27 @@ export default function Projects() {
             A selection of projects that showcase my passion for creating immersive, 
             AI-powered experiences and pushing the boundaries of web development.
           </p>
+          <div className="mt-8">
+            <a
+              href="/projects"
+              className="inline-flex items-center gap-3 group px-8 py-3 rounded-full bg-white/5 border border-white/10 text-gray-300 font-medium tracking-wide relative overflow-hidden transition-all duration-500 hover:border-blue-500/60 hover:text-white hover:shadow-[0_0_0_1px_rgba(59,130,246,0.4),0_0_30px_-5px_rgba(59,130,246,0.5)]"
+            >
+              <span className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 bg-gradient-to-r from-blue-600/20 via-blue-500/10 to-transparent" />
+              <span className="relative">All Projects</span>
+              <svg
+                className="w-5 h-5 relative transform transition-all duration-500 text-gray-400 group-hover:text-blue-300 group-hover:translate-x-1"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8l4 4m0 0l-4 4m4-4H3" />
+              </svg>
+            </a>
+          </div>
         </div>
 
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 stagger-animation">
-          {projects.map((project) => (
+          {projects.slice(0,3).map((project) => (
             <div
               key={project.id}
               className="project-card stagger-item group cursor-pointer bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl overflow-hidden hover:border-blue-400/50 transition-all duration-300"
@@ -120,17 +98,19 @@ export default function Projects() {
                       <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
                     </svg>
                   </a>
-                  <a
-                    href={project.demo}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-gray-400 hover:text-blue-400 transition-colors"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                    </svg>
-                  </a>
+                  {project.id !== 'offline-ai-app' && project.id !== 'language-learning-app' && (
+                    <a
+                      href={project.demo}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-gray-400 hover:text-blue-400 transition-colors"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                    </a>
+                  )}
                 </div>
               </div>
             </div>
@@ -203,17 +183,19 @@ export default function Projects() {
                     </svg>
                     <span>View Code</span>
                   </a>
-                  <a
-                    href={selectedProject.demo}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center space-x-2 px-6 py-3 bg-blue-500 hover:bg-blue-600 rounded-xl text-white transition-all duration-200"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                    </svg>
-                    <span>Live Demo</span>
-                  </a>
+                  {selectedProject.id !== 'offline-ai-app' && (
+                    <a
+                      href={selectedProject.demo}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center space-x-2 px-6 py-3 bg-blue-500 hover:bg-blue-600 rounded-xl text-white transition-all duration-200"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                      <span>Live Demo</span>
+                    </a>
+                  )}
                 </div>
               </div>
             </div>

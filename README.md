@@ -83,7 +83,7 @@ A modern, AI-powered portfolio website built with Next.js, featuring real-time c
 │   └── ask.ts            # Chat API endpoint
 ├── public/               # Static assets
 │   ├── context.json      # Portfolio data
-│   └── jack-avitar.jpg   # Profile image
+│   └── jack-avatar.jpg   # Profile image
 └── hooks/                # Custom React hooks
 ```
 
