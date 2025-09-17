@@ -1,0 +1,73 @@
+{
+  "bio": {
+    "name": "Jack Smith",
+    "title": "AI + Graphics Enthusiast",
+    "tagline": "Building Interactive Worlds",
+    "description": "I'm a full-stack developer passionate about creating immersive digital experiences. With expertise in AI integration, modern web technologies, and creative design, I build applications that bridge the gap between functionality and artistry.",
+    "location": "San Francisco, CA",
+    "email": "jack@example.com",
+    "github": "https://github.com/jacksmith",
+    "linkedin": "https://linkedin.com/in/jacksmith"
+  },
+  "skills": [
+    {
+      "category": "Frontend",
+      "items": ["React", "Next.js", "TypeScript", "GSAP", "Three.js", "Tailwind CSS"]
+    },
+    {
+      "category": "Backend", 
+      "items": ["Node.js", "Python", "PostgreSQL", "MongoDB", "GraphQL", "REST APIs"]
+    },
+    {
+      "category": "AI/ML",
+      "items": ["OpenAI GPT", "Langchain", "TensorFlow", "PyTorch", "Computer Vision", "NLP"]
+    },
+    {
+      "category": "Tools",
+      "items": ["Docker", "AWS", "Vercel", "Git", "Figma", "Adobe Creative Suite"]
+    }
+  ],
+  "projects": [
+    {
+      "id": "ai-chat-app",
+      "title": "AI-Powered Chat Platform",
+      "description": "Real-time chat application with AI assistant integration, supporting voice messages and document analysis.",
+      "tech": ["Next.js", "OpenAI API", "Socket.io", "PostgreSQL", "Redis"],
+      "github": "https://github.com/jacksmith/ai-chat",
+      "demo": "https://ai-chat-demo.vercel.app",
+      "image": "https://images.pexels.com/photos/8386440/pexels-photo-8386440.jpeg"
+    },
+    {
+      "id": "3d-portfolio",
+      "title": "Interactive 3D Portfolio",
+      "description": "Immersive portfolio experience built with Three.js, featuring animated 3D models and particle systems.",
+      "tech": ["Three.js", "React", "GSAP", "WebGL", "Blender"],
+      "github": "https://github.com/jacksmith/3d-portfolio",
+      "demo": "https://3d-portfolio-demo.vercel.app",
+      "image": "https://images.pexels.com/photos/1181677/pexels-photo-1181677.jpeg"
+    },
+    {
+      "id": "data-viz-dashboard",
+      "title": "Real-time Analytics Dashboard", 
+      "description": "Dynamic dashboard for visualizing complex datasets with interactive charts and real-time updates.",
+      "tech": ["React", "D3.js", "Node.js", "WebSocket", "MongoDB"],
+      "github": "https://github.com/jacksmith/analytics-dashboard",
+      "demo": "https://analytics-demo.vercel.app",
+      "image": "https://images.pexels.com/photos/590020/pexels-photo-590020.jpg"
+    }
+  ],
+  "experience": [
+    {
+      "company": "Tech Innovate Inc.",
+      "role": "Senior Full Stack Developer",
+      "period": "2022 - Present",
+      "description": "Leading development of AI-integrated web applications, mentoring junior developers, and architecting scalable solutions."
+    },
+    {
+      "company": "Creative Studios",
+      "role": "Frontend Developer",
+      "period": "2020 - 2022", 
+      "description": "Specialized in creating interactive user experiences and implementing complex animations for high-profile clients."
+    }
+  ]
+}
