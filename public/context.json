@@ -41,16 +41,16 @@
   ],
   "experience": [
     {
-      "company": "Tech Innovate Inc.",
-      "role": "Senior Full Stack Developer",
-      "period": "2022 - Present",
-      "description": "Leading development of AI-integrated web applications, mentoring junior developers, and architecting scalable solutions."
+      "company": "Project Falcon",
+      "role": "Missions Engineer",
+      "period": "2023 - 2024",
+      "description": "Architected and implemented a real-time analytics dashboard for Falcon, integrating real-time data analysis and scalable backend infrastructure."
     },
     {
-      "company": "Creative Studios",
-      "role": "Frontend Developer",
-      "period": "2020 - 2022", 
-      "description": "Specialized in creating interactive user experiences and implementing complex animations for high-profile clients."
+      "company": "UCD",
+      "role": "Full Stack Developer",
+      "period": "2025 - Present",
+      "description": "Founded a company that delivers custom web solutions for local businesses, focusing on user experience, performance, and maintainability."
     }
   ],
   "awards": [
