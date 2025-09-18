@@ -11,7 +11,14 @@ export default function Hero() {
     // Initialize hero animations after component mounts
     const timer = setTimeout(() => {
       AnimationManager.initHeroAnimations();
-      AnimationManager.initParticleBackground();
+      if (AnimationManager.initAdvancedParticleBackground) {
+        AnimationManager.initAdvancedParticleBackground();
+      } else {
+        AnimationManager.initParticleBackground();
+      }
+      if (AnimationManager.initMathematicalHeroBackground) {
+        AnimationManager.initMathematicalHeroBackground();
+      }
     }, 100);
 
     return () => clearTimeout(timer);
@@ -19,21 +26,8 @@ export default function Hero() {
 
   return (
     <section className="min-h-screen flex flex-col items-center justify-center relative overflow-hidden bg-[#0A0A0A]">
-      {/* Floating particles */}
-      <div className="absolute inset-0 pointer-events-none">
-        {[...Array(6)].map((_, i) => (
-          <div
-            key={i}
-            className={`particle absolute w-2 h-2 bg-blue-500/20 rounded-full ${
-              i % 2 === 0 ? 'animate-pulse' : ''
-            }`}
-            style={{
-              left: `${10 + i * 15}%`,
-              top: `${20 + i * 10}%`,
-            }}
-          />
-        ))}
-      </div>
+      {/* Enhanced floating particles (now built dynamically by AnimationManager) */}
+      <div className="hero-particles absolute inset-0 pointer-events-none" />
 
       <div className="text-center z-10 max-w-4xl mx-auto px-6">
         <h1 className="hero-title text-6xl md:text-8xl font-bold text-white mb-6 opacity-0">

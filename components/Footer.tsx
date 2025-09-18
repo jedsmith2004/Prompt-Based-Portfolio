@@ -13,7 +13,7 @@ export default function Footer() {
           <div className="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-8">
             <div className="flex space-x-6">
               <a
-                href="https://github.com"
+                href="https://github.com/jedsmith2004"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-gray-400 hover:text-white transition-colors duration-200"
@@ -21,7 +21,7 @@ export default function Footer() {
                 GitHub
               </a>
               <a
-                href="https://linkedin.com"
+                href="https://www.linkedin.com/in/jack-ed-smith/"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-gray-400 hover:text-white transition-colors duration-200"

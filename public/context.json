@@ -52,5 +52,42 @@
       "period": "2020 - 2022", 
       "description": "Specialized in creating interactive user experiences and implementing complex animations for high-profile clients."
     }
+  ],
+  "awards": [
+    {
+      "title": "Snapchat Lens Competition Cash Prize",
+      "place": "Cash Prize",
+      "date": "March 2022",
+      "description": "Created a Snapchat lens used 1M+ times – secured £1500 for school tech resources as top performing creative entry.",
+      "badges": ["AR", "INNOVATION", "IMPACT"]
+    },
+    {
+      "title": "Dragon's Apprentice Challenge",
+      "place": "1st Place",
+      "date": "March 2022",
+      "description": "Led winning charity venture multiplying £100 seed via events (balloon race, auction, milkshake stand) & secured creativity award.",
+      "badges": ["LEADERSHIP", "CHARITY", "ENTREPRENEUR"]
+    },
+    {
+      "title": "Public Speaking Competition",
+      "place": "2nd Place",
+      "date": "March 2023",
+      "description": "Delivered a talk on legalising psychedelics before an RAF Officer, police lieutenant & advisor to the Prime Minister.",
+      "badges": ["ADVOCACY", "COMMUNICATION", "STAGE"]
+    },
+    {
+      "title": "hackSheffield 10",
+      "place": "1st Place",
+      "date": "November 2024",
+      "description": "Won best GitHub repository – engineered structure, documentation & DX polish resulting in judges' top scoring repo.",
+      "badges": ["OPEN-SOURCE", "ENGINEERING", "DX"]
+    },
+    {
+      "title": "Engineering You're Hired",
+      "place": "3rd Place",
+      "date": "March 2025",
+      "description": "Designed a pipe inspection & repair concept using decentralised swarm robotics – authored swarm behaviour mechanics and AI visual inspection modules.",
+      "badges": ["SWARM", "ROBOTICS", "AI"]
+    }
   ]
 }

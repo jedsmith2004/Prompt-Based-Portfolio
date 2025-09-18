@@ -39,7 +39,7 @@ export class AnimationManager {
         { y: 80, opacity: 0 },
         {
           y: 0,
-          opacity: 1,
+            opacity: 1,
           duration: 1,
           ease: 'power3.out',
           scrollTrigger: {
@@ -189,6 +189,206 @@ export class AnimationManager {
         delay: index * 0.5
       });
     });
+  }
+
+  // Advanced dynamic particle system for hero background
+  // Generates layered soft particles with per-axis drift, scale flicker, orbital arcs and subtle parallax
+  static initAdvancedParticleBackground() {
+    if (typeof window === 'undefined') return;
+
+    const container = document.querySelector<HTMLElement>('.hero-particles');
+    if (!container) return;
+    container.style.background = '#0A0A0A'; // enforce flat background
+
+    // Prevent double init
+    if (container.dataset.advancedParticlesInit) return;
+    container.dataset.advancedParticlesInit = 'true';
+
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const particleCount = prefersReducedMotion ? 16 : 42;
+
+    const colors = [
+      'rgba(255,255,255,0.09)',
+      'rgba(255,255,255,0.06)',
+      'rgba(255,255,255,0.12)',
+      'rgba(255,255,255,0.04)'
+    ];
+
+    const fragment = document.createDocumentFragment();
+
+    for (let i = 0; i < particleCount; i++) {
+      const el = document.createElement('div');
+      el.className = 'hero-particle';
+      const baseSize = (Math.random() * 6 + 4); // 4 - 10px
+      const depth = Math.random(); // 0 (near) to 1 (far)
+
+      Object.assign(el.style, {
+        position: 'absolute',
+        width: `${baseSize}px`,
+        height: `${baseSize}px`,
+        borderRadius: '9999px',
+        left: `${Math.random() * 100}%`,
+        top: `${Math.random() * 100}%`,
+        background: colors[i % colors.length],
+        filter: 'blur(0.5px)',
+        opacity: String(0.25 + depth * 0.35),
+        pointerEvents: 'none',
+        mixBlendMode: 'screen',
+        willChange: 'transform'
+      });
+
+      // Slight variation shapes: some are faint rings / soft glows
+      if (Math.random() < 0.18) {
+        el.style.background = 'transparent';
+        el.style.boxShadow = `0 0 ${8 + Math.random()*12}px ${Math.random()*2 + 1}px ${colors[i % colors.length]}`;
+        el.style.filter = 'blur(1px)';
+      } else if (Math.random() < 0.3) {
+        el.style.boxShadow = `0 0 ${4 + Math.random()*10}px ${colors[i % colors.length].replace('0.', '0.2')}`;
+      }
+
+      fragment.appendChild(el);
+
+      // Primary drifting animation vector
+      const driftX = (Math.random() * 200 - 100) * (0.4 + depth * 0.6); // depth affects amplitude
+      const driftY = (Math.random() * 200 - 100) * (0.4 + depth * 0.6);
+      const duration = 16 + Math.random() * 18; // slow, ambient
+
+      gsap.to(el, {
+        x: driftX,
+        y: driftY,
+        duration,
+        ease: 'sine.inOut',
+        repeat: -1,
+        yoyo: true,
+      });
+
+      // Gentle scale pulse / flicker
+      gsap.to(el, {
+        scale: 0.85 + Math.random()*0.5,
+        duration: 3 + Math.random()*4,
+        ease: 'sine.inOut',
+        repeat: -1,
+        yoyo: true,
+      });
+
+      // Occasional orbital motion overlay for a subset
+      if (Math.random() < 0.18) {
+        const orbitRadius = 10 + Math.random()*25;
+        const orbitDur = 20 + Math.random()*20;
+        gsap.to(el, {
+          motionPath: {
+            path: [
+              { x: 0, y: 0 },
+              { x: orbitRadius, y: 0 },
+              { x: 0, y: orbitRadius },
+              { x: -orbitRadius, y: 0 },
+              { x: 0, y: -orbitRadius },
+              { x: 0, y: 0 },
+            ],
+            autoRotate: false,
+          },
+          duration: orbitDur,
+          ease: 'none',
+          repeat: -1,
+        });
+      }
+
+      // Subtle parallax relative to pointer (very gentle)
+      window.addEventListener('pointermove', (e) => {
+        const rect = container.getBoundingClientRect();
+        const relX = (e.clientX - rect.left) / rect.width - 0.5;
+        const relY = (e.clientY - rect.top) / rect.height - 0.5;
+        const parallaxStrength = 6 * (1 - depth); // near particles move more
+        gsap.to(el, { xPercent: relX * parallaxStrength, yPercent: relY * parallaxStrength, duration: 2, ease: 'sine.out' });
+      }, { passive: true });
+    }
+
+    container.appendChild(fragment);
+  }
+
+  static initMathematicalHeroBackground() {
+    if (typeof window === 'undefined') return;
+    const container = document.querySelector<HTMLElement>('.hero-particles');
+    if (!container || container.dataset.mathBgInit) return;
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    container.dataset.mathBgInit = 'true';
+    container.style.background = '#0A0A0A'; // enforce flat background
+
+    const canvas = document.createElement('canvas');
+    canvas.className = 'hero-math-canvas';
+    Object.assign(canvas.style, {
+      position: 'absolute', inset: '0', width: '100%', height: '100%', pointerEvents: 'none',
+      filter: 'blur(0.2px)', mixBlendMode: 'screen'
+    });
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    container.appendChild(canvas);
+
+    function resize() {
+      if (!container || !ctx) return;
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = container.clientWidth * dpr;
+      canvas.height = container.clientHeight * dpr;
+      ctx.setTransform(1,0,0,1,0,0);
+      ctx.scale(dpr, dpr);
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    const golden = Math.PI * (3 - Math.sqrt(5));
+    const POINTS = prefersReducedMotion ? 320 : 850;
+    const radiusMax = () => Math.min(container.clientWidth, container.clientHeight) * 0.55;
+    const points: {x:number; y:number; r:number; a:number;}[] = [];
+    for (let n = 0; n < POINTS; n++) {
+      const rNorm = Math.sqrt(n / POINTS);
+      const theta = n * golden;
+      points.push({ x: rNorm * Math.cos(theta), y: rNorm * Math.sin(theta), r: rNorm, a: theta });
+    }
+
+    // Declare animation state before render definition
+    let t = 0;
+    let frameId = 0;
+    function render() {
+      frameId = requestAnimationFrame(render);
+      if (!container || !ctx) return;
+      t += 0.004;
+      const w = container.clientWidth; const h = container.clientHeight;
+      ctx.clearRect(0,0,w,h);
+
+      const cx = w/2, cy = h/2;
+      const baseR = radiusMax();
+      // Removed concentric rings; introduce a global breathing factor for dots instead
+      const breath = 1 + Math.sin(t * 2) * 0.035; // previously ring pulse amplitude repurposed
+
+      const rot = t * 0.25;
+      const drift = Math.sin(t*0.8)*0.02;
+      const scale = baseR * 0.88 * breath; // apply breathing to overall point field radius
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(rot);
+      points.forEach((p,i) => {
+        const rx = p.x * scale * (1 + drift * p.r);
+        const ry = p.y * scale * (1 + drift * p.r);
+        // Per-point micro breathing layered atop global breath
+        const localPulse = 1 + Math.sin(t*3 + p.a) * 0.18;
+        const alpha = 0.022 + p.r*0.055; // slightly dimmer since no rings
+        ctx.fillStyle = `rgba(255,255,255,${alpha.toFixed(3)})`;
+        ctx.beginPath();
+        const sz = (0.55 + p.r * 1.25) * localPulse; // size also affected by breathing
+        ctx.arc(rx, ry, sz, 0, Math.PI*2);
+        ctx.fill();
+      });
+      ctx.restore();
+    }
+    if (!prefersReducedMotion) render();
+
+    const cleanup = () => {
+      cancelAnimationFrame(frameId);
+      window.removeEventListener('resize', resize);
+      canvas.remove();
+      if (container) delete container.dataset.mathBgInit;
+    };
+    (window as any).addEventListener('beforeunload', cleanup);
   }
 
   static animateSkillBars() {

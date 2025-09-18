@@ -46,7 +46,7 @@ export default function Navbar() {
 
           <div className="flex space-x-4">
             <a
-              href="https://github.com"
+              href="https://github.com/jedsmith2004"
               target="_blank"
               rel="noopener noreferrer"
               className="text-gray-300 hover:text-blue-400 transition-colors duration-200"
@@ -56,7 +56,7 @@ export default function Navbar() {
               </svg>
             </a>
             <a
-              href="https://linkedin.com"
+              href="https://www.linkedin.com/in/jack-ed-smith/"
               target="_blank"
               rel="noopener noreferrer"
               className="text-gray-300 hover:text-blue-400 transition-colors duration-200"

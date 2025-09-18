@@ -7,7 +7,7 @@ export interface ContextData {
     name: string;
     title: string;
     tagline: string;
-    description: string;
+    description: string[]; // changed to string[] to reflect context.json
     location: string;
     email: string;
     github: string;
@@ -17,7 +17,6 @@ export interface ContextData {
     category: string;
     items: string[];
   }>;
-  // projects made optional because context.json no longer includes it; loadContext injects canonical data
   projects?: Array<{
     id: string;
     title: string;
@@ -33,6 +32,13 @@ export interface ContextData {
     period: string;
     description: string;
   }>;
+  awards?: Array<{
+    title: string;
+    place: string;
+    date: string;
+    description: string;
+    badges?: string[];
+  }>;
 }
 
 export function loadContext(): ContextData {
@@ -40,7 +46,7 @@ export function loadContext(): ContextData {
   const contextData = fs.readFileSync(contextPath, 'utf-8');
   const parsed: ContextData = JSON.parse(contextData);
 
-  // Inject canonical project data
+  // Inject canonical project data (always authoritative)
   parsed.projects = projectData.map(p => ({
     id: p.id,
     title: p.title,
@@ -58,7 +64,7 @@ export function createSystemPrompt(context: ContextData): string {
   return `You are an AI assistant representing ${context.bio.name}, a ${context.bio.title} based in ${context.bio.location}. You are ${context.bio.tagline}.
 
 ABOUT ME:
-${context.bio.description}
+${context.bio.description.join('\n\n')}
 
 MY CORE SKILLS:
 ${context.skills.map(skill => `• ${skill.category}: ${skill.items.join(', ')}`).join('\n')}
@@ -76,6 +82,9 @@ ${context.experience.map(exp =>
   `• ${exp.role} at ${exp.company} (${exp.period})
     ${exp.description}`
 ).join('\n\n')}
+
+AWARDS & DISTINCTIONS:
+${(context.awards || []).map(a => `• ${a.title} – ${a.place} (${a.date})\n    ${a.description}`).join('\n\n')}
 
 CONTACT INFORMATION:
 • Email: ${context.bio.email}

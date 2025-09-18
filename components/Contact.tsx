@@ -26,28 +26,53 @@ export default function Contact() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setSubmitStatus('idle');
     
-    // Simulate form submission
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    setIsSubmitting(false);
-    setSubmitStatus('success');
-    setFormData({ name: '', email: '', message: '' });
-    
-    // Reset status after 3 seconds
-    setTimeout(() => setSubmitStatus('idle'), 3000);
+    try {
+      const response = await fetch('/api/contact', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        setSubmitStatus('success');
+        setFormData({ name: '', email: '', message: '' });
+        
+        // Reset status after 5 seconds
+        setTimeout(() => setSubmitStatus('idle'), 5000);
+      } else {
+        console.error('Form submission error:', result);
+        setSubmitStatus('error');
+        
+        // Reset status after 5 seconds
+        setTimeout(() => setSubmitStatus('idle'), 5000);
+      }
+    } catch (error) {
+      console.error('Network error:', error);
+      setSubmitStatus('error');
+      
+      // Reset status after 5 seconds
+      setTimeout(() => setSubmitStatus('idle'), 5000);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <section id="contact" className="py-20 bg-gradient-to-b from-black to-[#0A0A0A]">
-      <div className="max-w-4xl mx-auto px-6">
+      <div className="max-w-5xl mx-auto px-6">
         <div className="animate-on-scroll text-center mb-16">
           <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
-            Let's Work Together
+            Let's Connect
           </h2>
           <p className="text-xl text-gray-400 max-w-2xl mx-auto">
-            Have an exciting project in mind? I'd love to hear about it. 
-            Let's discuss how we can bring your vision to life.
+            I'm actively seeking new opportunities and would love to discuss how my skills 
+            can contribute to your team's success.
           </p>
         </div>
 
@@ -57,8 +82,9 @@ export default function Contact() {
             <div>
               <h3 className="text-2xl font-bold text-white mb-6">Get In Touch</h3>
               <p className="text-gray-300 leading-relaxed mb-8">
-                Whether you're looking to build a new application, integrate AI capabilities, 
-                or create an immersive user experience, I'm here to help turn your ideas into reality.
+                I'm passionate about creating innovative solutions and would be excited to join a team 
+                where I can make a meaningful impact. Whether you're looking for a software engineer, 
+                AI specialist, or creative problem solver, I'd love to hear about opportunities.
               </p>
             </div>
 
@@ -96,8 +122,8 @@ export default function Contact() {
                   </svg>
                 </div>
                 <div>
-                  <p className="text-white font-medium">Response Time</p>
-                  <p className="text-gray-400">Usually within 24 hours</p>
+                  <p className="text-white font-medium">Availability</p>
+                  <p className="text-gray-400">Open to new opportunities</p>
                 </div>
               </div>
             </div>
@@ -184,7 +210,7 @@ export default function Contact() {
                   required
                   rows={5}
                   className="w-full px-4 py-3 bg-white/5 backdrop-blur-md border border-white/20 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/50 transition-all duration-300 resize-none"
-                  placeholder="Tell me about your project..."
+                  placeholder="Tell me about the role or opportunity..."
                 />
               </div>
 
@@ -196,6 +222,8 @@ export default function Contact() {
                     ? 'bg-gray-600 cursor-not-allowed'
                     : submitStatus === 'success'
                     ? 'bg-green-600 hover:bg-green-700'
+                    : submitStatus === 'error'
+                    ? 'bg-red-600 hover:bg-red-700'
                     : 'bg-blue-500 hover:bg-blue-600 hover:shadow-lg hover:shadow-blue-500/30'
                 } text-white`}
               >
@@ -208,16 +236,35 @@ export default function Contact() {
                     Sending...
                   </span>
                 ) : submitStatus === 'success' ? (
-                  'Message Sent!'
+                  'Message Sent! ✓'
+                ) : submitStatus === 'error' ? (
+                  'Try Again'
                 ) : (
                   'Send Message'
                 )}
               </button>
 
+
               {submitStatus === 'success' && (
-                <p className="text-green-400 text-center">
-                  Thanks for your message! I'll get back to you soon.
-                </p>
+                <div className="text-center p-4 bg-green-500/10 border border-green-500/20 rounded-xl">
+                  <p className="text-green-400 font-medium">
+                    ✓ Message sent successfully!
+                  </p>
+                  <p className="text-green-300 text-sm mt-1">
+                    Thank you for reaching out! I'll get back to you within 24 hours.
+                  </p>
+                </div>
+              )}
+
+              {submitStatus === 'error' && (
+                <div className="text-center p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
+                  <p className="text-red-400 font-medium">
+                    ⚠ Something went wrong
+                  </p>
+                  <p className="text-red-300 text-sm mt-1">
+                    Please try again or email me directly at jedsmith2004@gmail.com
+                  </p>
+                </div>
               )}
             </form>
           </div>

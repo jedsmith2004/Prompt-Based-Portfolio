@@ -4,10 +4,61 @@ import { useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import { AnimationManager } from '../lib/animations';
 import { projects } from '../lib/projects-data';
+import { gsap } from 'gsap'; // added for pill hover animations
 
 export default function About() {
   useEffect(() => {
     AnimationManager.initScrollAnimations();
+  }, []);
+
+  // New: animated hover interactions for tech pills
+  useEffect(() => {
+    const pills = Array.from(document.querySelectorAll<HTMLElement>('.tech-pill'));
+    pills.forEach(pill => {
+      if (pill.dataset.animInit) return; // avoid duplicates
+      pill.dataset.animInit = 'true';
+      const enter = () => {
+        gsap.to(pill, {
+          y: -6,
+            scale: 1.08,
+          boxShadow: '0 10px 28px -10px rgba(59,130,246,0.45), 0 4px 12px -4px rgba(0,0,0,0.6)',
+          borderColor: 'rgba(59,130,246,0.65)',
+          color: '#fff',
+          background: 'rgba(255,255,255,0.14)',
+          duration: 0.45,
+          ease: 'power3.out'
+        });
+      };
+      const leave = () => {
+        gsap.to(pill, {
+          y: 0,
+          scale: 1,
+          boxShadow: '0 0 0 0 rgba(0,0,0,0)',
+          borderColor: 'rgba(255,255,255,0.18)',
+          background: 'rgba(255,255,255,0.10)',
+          duration: 0.55,
+          ease: 'power3.out'
+        });
+      };
+      const down = () => {
+        gsap.to(pill, { scale: 0.97, y: -2, duration: 0.2, ease: 'power2.out' });
+      };
+      const up = () => {
+        gsap.to(pill, { scale: 1.06, y: -6, duration: 0.3, ease: 'power2.out' });
+      };
+      pill.addEventListener('mouseenter', enter);
+      pill.addEventListener('mouseleave', leave);
+      pill.addEventListener('mousedown', down);
+      pill.addEventListener('mouseup', up);
+      pill.addEventListener('touchstart', enter, { passive: true });
+      pill.addEventListener('touchend', leave, { passive: true });
+    });
+
+    return () => {
+      pills.forEach(pill => {
+        delete pill.dataset.animInit;
+      });
+    };
   }, []);
 
   const topTechnologies = useMemo(() => {
@@ -76,9 +127,10 @@ export default function About() {
               {topTechnologies.map((tech) => (
                 <span
                   key={tech}
-                  className="px-4 py-2 bg-white/10 backdrop-blur-md border border-white/20 rounded-full text-sm text-gray-300 hover:border-blue-400/50 hover:text-white transition-all duration-200"
+                  className="tech-pill px-4 py-2 bg-white/10 backdrop-blur-md border border-white/20 rounded-full text-sm text-gray-300 transition-all duration-300 will-change-transform cursor-default select-none relative"
                 >
-                  {tech}
+                  <span className="relative z-10">{tech}</span>
+                  <span className="pointer-events-none absolute inset-0 rounded-full opacity-0" />
                 </span>
               ))}
             </div>
