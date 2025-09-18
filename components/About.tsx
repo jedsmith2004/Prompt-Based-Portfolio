@@ -73,7 +73,7 @@ export default function About() {
         if (b[1] !== a[1]) return b[1] - a[1];
         return a[0].localeCompare(b[0]);
       })
-      .slice(0, 6)
+      .slice(0, 5)
       .map(([tech]) => tech);
   }, []);
 
@@ -111,9 +111,10 @@ export default function About() {
               <p>
                 At university, I've explored a wide range of computer science disciplines, from hands-on 
                 machine learning projects to full-stack web development with real clients. I've also worked 
-                with SELSA (Student Experience of Learning and Student Assessment) to help improve the quality 
-                of teaching and feedback for future students. These experiences have shaped me into someone 
-                who loves solving real-world problems and delivering work that makes an impact.
+                with SELSA (Sheffield Engineering and Leaership Academy),where I attend talks from industry 
+                experts, join workshops to develop my technical and leadership skills, and take part in 
+                networking events to expand my professional circle. These experiences have shaped me into 
+                someone who loves solving real-world problems and delivering work that makes an impact.
               </p>
               <p>
                 Outside of tech, I'm driven by adventure and physical challenge. I'm a keen boulderer and 
