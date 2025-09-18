@@ -83,12 +83,12 @@ export const projects: Project[] = [
     status: 'completed',
     date: 'June 2023',
     features: [
-      'Prismic driven content slices',
-      'Custom GLSL shader accents',
-      'Optimised image delivery via Cloudflare',
-      'Reusable layout primitives',
-      'Accessible keyboard navigation',
-      'Theming & content versioning'
+      'Custom software rasterization pipeline with triangle filling and z-buffering',
+      'Support for loading and rendering 3D models from .obj files',
+      'Custom vector and matrix math library for transformations',
+      'Camera system with perspective projection and rotation controls',
+      'Wireframe and solid rendering modes for debugging and visualization',
+      'Scene management with multiple objects and real-time rendering loop'
     ]
   },
     {

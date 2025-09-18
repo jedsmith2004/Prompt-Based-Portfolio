@@ -111,7 +111,7 @@ export default function About() {
               <p>
                 At university, I've explored a wide range of computer science disciplines, from hands-on 
                 machine learning projects to full-stack web development with real clients. I've also worked 
-                with SELSA (Sheffield Engineering and Leaership Academy),where I attend talks from industry 
+                with SELSA (Sheffield Engineering and Leaership Academy), where I attend talks from industry 
                 experts, join workshops to develop my technical and leadership skills, and take part in 
                 networking events to expand my professional circle. These experiences have shaped me into 
                 someone who loves solving real-world problems and delivering work that makes an impact.
