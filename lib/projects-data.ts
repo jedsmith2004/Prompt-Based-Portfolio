@@ -58,7 +58,7 @@ export const projects: Project[] = [
     tech: ['Python', 'NumPy', 'SciPy', 'AI', 'Machine Learning', 'Computer Vision', 'Mathematics'],
     github: 'https://github.com/jedsmith2004/Handwritten-Number-Classifier',
     demo: '',
-    image: '/',
+    image: '/MNIST-handwritten-digits-dataset-visualized-by-Activeloop.webp',
     status: 'completed',
     date: 'December 2024',
     features: [
