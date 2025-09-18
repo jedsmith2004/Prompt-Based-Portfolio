@@ -1,18 +1,25 @@
 {
   "bio": {
     "name": "Jack Smith",
-    "title": "Crafting immersive systems at the intersection of AI, graphics & web development. From offline neural runtimes to shader-driven interfaces & algorithmic engines.",
-    "tagline": "Building Interactive Worlds",
+    "title": "Engineering at the edge of AI, graphics, and web — from neural runtimes to interactive worlds.",
+    "tagline": "Turning Ideas into Systems That Run",
     "description": [
-      "I'm a full-stack developer passionate about creating immersive digital experiences.",
-      "With expertise in AI integration, modern web technologies, and creative design,",
-      "I build applications that bridge the gap between functionality and artistry.",
-      "I have a passion for learning new concepts, techniques and technologies."
+      "I'm Jack, a final-year Computer Science student with a builder’s mindset and a strong desire to merge creativity with computation. My work spans software engineering, AI research, and computer graphics — I thrive when I'm architecting systems that are both technically rigorous and visually expressive.",
+      
+      "My academic journey has been deliberately broad. I've built and trained machine learning models, explored reinforcement learning and classical ML techniques, and designed and delivered full-stack web applications for real-world clients. I've also worked closely with SELSA (Student Experience of Learning and Student Assessment) to improve teaching quality across my department, giving me insight into user feedback loops and the human side of engineering.",
+      
+      "Outside of coursework, I've developed passion projects that push my understanding of technology. I built a software rasterizer from scratch in Python, implementing my own 3D pipeline with projection, rasterization, and z-buffering — a project that taught me how to think like a GPU. I’ve also explored offline AI, experimenting with small LLMs and neural inference runtimes that can run entirely on-device, with the long-term ambition of bringing private, local AI tools to individuals and businesses who need them most.",
+      
+      "I’m not just a developer, but an entrepreneur: I started a small business designing websites for local businesses, managing everything from UI/UX design to deployment, and building direct relationships with clients. These experiences gave me a real appreciation for shipping polished, reliable software and communicating technical ideas clearly to non-technical stakeholders.",
+      
+      "Beyond technology, I live for challenge and exploration. I'm a boulderer and judoka, and I recently spent a month hitchhiking across Europe — from Croatia, through France and Spain, all the way to Morocco — where I volunteered for a week in a small village near the Sahara Desert. These experiences sharpen my ability to stay calm under pressure, adapt quickly to changing circumstances, and connect with people from all walks of life.",
+      
+      "At my core, I love solving problems and building things that matter. Whether it’s designing a neural network architecture, debugging a rendering engine, or climbing a wall that looks impossible, I’m driven by curiosity, creativity, and the joy of making ideas real."
     ],
-    "location": "Sheffield, UK and Hemel Hempstead, UK",
+    "location": "Sheffield, UK & Hemel Hempstead, UK",
     "email": "jedsmith2004@gmail.com",
-    "github": "https://github.com/jacksmith",
-    "linkedin": "https://linkedin.com/in/jacksmith"
+    "github": "https://github.com/jedsmith2004",
+    "linkedin": "https://linkedin.com/in/jack-ed-smith"
   },
   "skills": [
     {

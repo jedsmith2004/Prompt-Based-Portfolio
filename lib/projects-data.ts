@@ -116,7 +116,7 @@ export const projects: Project[] = [
     id: 'old-personal-portfolio',
     title: 'Old Personal Portfolio',
     description: 'A Next.js based old personal portfolio website, utilising various technologies such as a CMS, Three.js and Shaders.',
-    tech: ['Next.js', 'React', 'Typescript', 'Prismic CMS', 'Three.js', 'Tailwind CSS', 'PostCSS', 'Slice Machine', 'Cloudflare', 'Shaders', 'GSAP'],
+    tech: ['Next.js', 'React', 'Typescript', 'Prismic CMS', 'Three.js', '3D Graphics', 'Tailwind CSS', 'PostCSS', 'Slice Machine', 'Cloudflare', 'Shaders', 'GSAP'],
     github: 'https://github.com/jedsmith2004/portfolio',
     demo: 'https://jacksmith.me',
     image: '/old-portfolio.png',
