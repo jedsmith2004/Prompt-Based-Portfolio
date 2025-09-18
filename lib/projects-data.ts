@@ -14,24 +14,22 @@ export interface Project {
 
 export const projects: Project[] = [
   {
-    id: 'interactive-ai-portfolio',
-    title: 'Interactive AI Portfolio',
-    description: 'This live portfolio you\'re browsing: an AI-augmented, animation-rich Next.js site with streaming Groq chat, contextual system prompt generation, markdown rendering, and dynamic placeholder suggestion engine.',
-    tech: ['Next.js', 'React', 'TypeScript', 'Tailwind CSS', 'GSAP', 'LLM Streaming', 'Groq', 'Markdown', 'Node.js', 'Edge Patterns', 'AI', 'LLM', 'API'],
-    github: 'https://github.com/jedsmith2004/Prompt-Based-Portfolio',
-    demo: '',
-    image: '/AI-Portfolio.png',
-    status: 'in-progress',
-    date: 'September 2025',
+    id: 'old-personal-portfolio',
+    title: 'Old Personal Portfolio',
+    description: 'A Next.js based old personal portfolio website, utilising various technologies such as a CMS, Three.js and Shaders.',
+    tech: ['Next.js', 'React', 'Typescript', 'Prismic CMS', 'Three.js', '3D Graphics', 'Tailwind CSS', 'PostCSS', 'Slice Machine', 'Cloudflare', 'Shaders', 'GSAP'],
+    github: 'https://github.com/jedsmith2004/portfolio',
+    demo: 'old-portfolio.jacksmith.me',
+    image: '/old-portfolio.png',
+    status: 'completed',
+    date: 'December 2024',
     features: [
-      'Real-time streaming AI chat with conversation memory & fallback model chain',
-      'RunId-based deterministic placeholder suggestion animator (no overlap)',
-      'Lightweight custom markdown renderer with links, code & lists',
-      'Dynamic system prompt built from structured JSON context & project injection',
-      'Responsive glass UI with particle & hero entrance animations (GSAP)',
-      'Model fallback chain (Mixtral → Gemma2 → Llama 8B) for resilience',
-      'Type-safe project metadata with extended feature lists',
-      'Optimized minimal message rendering and scroll management'
+      'Prismic driven content slices',
+      'Custom GLSL shader accents',
+      'Optimised image delivery via Cloudflare',
+      'Reusable layout primitives',
+      'Accessible keyboard navigation',
+      'Theming & content versioning'
     ]
   },
   {
@@ -51,25 +49,6 @@ export const projects: Project[] = [
       'Real client requirement gathering process',
       'Component animations powered by GSAP',
       'Secure Postgres relational schema'
-    ]
-  },
-  {
-    id: '3d-rasterizer-engine',
-    title: '3D Rasterizer Engine',
-    description: 'A 3D engine pipeline built from scratch enrirely in python, usiliting rasterzing, loading models from .obj files and using custom vector and matrix types.',
-    tech: ['Python', 'Pygame', '3D Graphics', 'Rasterization', 'Mathematics', 'Object representation'],
-    github: 'https://github.com/jedsmith2004/rasterizer',
-    demo: '',
-    image: '/3d-rasterizer-engine.png',
-    status: 'completed',
-    date: 'June 2023',
-    features: [
-      'Prismic driven content slices',
-      'Custom GLSL shader accents',
-      'Optimised image delivery via Cloudflare',
-      'Reusable layout primitives',
-      'Accessible keyboard navigation',
-      'Theming & content versioning'
     ]
   },
   {
@@ -94,11 +73,51 @@ export const projects: Project[] = [
     ]
   },
   {
+    id: '3d-rasterizer-engine',
+    title: '3D Rasterizer Engine',
+    description: 'A 3D engine pipeline built from scratch enrirely in python, usiliting rasterzing, loading models from .obj files and using custom vector and matrix types.',
+    tech: ['Python', 'Pygame', '3D Graphics', 'Rasterization', 'Mathematics', 'Object representation'],
+    github: 'https://github.com/jedsmith2004/rasterizer',
+    demo: '',
+    image: '/3d-rasterizer-engine.png',
+    status: 'completed',
+    date: 'June 2023',
+    features: [
+      'Prismic driven content slices',
+      'Custom GLSL shader accents',
+      'Optimised image delivery via Cloudflare',
+      'Reusable layout primitives',
+      'Accessible keyboard navigation',
+      'Theming & content versioning'
+    ]
+  },
+    {
+    id: 'interactive-ai-portfolio',
+    title: 'Interactive AI Portfolio',
+    description: 'This live portfolio you\'re browsing: an AI-augmented, animation-rich Next.js site with streaming Groq chat, contextual system prompt generation, markdown rendering, and dynamic placeholder suggestion engine.',
+    tech: ['Next.js', 'React', 'TypeScript', 'Tailwind CSS', 'GSAP', 'LLM Streaming', 'Groq', 'Markdown', 'Node.js', 'Edge Patterns', 'AI', 'LLM', 'API'],
+    github: 'https://github.com/jedsmith2004/Prompt-Based-Portfolio',
+    demo: '',
+    image: '/AI-Portfolio.png',
+    status: 'in-progress',
+    date: 'September 2025',
+    features: [
+      'Real-time streaming AI chat with conversation memory & fallback model chain',
+      'RunId-based deterministic placeholder suggestion animator (no overlap)',
+      'Lightweight custom markdown renderer with links, code & lists',
+      'Dynamic system prompt built from structured JSON context & project injection',
+      'Responsive glass UI with particle & hero entrance animations (GSAP)',
+      'Model fallback chain (Mixtral → Gemma2 → Llama 8B) for resilience',
+      'Type-safe project metadata with extended feature lists',
+      'Optimized minimal message rendering and scroll management'
+    ]
+  },
+  {
     id: 'offline-ai-app',
     title: 'Mobile Based Offline AI App',
     description: 'A mobile based app that runs distilled models on the phone to access AI without internet. It also has personalities, offline maps and survival guides.',
     tech: ['AI', 'LLM', 'Flask', 'Python', 'LLama.cpp', 'SQLite', 'GGUF', 'Swift', 'Figma', 'React', 'Next.js'],
-    github: 'https://github.com/jedsmith2004/OfflineAI',
+    github: 'https://github.com/jedsmith2004/Offline-AI',
     demo: '',
     image: '/Offline-AI-App.png',
     status: 'in-progress',
@@ -110,25 +129,6 @@ export const projects: Project[] = [
       'Offline maps & survival reference modules',
       'Optimized quantized GGUF models (memory aware)',
       'Energy adaptive runtime (battery aware)'
-    ]
-  },
-  {
-    id: 'old-personal-portfolio',
-    title: 'Old Personal Portfolio',
-    description: 'A Next.js based old personal portfolio website, utilising various technologies such as a CMS, Three.js and Shaders.',
-    tech: ['Next.js', 'React', 'Typescript', 'Prismic CMS', 'Three.js', '3D Graphics', 'Tailwind CSS', 'PostCSS', 'Slice Machine', 'Cloudflare', 'Shaders', 'GSAP'],
-    github: 'https://github.com/jedsmith2004/portfolio',
-    demo: 'https://jacksmith.me',
-    image: '/old-portfolio.png',
-    status: 'completed',
-    date: 'December 2024',
-    features: [
-      'Prismic driven content slices',
-      'Custom GLSL shader accents',
-      'Optimised image delivery via Cloudflare',
-      'Reusable layout primitives',
-      'Accessible keyboard navigation',
-      'Theming & content versioning'
     ]
   },
   {
