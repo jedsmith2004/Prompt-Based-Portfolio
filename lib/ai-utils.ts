@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { projects as projectData } from './projects-data';
 
 export interface ContextData {
   bio: {
@@ -16,7 +17,8 @@ export interface ContextData {
     category: string;
     items: string[];
   }>;
-  projects: Array<{
+  // projects made optional because context.json no longer includes it; loadContext injects canonical data
+  projects?: Array<{
     id: string;
     title: string;
     description: string;
@@ -36,7 +38,20 @@ export interface ContextData {
 export function loadContext(): ContextData {
   const contextPath = path.join(process.cwd(), 'public', 'context.json');
   const contextData = fs.readFileSync(contextPath, 'utf-8');
-  return JSON.parse(contextData);
+  const parsed: ContextData = JSON.parse(contextData);
+
+  // Inject canonical project data
+  parsed.projects = projectData.map(p => ({
+    id: p.id,
+    title: p.title,
+    description: p.description,
+    tech: p.tech,
+    github: p.github,
+    demo: p.demo,
+    image: p.image
+  }));
+
+  return parsed;
 }
 
 export function createSystemPrompt(context: ContextData): string {
@@ -49,7 +64,7 @@ MY CORE SKILLS:
 ${context.skills.map(skill => `• ${skill.category}: ${skill.items.join(', ')}`).join('\n')}
 
 MY FEATURED PROJECTS:
-${context.projects.map(project => 
+${context.projects?.map(project => 
   `• ${project.title}: ${project.description}
     Technologies used: ${project.tech.join(', ')}
     GitHub: ${project.github}
@@ -78,20 +93,21 @@ PERSONALITY & TONE:
 
 RESPONSE GUIDELINES:
 1. Answer as if you ARE ${context.bio.name} - use first person ("I", "my", "me")
-2. Keep responses SHORT and conversational (1-2 sentences max, like a real chat)
-3. Be casual and friendly, not formal or overly professional
-4. Show genuine excitement about technology but don't overwhelm with details
-5. If asked about something outside your expertise, acknowledge it briefly and redirect
-6. Use natural, conversational language with contractions (I'm, I'd, that's, etc.)
-7. Ask follow-up questions to keep the conversation going when appropriate
-8. If you need multiple points, separate them with line breaks for better readability
+2. Default to VERY SHORT answers (1 sentence, occasionally 2). ONLY go longer (up to ~4 concise sentences or short bullet lines) if the user explicitly asks for detail or a 1–2 sentence reply would be incomplete or unclear.
+3. Never cut off mid-sentence. Always finish the thought cleanly.
+4. Keep it casual and friendly; avoid sounding formal or academic.
+5. Show genuine excitement about technology without overwhelming with detail.
+6. If outside your expertise, acknowledge briefly and redirect.
+7. Use contractions (I'm, I'd, that's, etc.).
+8. Ask a brief follow-up only when it meaningfully advances the conversation.
+9. If listing multiple items, use short line breaks or commas—keep it tight.
+10. If user asks for deeper explanation, still stay crisp—no rambling paragraphs.
 
 EXAMPLE RESPONSES:
-- "Hey! Yeah, I love combining AI with web stuff. Just built this chat widget you're using!"
-- "That's cool! I did something similar with Three.js - want to know more about it?"
-- "Nice question! I'm more of a frontend guy, but I've used Node.js for backends."
-- "Absolutely! I'm always up for collaborating on interesting projects."
-- "Thanks for asking! What kind of project are you thinking about?"
+- "Yeah! I built that to test fast on-device inference. Want the rough setup?"
+- "I used a custom rasterizer pipeline—happy to break it down if you want."
+- "Mostly TypeScript + Rust on that part. Need more detail?"
+- "Sure! I can go deeper into the optimization if that's helpful."
 
-Remember: Keep it SHORT, friendly, and conversational - like you're texting a friend who happens to be a developer!`;
+Remember: Default ultra-concise. Expand ONLY when needed. Never end abruptly or mid-sentence.`;
 }

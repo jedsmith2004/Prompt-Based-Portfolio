@@ -9,7 +9,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const { message } = req.body;
+    const { message, history } = req.body;
     
     if (!message) {
       return res.status(400).json({ error: 'Message is required' });
@@ -18,44 +18,85 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const context = loadContext();
     const systemPrompt = createSystemPrompt(context);
 
-    // Using Groq API for fast inference
+    // Normalize & trim history (optional)
+    const MAX_HISTORY_MESSAGES = 14; // slight increase for better continuity
+    let normalizedHistory: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+    if (Array.isArray(history)) {
+      normalizedHistory = history
+        .filter(h => h && typeof h.role === 'string' && typeof h.content === 'string' && h.content.trim().length > 0)
+        .map(h => ({ role: h.role === 'assistant' ? 'assistant' : 'user', content: h.content.slice(0, 6000) }));
+      if (normalizedHistory.length > MAX_HISTORY_MESSAGES) {
+        normalizedHistory = normalizedHistory.slice(-MAX_HISTORY_MESSAGES);
+      }
+    }
+
     const apiKey = process.env.GROQ_API_KEY;
-    const model = process.env.GROQ_MODEL || 'llama-3.1-8b-instant';
     
     if (!apiKey) {
       return res.status(500).json({ error: 'Groq API key not configured' });
     }
 
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: message }
-        ],
-        stream: true,
-        max_tokens: 150, // Shorter responses for conversational feel
-        temperature: 0.8, // Slightly higher for more natural conversation
-      }),
-    });
+    const chatMessages = [
+      { role: 'system', content: systemPrompt },
+      ...normalizedHistory,
+      { role: 'user', content: message }
+    ];
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Groq API Error:', errorText);
-      throw new Error(`Groq API request failed: ${response.status} - ${errorText}`);
+    // Model fallback chain (prefer OSS ~20B-class effective model first)
+    const fallbackChain = [
+      'mixtral-8x7b-32768',
+      'gemma2-9b-it',
+      'llama-3.1-8b-instant'
+    ];
+    const explicit = process.env.GROQ_MODEL ? [process.env.GROQ_MODEL] : [];
+    const dedup: Record<string, true> = {};
+    const candidateModels: string[] = [];
+    [...explicit, ...fallbackChain].forEach(m => { if (!dedup[m]) { dedup[m] = true; candidateModels.push(m); } });
+
+    const tried: string[] = [];
+    let chosenModel: string | null = null;
+    let response: Response | null = null;
+    let lastError: any = null;
+
+    for (const m of candidateModels) {
+      tried.push(m);
+      try {
+        const attempt = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: m,
+            messages: chatMessages,
+            stream: true,
+            max_tokens: 220,
+            temperature: 0.8,
+          }),
+        });
+        if (attempt.ok && attempt.body) {
+          response = attempt;
+          chosenModel = m;
+          break;
+        } else {
+          lastError = new Error(`Model ${m} failed: ${attempt.status} ${attempt.statusText}`);
+        }
+      } catch (err) {
+        lastError = err;
+      }
     }
 
-    // Set headers for streaming response
+    if (!response || !chosenModel) {
+      console.error('All model attempts failed', { tried, lastError });
+      return res.status(502).json({ error: 'Upstream model failure', tried, detail: lastError instanceof Error ? lastError.message : String(lastError) });
+    }
+
+    res.setHeader('X-Model-Used', chosenModel);
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
 
-    // Create a readable stream for the response
     const reader = response.body?.getReader();
     const decoder = new TextDecoder();
 

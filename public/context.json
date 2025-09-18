@@ -1,9 +1,14 @@
 {
   "bio": {
     "name": "Jack Smith",
-    "title": "AI + Graphics Enthusiast",
+    "title": "Crafting immersive systems at the intersection of AI, graphics & web development. From offline neural runtimes to shader-driven interfaces & algorithmic engines.",
     "tagline": "Building Interactive Worlds",
-    "description": "I'm a full-stack developer passionate about creating immersive digital experiences. With expertise in AI integration, modern web technologies, and creative design, I build applications that bridge the gap between functionality and artistry.",
+    "description": [
+      "I'm a full-stack developer passionate about creating immersive digital experiences.",
+      "With expertise in AI integration, modern web technologies, and creative design,",
+      "I build applications that bridge the gap between functionality and artistry.",
+      "I have a passion for learning new concepts, techniques and technologies."
+    ],
     "location": "Sheffield, UK and Hemel Hempstead, UK",
     "email": "jedsmith2004@gmail.com",
     "github": "https://github.com/jacksmith",
@@ -25,35 +30,6 @@
     {
       "category": "Tools",
       "items": ["Docker", "AWS", "Vercel", "Git", "Figma", "Adobe Creative Suite"]
-    }
-  ],
-  "projects": [
-    {
-      "id": "offline-ai-app",
-      "title": "Mobile Based Offline AI App",
-      "description": "A mobile based app that runs distilled models on the phone to access AI without internet. It also has personalities, offline maps and survival guides.",
-      "tech": ["Flask", "LLama.cpp", "SQLite", "GGUF", "Swift"],
-      "github": "https://github.com/jedsmith2004/OfflineAI",
-      "demo": "",
-      "image": "/Offline-AI-App.png"
-    },
-    {
-      "id": "language-learning-app",
-      "title": "Language Learning App",
-      "description": "A Ruby on Rails language learning app made for a real client as a university project. Through requirements and regular meetings we developed an app that met the desired standards.",
-      "tech": ["Ruby on Rails", "PostgreSQL", "ActiveStorage", "HAML", "JavaScript", "Bootstrap", "ShakerPacker", "Rake", "GSAP", "WSL", "Gitlab"],
-      "github": "https://github.com/jedsmith2004/Language-Learning-App",
-      "demo": "",
-      "image": "/language-learning-app.png"
-    },
-    {
-      "id": "old-personal-portfolio",
-      "title": "Personal Portfolio",
-      "description": "A Next.js based old personal portfolio website, utilising various technologies such as a CMS, Three.js and Shaders.",
-      "tech": ["Next.js", "React", "Typescript", "Prismic CMS", "Tailwind CSS", "PostCSS", "Slice Machine", "Cloudflare", "Shaders"],
-      "github": "https://github.com/jedsmith2004/portfolio",
-      "demo": "https://jacksmith.me",
-      "image": "/old-portfolio.png"
     }
   ],
   "experience": [

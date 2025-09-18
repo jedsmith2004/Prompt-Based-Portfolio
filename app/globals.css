@@ -144,3 +144,12 @@
 
 /* Subtle base micro grid (alternating squares) */
 .animated-grid-squares { background-image: linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px); background-size: 50px 50px; }
+
+/* Placeholder opacity transitions for ChatWidget */
+.placeholder-opacity-transition::placeholder {
+  transition: opacity .35s ease;
+  opacity: var(--ph-opacity,1);
+}
+.placeholder-transitioning::placeholder {
+  opacity: 1 !important;
+}

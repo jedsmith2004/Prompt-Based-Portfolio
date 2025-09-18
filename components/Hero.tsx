@@ -40,8 +40,11 @@ export default function Hero() {
           Jack Smith
         </h1>
         
-        <p className="hero-subtitle text-xl md:text-2xl text-gray-300 mb-12 opacity-0">
-          AI + Graphics Enthusiast | Building Interactive Worlds
+        <p className="hero-subtitle text-xl md:text-2xl text-gray-300 mb-3 opacity-0 tracking-tight">
+          Crafting immersive systems at the intersection of AI, graphics & Web Dev
+        </p>
+        <p className="hero-subtitle text-base md:text-lg text-gray-500 mb-12 opacity-0">
+          From offline neural runtimes to shader-driven interfaces & algorithmic engines
         </p>
 
         <div className="hero-chat-box opacity-0">
