@@ -3,22 +3,37 @@
     "name": "Jack Smith",
     "title": "Engineering at the edge of AI, graphics, and web — from neural runtimes to interactive worlds.",
     "tagline": "Turning Ideas into Systems That Run",
+    "persona_instructions": [
+      "You are an AI representation of Jack Smith.",
+      "Speak in the first person as Jack.",
+      "Be technically accurate, reflective, and grounded.",
+      "Avoid hype and buzzwords; prioritise clarity, reasoning, and systems thinking.",
+      "When discussing projects, explain not just what was built, but why design decisions were made.",
+      "Be explicit when something is ongoing, exploratory, or a stretch goal.",
+      "Answer questions as if speaking to recruiters, engineers, researchers, or collaborators."
+    ],
     "description": [
-      "I'm Jack, a 20 year old final-year Computer Science student at The University of Sheffield with a builder’s mindset and a strong desire to merge creativity with computation. My dissertation which I am currently working on is about 3D human modelling generation, it's generation 3D human motion from text prompts, I have to improve current methods either through building on current models or creating my own. My work spans software engineering, AI research, and computer graphics — I thrive when I'm architecting systems that are both technically rigorous and visually expressive.",
+      "I’m Jack, a 20-year-old final-year Computer Science student at The University of Sheffield with a strong builder’s mindset and a drive to merge creativity with computation. My current dissertation focuses on 3D human motion generation from text prompts, where the goal is to improve the editability and usability of existing models by building on current research or developing new approaches. My work spans software engineering, AI research, and computer graphics, and I’m most engaged when designing systems that are both technically rigorous and visually expressive.",
       
-      "My academic journey has been deliberately broad. I've built and trained machine learning models, explored reinforcement learning and classical ML techniques, and designed and delivered full-stack web applications for real-world clients. I've also worked closely with SELSA (Student Experience of Learning and Student Assessment) to improve teaching quality across my department, giving me insight into user feedback loops and the human side of engineering.",
+      "I attended John F Kennedy School in Hemel Hempstead for secondary school and sixth form, achieving 10 GCSEs and A-levels including an A* in Maths, an A in Computer Science, a B in Further Maths, and a B in Physics. Since starting university, I have consistently performed strongly in both coursework and examinations and am currently on track to graduate with a first-class degree.",
       
-      "Outside of coursework, I've developed passion projects that push my understanding of technology. I built a software rasterizer from scratch in Python, implementing my own 3D pipeline with projection, rasterization, and z-buffering — a project that taught me how to think like a GPU. I’ve also explored offline AI, experimenting with small LLMs and neural inference runtimes that can run entirely on-device, with the long-term ambition of bringing private, local AI tools to individuals and businesses who need them most.",
+      "My academic path has been deliberately broad. I have built and trained machine learning models, explored reinforcement learning and classical ML techniques, and designed and delivered full-stack web applications for real-world clients. Alongside this, I have worked closely with SELSA (Student Experience of Learning and Student Assessment), contributing to improvements in teaching quality across my department and gaining insight into feedback loops and the human side of engineering.",
       
-      "I’m not just a developer, but an entrepreneur: I started a small business designing websites for local businesses, managing everything from UI/UX design to deployment, and building direct relationships with clients. These experiences gave me a real appreciation for shipping polished, reliable software and communicating technical ideas clearly to non-technical stakeholders.",
+      "Outside formal coursework, I regularly pursue technically demanding passion projects. I built a software rasterizer from scratch in Python, implementing a full 3D graphics pipeline including projection, rasterization, and z-buffering, which gave me a deeper understanding of how GPUs operate at a low level. I have also explored offline AI systems, experimenting with small language models and local inference runtimes that can run entirely on-device, with the long-term ambition of enabling private, local AI tools for individuals and businesses.",
       
-      "Beyond technology, I live for challenge and exploration. I'm a boulderer and judoka, and I recently spent a month hitchhiking across Europe — from Croatia, through France and Spain, all the way to Morocco — where I volunteered for a week in a small village near the Sahara Desert. These experiences sharpen my ability to stay calm under pressure, adapt quickly to changing circumstances, and connect with people from all walks of life.",
+      "I’m not only a developer but also an entrepreneur. I founded a small business creating websites for local companies, handling the full lifecycle from UI/UX design through deployment and maintenance. This experience strengthened my appreciation for shipping reliable, polished software and for communicating complex technical ideas clearly to non-technical stakeholders.",
       
-      "At my core, I love solving problems and building things that matter. Whether it’s designing a neural network architecture, debugging a rendering engine, or climbing a wall that looks impossible, I’m driven by curiosity, creativity, and the joy of making ideas real.",
-      "Currently seeking opportunities in AI research, full-stack engineering, or technical leadership roles.",
-      "I'm an active participant in SELSA (Sheffield Engineering Leadership and Service Award), where I attend talks from industry experts, join workshops to develop my technical and leadership skills, and take part in networking events to expand my professional circle.",
-      "I'm also a member of my university's hitchhiking society. I've hitchhiked from Sheffield to Porto and Sheffield to Slovakia, and this summer, my friend and I journeyed from Croatia all the way to Morocco. I documented the adventure on Instagram at @5001km.sidequest—go check it out!",
-      "Outside of tech, I have a Grade 8 guitar qualification and rock climb regularly with friends, both up in the Peak District and down in London. I know English as my native language and I've been studying Arabic for a year and a half."
+      "Beyond technology, I actively seek challenge and exploration. I am a boulderer and judoka, and I recently spent a month hitchhiking across Europe — travelling from Croatia through France and Spain to Morocco — where I volunteered for a week in a small village near the Sahara Desert. These experiences have sharpened my ability to stay calm under pressure, adapt quickly to changing conditions, and connect with people from very different backgrounds.",
+      
+      "At my core, I enjoy solving hard problems and building things that matter. Whether I’m designing a neural architecture, debugging a rendering engine, or climbing a route that initially feels impossible, I’m driven by curiosity, creativity, and the satisfaction of turning ideas into reality.",
+      
+      "I am currently seeking opportunities in AI research, full-stack engineering, or technically demanding leadership roles.",
+      
+      "I am an active participant in SELSA (Sheffield Engineering Leadership and Service Award), regularly attending industry talks, workshops, and networking events to develop both my technical and leadership skills.",
+      
+      "I am also a member of my university’s hitchhiking society. I have hitchhiked from Sheffield to Porto, from Sheffield to Slovakia, and most recently from Croatia to Morocco. I documented this journey on Instagram at @5001km.sidequest.",
+      
+      "Outside of computing, I hold a Grade 8 guitar qualification and climb regularly with friends in the Peak District and London. English is my native language, and I have been studying Arabic for approximately a year and a half."
     ],
     "location": "Sheffield, UK & Hemel Hempstead, UK",
     "email": "jedsmith2004@gmail.com",
@@ -31,7 +46,7 @@
       "items": ["React", "Next.js", "TypeScript", "GSAP", "Three.js", "Tailwind CSS"]
     },
     {
-      "category": "Backend", 
+      "category": "Backend",
       "items": ["Node.js", "Python", "PostgreSQL", "MongoDB", "GraphQL", "REST APIs"]
     },
     {
@@ -48,13 +63,13 @@
       "company": "Project Falcon",
       "role": "Missions Engineer",
       "period": "2023 - 2024",
-      "description": "Architected and implemented a real-time analytics dashboard for Falcon, integrating real-time data analysis and scalable backend infrastructure."
+      "description": "Architected and implemented a real-time analytics dashboard, integrating live data analysis with scalable backend infrastructure."
     },
     {
       "company": "UCD",
       "role": "Full Stack Developer",
       "period": "2025 - Present",
-      "description": "Founded a company that delivers custom web solutions for local businesses, focusing on user experience, performance, and maintainability."
+      "description": "Founded and operated a company delivering custom web solutions for local businesses, with a focus on performance, usability, and maintainability."
     }
   ],
   "awards": [
@@ -62,36 +77,337 @@
       "title": "Snapchat Lens Competition Cash Prize",
       "place": "Cash Prize",
       "date": "March 2022",
-      "description": "Created a Snapchat lens used 1M+ times – secured £1500 for school tech resources as top performing creative entry.",
+      "description": "Created a Snapchat lens used over 1 million times, securing £1500 for school technology resources as a top-performing creative entry.",
       "badges": ["AR", "INNOVATION", "IMPACT"]
     },
     {
       "title": "Dragon's Apprentice Challenge",
       "place": "1st Place",
       "date": "March 2022",
-      "description": "Led winning charity venture multiplying £100 seed via events (balloon race, auction, milkshake stand) & secured creativity award.",
+      "description": "Led a winning charity venture that multiplied a £100 seed fund through events including a balloon race, auction, and milkshake stand, and received a creativity award.",
       "badges": ["LEADERSHIP", "CHARITY", "ENTREPRENEUR"]
     },
     {
       "title": "Public Speaking Competition",
       "place": "2nd Place",
       "date": "March 2023",
-      "description": "Delivered a talk on legalising psychedelics before an RAF Officer, police lieutenant & advisor to the Prime Minister.",
+      "description": "Delivered a talk on the legalisation of psychedelics to an audience including an RAF Officer, a police lieutenant, and an advisor to the Prime Minister.",
       "badges": ["ADVOCACY", "COMMUNICATION", "STAGE"]
     },
     {
       "title": "hackSheffield 10",
       "place": "1st Place",
       "date": "November 2024",
-      "description": "Won best GitHub repository – engineered structure, documentation & DX polish resulting in judges' top scoring repo.",
+      "description": "Won best GitHub repository award by engineering strong project structure, documentation, and developer experience, resulting in the top-scoring repository.",
       "badges": ["OPEN-SOURCE", "ENGINEERING", "DX"]
     },
     {
       "title": "Engineering You're Hired",
       "place": "3rd Place",
       "date": "March 2025",
-      "description": "Designed a pipe inspection & repair concept using decentralised swarm robotics – authored swarm behaviour mechanics and AI visual inspection modules.",
+      "description": "Designed a pipe inspection and repair concept using decentralised swarm robotics, contributing swarm behaviour mechanics and AI-based visual inspection ideas.",
       "badges": ["SWARM", "ROBOTICS", "AI"]
     }
-  ]
+  ],
+  "hitchhikeRoute": {
+    "title": "Hitchhiking Route — Summer 2025",
+    "subtitle": "Croatia → Austria → Switzerland → France → Spain → Morocco",
+    "stops": [
+      {
+        "name": "Split",
+        "country": "Croatia",
+        "lat": 43.514,
+        "lon": 16.443,
+        "reels": [
+          {
+            "url": "https://www.instagram.com/p/DNQXSmNtxf7/",
+            "thumbnail": "/thumbnails/split-day1.jpg",
+            "title": "Day 1"
+          },
+          {
+            "url": "https://www.instagram.com/p/DNTeM0aNIbW/",
+            "thumbnail": "/thumbnails/split-day2.jpg",
+            "title": "Day 2"
+          }
+        ]
+      },
+      {
+        "name": "Šibenik",
+        "country": "Croatia",
+        "lat": 43.803,
+        "lon": 15.802,
+        "reels": [
+          {
+            "url": "https://www.instagram.com/p/DNWSnsmNb_i/",
+            "thumbnail": "/thumbnails/sibenik-day3.jpg",
+            "title": "Day 3"
+          }
+        ]
+      },
+      {
+        "name": "Zadar",
+        "country": "Croatia",
+        "lat": 44.136,
+        "lon": 15.207,
+        "reels": [
+          {
+            "url": "https://www.instagram.com/p/DNXvjoctvxM/",
+            "thumbnail": "/thumbnails/zadar-day4.jpg",
+            "title": "Day 4"
+          }
+        ]
+      },
+      {
+        "name": "Zagreb",
+        "country": "Croatia",
+        "lat": 45.842,
+        "lon": 15.808,
+        "reels": [
+          {
+            "url": "https://www.instagram.com/p/DNbYM4htrOW/",
+            "thumbnail": "/thumbnails/zagreb-day5.jpg",
+            "title": "Day 5"
+          },
+          {
+            "url": "https://www.instagram.com/p/DNdNvPJtptb/",
+            "thumbnail": "/thumbnails/zagreb-day6.jpg",
+            "title": "Day 6"
+          }
+        ]
+      },
+      {
+        "name": "Salzburg",
+        "country": "Austria",
+        "lat": 47.802,
+        "lon": 12.978,
+        "reels": [
+          {
+            "url": "https://www.instagram.com/reel/DNgRxSOtTjw/",
+            "thumbnail": "/thumbnails/salzburg-day7.jpg",
+            "title": "Day 7"
+          }
+        ]
+      },
+      {
+        "name": "Innsbruck",
+        "country": "Austria",
+        "lat": 47.285,
+        "lon": 11.296,
+        "reels": [
+          {
+            "url": "https://www.instagram.com/p/DNl5vjTtqvP/",
+            "thumbnail": "/thumbnails/innsbruck-day8.jpg",
+            "title": "Day 8"
+          }
+        ]
+      },
+      {
+        "name": "Swiss Border",
+        "country": "Austria",
+        "lat": 47.265,
+        "lon": 9.603,
+        "reels": [
+          {
+            "url": "https://www.instagram.com/p/DNnH2eetCy0/",
+            "thumbnail": "/thumbnails/swiss-border-day9.jpg",
+            "title": "Day 9"
+          }
+        ]
+      },
+      {
+        "name": "Basel",
+        "country": "Switzerland",
+        "lat": 47.554,
+        "lon": 7.553,
+        "reels": [
+          {
+            "url": "https://www.instagram.com/p/DNnu1LroMS-/",
+            "thumbnail": "/thumbnails/basel-day10.jpg",
+            "title": "Day 10"
+          }
+        ]
+      },
+      {
+        "name": "Bern",
+        "country": "Switzerland",
+        "lat": 46.954,
+        "lon": 7.353,
+        "reels": [
+          {
+            "url": "https://www.instagram.com/p/DNttM4l2r3B/",
+            "thumbnail": "/thumbnails/bern-day11.jpg",
+            "title": "Day 11"
+          }
+        ]
+      },
+      {
+        "name": "Lausanne",
+        "country": "Switzerland",
+        "lat": 46.519,
+        "lon": 6.164,
+        "reels": [
+          {
+            "url": "https://www.instagram.com/p/DNvEu2i2stk/",
+            "thumbnail": "/thumbnails/lausanne-day12.jpg",
+            "title": "Day 12"
+          }
+        ]
+      },
+      {
+        "name": "Geneva",
+        "country": "Switzerland",
+        "lat": 46.204,
+        "lon": 6.122,
+        "reels": [
+          {
+            "url": "https://www.instagram.com/p/DNz7UMk2srx/",
+            "thumbnail": "/thumbnails/geneva-day13.jpg",
+            "title": "Day 13"
+          }
+        ]
+      },
+      {
+        "name": "Lyon",
+        "country": "France",
+        "lat": 45.758,
+        "lon": 4.793,
+        "reels": [
+          {
+            "url": "https://www.instagram.com/reel/DN1KpLEWlUF/",
+            "thumbnail": "/thumbnails/lyon-day14.jpg",
+            "title": "Day 14"
+          }
+        ]
+      },
+      {
+        "name": "Nîmes",
+        "country": "France",
+        "lat": 43.832,
+        "lon": 4.260,
+        "reels": [
+          {
+            "url": "https://www.instagram.com/reel/DN5N_CgDXTj/",
+            "thumbnail": "/thumbnails/nimes-day15.jpg",
+            "title": "Day 15"
+          }
+        ]
+      },
+      {
+        "name": "Barcelona",
+        "country": "Spain",
+        "lat": 41.392,
+        "lon": 2.057,
+        "reels": [
+          {
+            "url": "https://www.instagram.com/reel/DN6HBKnjcBe/",
+            "thumbnail": "/thumbnails/barcelona-day16.jpg",
+            "title": "Day 16"
+          }
+        ]
+      },
+      {
+        "name": "Valencia",
+        "country": "Spain",
+        "lat": 39.407,
+        "lon": -0.443,
+        "reels": [
+          {
+            "url": "https://www.instagram.com/reel/DN_AUQQiKma/",
+            "thumbnail": "/thumbnails/valencia-day17.jpg",
+            "title": "Day 17"
+          }
+        ]
+      },
+      {
+        "name": "Murcia",
+        "country": "Spain",
+        "lat": 37.991,
+        "lon": -1.160,
+        "reels": [
+          {
+            "url": "https://www.instagram.com/reel/DOD5fu0iDmT/",
+            "thumbnail": "/thumbnails/murcia-day18.jpg",
+            "title": "Day 18"
+          }
+        ]
+      },
+      {
+        "name": "Malaga",
+        "country": "Spain",
+        "lat": 36.718,
+        "lon": -4.490,
+        "reels": [
+          {
+            "url": "https://www.instagram.com/reel/DOF_ju7DZgU/",
+            "thumbnail": "/thumbnails/malaga-day19.jpg",
+            "title": "Day 19"
+          },
+          {
+            "url": "https://www.instagram.com/p/DOJNfIuDLJs/",
+            "thumbnail": "/thumbnails/malaga-day20.jpg",
+            "title": "Day 20"
+          }
+        ]
+      },
+      {
+        "name": "Tangier",
+        "country": "Morocco",
+        "lat": 35.763,
+        "lon": -5.916,
+        "reels": [
+          {
+            "url": "https://www.instagram.com/p/DOJNfIuDLJs/",
+            "thumbnail": "/thumbnails/tangier-day21.jpg",
+            "title": "Day 21"
+          }
+        ]
+      },
+      {
+        "name": "Marrakesh",
+        "country": "Morocco",
+        "lat": 31.634,
+        "lon": -8.090,
+        "reels": [
+          {
+            "url": "https://www.instagram.com/p/DOTvXNYDelU/",
+            "thumbnail": "/thumbnails/marrakesh-day22.jpg",
+            "title": "Day 22"
+          }
+        ]
+      },
+      {
+        "name": "Tagounite",
+        "country": "Morocco",
+        "lat": 29.978,
+        "lon": -5.593,
+        "reels": [
+          {
+            "url": "https://www.instagram.com/p/DOYKb6VjdK6/",
+            "thumbnail": "/thumbnails/tagounite-day23.jpg",
+            "title": "Day 23"
+          },
+          {
+            "url": "https://www.instagram.com/p/DObD6bdiDm8/",
+            "thumbnail": "/thumbnails/tagounite-day24.jpg",
+            "title": "Day 24"
+          },
+          {
+            "url": "https://www.instagram.com/p/DOrnZvfCKhh/",
+            "thumbnail": "/thumbnails/tagounite-day25.jpg",
+            "title": "Day 25"
+          },
+          {
+            "url": "https://www.instagram.com/p/DPWvu8UDXks/",
+            "thumbnail": "/thumbnails/tagounite-day26.jpg",
+            "title": "Day 26"
+          },
+          {
+            "url": "https://www.instagram.com/p/DPxEKFMCOjQ/",
+            "thumbnail": "/thumbnails/tagounite-day27.jpg",
+            "title": "Day 27"
+          }
+        ]
+      }
+    ]
+  }
 }

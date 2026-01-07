@@ -10,9 +10,30 @@ export interface Project {
   status?: 'completed' | 'in-progress';
   date?: string; // e.g. 'Jan 2025'
   features?: string[]; // Key feature bullet points
+  linkedin?: string; // Link to LinkedIn post about this project
 }
 
 export const projects: Project[] = [
+  {
+    id: 'client-website-sheffield',
+    title: 'Client Website Delivery (Sheffield)',
+    description: 'A real client website delivered end-to-end with a full requirements → prototype → feedback iteration loop, followed by deployment and domain transfer coordination with the client’s previous web provider.',
+    tech: ['Web Development', 'UI/UX', 'Prototyping', 'Client Requirements', 'Iteration', 'Deployment', 'Domain Transfer', 'Git', 'Figma'],
+    github: '',
+    demo: 'www.d-a-r-t.co.uk',
+    linkedin: 'https://www.linkedin.com/in/jack-ed-smith/',
+    image: '/dart_home_page.png',
+    status: 'completed',
+    date: 'October 2025',
+    features: [
+      'Ran requirements gathering sessions and converted goals into a clear delivery plan and site structure',
+      'Built iterative prototypes, collected feedback, and made decisive changes to match client expectations',
+      'Focused on usability, clarity, and maintainability to support long-term client updates',
+      'Coordinated deployment and handover, ensuring a reliable release process and minimal disruption',
+      'Worked with the previous provider to transfer the domain and complete the migration cleanly',
+      'Delivered a polished, client-ready site with a smooth post-launch transition'
+    ]
+  },
   {
     id: 'old-personal-portfolio',
     title: 'Old Personal Portfolio',
@@ -39,6 +60,7 @@ export const projects: Project[] = [
     tech: ['Ruby on Rails', 'PostgreSQL', 'ActiveStorage', 'HAML', 'Bootstrap', 'ShakerPacker', 'Rake', 'GSAP', 'WSL', 'Gitlab', 'Figma'],
     github: 'https://github.com/jedsmith2004/Language-Learning-App',
     demo: '',
+    linkedin: 'https://www.linkedin.com/in/jack-ed-smith/',
     image: '/language-learning-app.png',
     status: 'completed',
     date: 'May 2025',
@@ -91,13 +113,34 @@ export const projects: Project[] = [
       'Scene management with multiple objects and real-time rendering loop'
     ]
   },
-    {
+  {
+    id: 'eyh-swarm-pipe-robots',
+    title: 'EYH Swarm Pipe Robots (FISH)',
+    description: 'A third-place Engineering You’re Hired (EYH) concept project: a decentralised swarm of pipe-crawling robots for inspection and leak detection, designed with failure-tolerant locomotion, robust operational protocols, and clear system-level animations.',
+    tech: ['Swarm Robotics', 'Robotics', 'Algorithms', 'Systems Design', 'Computer Vision', 'LiDAR', 'Ultrasonic Sensing', 'CAD', 'CFD', 'Blender', '3D Animation', 'Technical Drawings', 'Business Planning'],
+    github: '',
+    demo: '',
+    linkedin: 'https://www.linkedin.com/in/jack-ed-smith/',
+    image: '/FISH_final_design.png',
+    status: 'completed',
+    date: 'March 2025',
+    features: [
+      'Designed caterpillar-like pipe locomotion with grippers + motors and spring-extended safety behavior for power loss',
+      'Developed swarm rules for cohesion + full coverage exploration while minimizing redundancy and missed sections',
+      'Specified multi-sensor leak detection approach combining vision, LiDAR, and ultrasonic techniques',
+      'Defined robust operational protocols (rescue, corner navigation, disconnection handling, recovery procedures)',
+      'Produced system animations in Blender, learning the tool from scratch under hack-week time pressure',
+      'Delivered CAD concepts, CFD simulations, electrical/technical drawings, and an industry-facing business plan'
+    ]
+  },
+  {
     id: 'interactive-ai-portfolio',
     title: 'Interactive AI Portfolio',
     description: 'This live portfolio you\'re browsing: an AI-augmented, animation-rich Next.js site with streaming Groq chat, contextual system prompt generation, markdown rendering, and dynamic placeholder suggestion engine.',
     tech: ['Next.js', 'React', 'TypeScript', 'Tailwind CSS', 'GSAP', 'LLM Streaming', 'Groq', 'Markdown', 'Node.js', 'Edge Patterns', 'AI', 'LLM', 'API'],
     github: 'https://github.com/jedsmith2004/Prompt-Based-Portfolio',
-    demo: '',
+    demo: 'https://www.jacksmith.me',
+    linkedin: 'https://www.linkedin.com/in/jack-ed-smith/',
     image: '/AI-Portfolio.png',
     status: 'in-progress',
     date: 'September 2025',

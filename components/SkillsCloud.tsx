@@ -7,13 +7,13 @@ import { projects } from '../lib/projects-data';
 // Mapping of individual tech strings to broad categories (core 4 used for quadrants)
 const techCategoryMap: Record<string, string> = {
   // Frontend / UI / Presentation
-  'React': 'Frontend', 'Next.js': 'Frontend', 'Typescript': 'Frontend', 'TypeScript': 'Frontend', 'JavaScript': 'Frontend', 'Tailwind CSS': 'Frontend', 'GSAP': 'Frontend', 'Three.js': 'Frontend', 'HAML': 'Frontend', 'Bootstrap': 'Frontend', 'Shaders': 'Frontend', 'Swift': 'Frontend', 'Pygame': 'Frontend',
+  'React': 'Frontend', 'Next.js': 'Frontend', 'Typescript': 'Frontend', 'TypeScript': 'Frontend', 'JavaScript': 'Frontend', 'Tailwind CSS': 'Frontend', 'GSAP': 'Frontend', 'Three.js': 'Frontend', 'HAML': 'Frontend', 'Bootstrap': 'Frontend', 'Shaders': 'Frontend', 'Swift': 'Frontend', 'Pygame': 'Frontend', 'Web Development': 'Frontend', 'UI/UX': 'Frontend', 'Prototyping': 'Frontend', 'Haskell': 'Frontend',
   // Backend / Core Platform
-  'Ruby on Rails': 'Backend', 'PostgreSQL': 'Backend', 'SQLite': 'Backend', 'Flask': 'Backend', 'Node.js': 'Backend', 'GraphQL': 'Backend', 'REST APIs': 'Backend', 'ActiveStorage': 'Backend', 'Python': 'Backend', 'API': 'Backend', 'Edge Patterns': 'Backend',
+  'Ruby on Rails': 'Backend', 'PostgreSQL': 'Backend', 'SQLite': 'Backend', 'Flask': 'Backend', 'Node.js': 'Backend', 'GraphQL': 'Backend', 'REST APIs': 'Backend', 'ActiveStorage': 'Backend', 'Python': 'Backend', 'API': 'Backend', 'Edge Patterns': 'Backend', 'MongoDB': 'Backend',
   // AI / ML / Data / Computational
-  'AI': 'AI/ML', 'ML': 'AI/ML', 'Machine Learning': 'AI/ML', 'LLM': 'AI/ML', 'LLM Streaming': 'AI/ML', 'Groq': 'AI/ML', 'Markdown': 'Tools', 'OpenAI GPT': 'AI/ML', 'Langchain': 'AI/ML', 'LLama.cpp': 'AI/ML', 'GGUF': 'AI/ML', 'TensorFlow': 'AI/ML', 'PyTorch': 'AI/ML', 'Computer Vision': 'AI/ML', 'NLP': 'AI/ML', '3D Graphics': 'AI/ML', 'Rasterization': 'AI/ML', 'NumPy': 'AI/ML', 'SciPy': 'AI/ML', 'Object representation': 'AI/ML', 'Random Generation': 'AI/ML',
+  'AI': 'AI/ML', 'ML': 'AI/ML', 'Machine Learning': 'AI/ML', 'LLM': 'AI/ML', 'LLM Streaming': 'AI/ML', 'Groq': 'AI/ML', 'OpenAI GPT': 'AI/ML', 'Langchain': 'AI/ML', 'LLama.cpp': 'AI/ML', 'GGUF': 'AI/ML', 'TensorFlow': 'AI/ML', 'PyTorch': 'AI/ML', 'Computer Vision': 'AI/ML', 'NLP': 'AI/ML', '3D Graphics': 'AI/ML', 'Rasterization': 'AI/ML', 'NumPy': 'AI/ML', 'SciPy': 'AI/ML', 'Object representation': 'AI/ML', 'Random Generation': 'AI/ML', 'Mathematics': 'AI/ML', 'Algorithms': 'AI/ML', 'Systems Design': 'AI/ML', 'Swarm Robotics': 'AI/ML', 'Robotics': 'AI/ML',
   // Tools / Infra / Dev Productivity
-  'Docker': 'Tools', 'AWS': 'Tools', 'Vercel': 'Tools', 'Git': 'Tools', 'Figma': 'Tools', 'Adobe Creative Suite': 'Tools', 'Prismic CMS': 'Tools', 'Slice Machine': 'Tools', 'PostCSS': 'Tools', 'Cloudflare': 'Tools', 'Rake': 'Tools', 'WSL': 'Tools', 'Gitlab': 'Tools', 'ShakerPacker': 'Tools', 'Functional Programming': 'Tools', 'Game Development': 'Tools', 'Monadic Programming': 'Tools'
+  'Docker': 'Tools', 'AWS': 'Tools', 'Vercel': 'Tools', 'Git': 'Tools', 'Figma': 'Tools', 'Adobe Creative Suite': 'Tools', 'Prismic CMS': 'Tools', 'Slice Machine': 'Tools', 'PostCSS': 'Tools', 'Cloudflare': 'Tools', 'Rake': 'Tools', 'WSL': 'Tools', 'Gitlab': 'Tools', 'ShakerPacker': 'Tools', 'Functional Programming': 'Tools', 'Game Development': 'Tools', 'Monadic Programming': 'Tools', 'Markdown': 'Tools', 'Client Requirements': 'Tools', 'Iteration': 'Tools', 'Deployment': 'Tools', 'Domain Transfer': 'Tools', 'Blender': 'Tools', '3D Animation': 'Tools', 'Technical Drawings': 'Tools', 'Business Planning': 'Tools', 'CAD': 'Tools', 'CFD': 'Tools', 'LiDAR': 'Tools', 'Ultrasonic Sensing': 'Tools'
 };
 
 interface RawSkill { name: string; count: number; weight: number; category: string; }
@@ -283,6 +283,15 @@ export default function SkillsCloud() {
     const grouped: Record<string, RawSkill[]> = { Frontend: [], Backend: [], 'AI/ML': [], Tools: [] };
     raw.forEach(s => grouped[s.category].push(s));
 
+    // Cap each category to top 25 skills by usage count for visual clarity
+    const MAX_SKILLS_PER_QUADRANT = 20;
+    core.forEach(cat => {
+      // Always sort by count descending, then alphabetically
+      grouped[cat].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+      // Always slice to max (handles cases where length <= max too)
+      grouped[cat] = grouped[cat].slice(0, MAX_SKILLS_PER_QUADRANT);
+    });
+
     // Assign weights relative to EACH CATEGORY (local max) instead of global
     core.forEach(cat => {
       const arr = grouped[cat];
@@ -374,18 +383,21 @@ export default function SkillsCloud() {
                   const borderAlpha = (0.15 + s.weight * 0.35).toFixed(2);
                   const bgAlpha = (0.06 + s.weight * 0.22).toFixed(2);
                   const glow = (0.15 + s.weight * 0.40).toFixed(2);
+                  // Higher weight = higher z-index so bigger tiles are always on top
+                  const zIndex = Math.round(s.weight * 100);
                   return (
                     <span
                       key={s.name}
                       data-skill
                       data-rotate={s.rotation}
-                      className="absolute select-none cursor-default rounded-full backdrop-blur-sm border text-white/90 font-medium inline-flex items-center gap-1.5 shadow-sm transition-all duration-300 will-change-transform hover:shadow-[0_0_20px_var(--glow)] hover:-translate-y-1 hover:scale-[1.05]"
+                      className="absolute select-none cursor-default rounded-full backdrop-blur-sm border text-white/90 font-medium inline-flex items-center gap-1.5 shadow-sm transition-all duration-300 will-change-transform hover:shadow-[0_0_20px_var(--glow)] hover:-translate-y-1 hover:scale-[1.05] hover:z-[200]"
                       style={{
                         top: s.y + '%',
                         left: s.x + '%',
                         transform: 'translate(-50%, -50%)',
                         fontSize: s.fontSize,
                         padding: `${s.padding.y}rem ${s.padding.x}rem`,
+                        zIndex,
                         ['--glow' as any]: `hsla(${s.hue} 100% 55% / ${glow})`,
                         background: `linear-gradient(135deg, hsla(${s.hue} 100% ${s.lightness}% / ${bgAlpha}), hsla(${s.hue} 100% ${(s.lightness - 12)}% / ${(Number(bgAlpha)*0.55).toFixed(2)}))`,
                         borderColor: `hsla(${s.hue} 100% 70% / ${borderAlpha})`,

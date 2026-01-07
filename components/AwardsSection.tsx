@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { AnimationManager } from '../lib/animations';
+import dynamic from 'next/dynamic';
 
 interface AwardItem { 
   title: string; 
@@ -47,6 +48,9 @@ export default function AwardsSection() {
   }, []);
 
   const awards = dynamicData?.awards || [];
+
+  // Client-only map to avoid SSR hydration mismatches
+  const HitchhikeMap = useMemo(() => dynamic(() => import('./HitchhikeMap'), { ssr: false }), []);
 
   // Whether to render a decorative filler to occupy bottom-right gap (3-column xl layout with 5 awards leaves one empty cell)
   const showAwardsFiller = useMemo(() => awards.length % 3 !== 0, [awards.length]);
@@ -194,6 +198,11 @@ export default function AwardsSection() {
               </div>
             )}
           </div>
+        </div>
+
+        {/* Hitchhiking route map under awards (client-only) */}
+        <div className="mt-16">
+          <HitchhikeMap />
         </div>
 
         <style jsx global>{`

@@ -103,24 +103,24 @@ export default function About() {
             
             <div className="space-y-4 text-gray-300 leading-relaxed">
               <p>
-                I'm a passionate builder at heart, whether that's developing software, starting businesses, 
-                or exploring the world. I founded a small web development business to help local companies 
-                grow their online presence. Now, I'm focused on an ambitious new goal: making Offline AI 
-                accessible to everyone who needs it, no matter their resources or internet connection.
+                I’m a builder at heart, whether that’s developing software, launching small ventures, 
+                or exploring the world beyond a screen. I founded a web development business to help local 
+                companies strengthen their online presence, and I’m now focused on a longer-term goal: 
+                making offline, private AI accessible to people and organisations regardless of resources 
+                or internet connectivity.
               </p>
               <p>
-                At university, I've explored a wide range of computer science disciplines, from hands-on 
-                machine learning projects to full-stack web development with real clients. I've also worked 
-                with SELSA (Sheffield Engineering and Leaership Academy), where I attend talks from industry 
-                experts, join workshops to develop my technical and leadership skills, and take part in 
-                networking events to expand my professional circle. These experiences have shaped me into 
-                someone who loves solving real-world problems and delivering work that makes an impact.
+                At university, I’ve deliberately explored a broad range of computer science disciplines, 
+                from hands-on machine learning projects to full-stack web development with real clients. 
+                Alongside this, I’ve been involved with SELSA (Sheffield Engineering and Leadership Academy), 
+                attending industry talks, technical workshops, and networking events. These experiences have 
+                shaped how I approach problems, with a focus on practicality, clarity, and real-world impact.
               </p>
               <p>
-                Outside of tech, I'm driven by adventure and physical challenge. I'm a keen boulderer and 
-                judoka, and I recently spent a month hitchhiking from Croatia through Europe to Morocco, a 
-                journey that ended with a week of volunteering in a small village near the Sahara Desert. 
-                These experiences keep me grounded, resilient, and always eager for the next challenge.
+                Outside of technology, I’m motivated by adventure and physical challenge. I’m a keen 
+                boulderer and judoka, and I recently spent a month hitchhiking from Croatia through Europe 
+                to Morocco, finishing with a week of volunteering in a small village near the Sahara Desert. 
+                Experiences like these keep me grounded, adaptable, and always curious about what comes next.
               </p>
             </div>
 

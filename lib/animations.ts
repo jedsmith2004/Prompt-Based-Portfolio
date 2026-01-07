@@ -371,7 +371,7 @@ export class AnimationManager {
         const ry = p.y * scale * (1 + drift * p.r);
         // Per-point micro breathing layered atop global breath
         const localPulse = 1 + Math.sin(t*3 + p.a) * 0.18;
-        const alpha = 0.022 + p.r*0.055; // slightly dimmer since no rings
+        const alpha = 0.022 + p.r*0.25; // slightly dimmer since no rings
         ctx.fillStyle = `rgba(255,255,255,${alpha.toFixed(3)})`;
         ctx.beginPath();
         const sz = (0.55 + p.r * 1.25) * localPulse; // size also affected by breathing
