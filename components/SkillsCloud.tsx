@@ -6,14 +6,14 @@ import { projects } from '../lib/projects-data';
 
 // Mapping of individual tech strings to broad categories (core 4 used for quadrants)
 const techCategoryMap: Record<string, string> = {
-  // Frontend / UI / Presentation
-  'React': 'Frontend', 'Next.js': 'Frontend', 'Typescript': 'Frontend', 'TypeScript': 'Frontend', 'JavaScript': 'Frontend', 'Tailwind CSS': 'Frontend', 'GSAP': 'Frontend', 'Three.js': 'Frontend', 'HAML': 'Frontend', 'Bootstrap': 'Frontend', 'Shaders': 'Frontend', 'Swift': 'Frontend', 'Pygame': 'Frontend', 'Web Development': 'Frontend', 'UI/UX': 'Frontend', 'Prototyping': 'Frontend', 'Haskell': 'Frontend',
-  // Backend / Core Platform
-  'Ruby on Rails': 'Backend', 'PostgreSQL': 'Backend', 'SQLite': 'Backend', 'Flask': 'Backend', 'Node.js': 'Backend', 'GraphQL': 'Backend', 'REST APIs': 'Backend', 'ActiveStorage': 'Backend', 'Python': 'Backend', 'API': 'Backend', 'Edge Patterns': 'Backend', 'MongoDB': 'Backend',
-  // AI / ML / Data / Computational
-  'AI': 'AI/ML', 'ML': 'AI/ML', 'Machine Learning': 'AI/ML', 'LLM': 'AI/ML', 'LLM Streaming': 'AI/ML', 'Groq': 'AI/ML', 'OpenAI GPT': 'AI/ML', 'Langchain': 'AI/ML', 'LLama.cpp': 'AI/ML', 'GGUF': 'AI/ML', 'TensorFlow': 'AI/ML', 'PyTorch': 'AI/ML', 'Computer Vision': 'AI/ML', 'NLP': 'AI/ML', '3D Graphics': 'AI/ML', 'Rasterization': 'AI/ML', 'NumPy': 'AI/ML', 'SciPy': 'AI/ML', 'Object representation': 'AI/ML', 'Random Generation': 'AI/ML', 'Mathematics': 'AI/ML', 'Algorithms': 'AI/ML', 'Systems Design': 'AI/ML', 'Swarm Robotics': 'AI/ML', 'Robotics': 'AI/ML',
-  // Tools / Infra / Dev Productivity
-  'Docker': 'Tools', 'AWS': 'Tools', 'Vercel': 'Tools', 'Git': 'Tools', 'Figma': 'Tools', 'Adobe Creative Suite': 'Tools', 'Prismic CMS': 'Tools', 'Slice Machine': 'Tools', 'PostCSS': 'Tools', 'Cloudflare': 'Tools', 'Rake': 'Tools', 'WSL': 'Tools', 'Gitlab': 'Tools', 'ShakerPacker': 'Tools', 'Functional Programming': 'Tools', 'Game Development': 'Tools', 'Monadic Programming': 'Tools', 'Markdown': 'Tools', 'Client Requirements': 'Tools', 'Iteration': 'Tools', 'Deployment': 'Tools', 'Domain Transfer': 'Tools', 'Blender': 'Tools', '3D Animation': 'Tools', 'Technical Drawings': 'Tools', 'Business Planning': 'Tools', 'CAD': 'Tools', 'CFD': 'Tools', 'LiDAR': 'Tools', 'Ultrasonic Sensing': 'Tools'
+  // Frontend / UI / Graphics / Game Dev
+  'React': 'Frontend', 'Next.js': 'Frontend', 'Typescript': 'Frontend', 'TypeScript': 'Frontend', 'JavaScript': 'Frontend', 'Tailwind CSS': 'Frontend', 'GSAP': 'Frontend', 'Three.js': 'Frontend', 'HAML': 'Frontend', 'Bootstrap': 'Frontend', 'Shaders': 'Frontend', 'Swift': 'Frontend', 'Pygame': 'Frontend', 'Web Development': 'Frontend', 'UI/UX': 'Frontend', 'Prototyping': 'Frontend', '3D Graphics': 'Frontend', 'Rasterization': 'Frontend', 'Object representation': 'Frontend', 'Game Development': 'Frontend', 'Blender': 'Frontend', '3D Animation': 'Frontend',
+  // Backend / Languages / Algorithms
+  'Ruby on Rails': 'Backend', 'PostgreSQL': 'Backend', 'SQLite': 'Backend', 'Flask': 'Backend', 'Node.js': 'Backend', 'GraphQL': 'Backend', 'REST APIs': 'Backend', 'ActiveStorage': 'Backend', 'Python': 'Backend', 'API': 'Backend', 'Edge Patterns': 'Backend', 'MongoDB': 'Backend', 'Haskell': 'Backend', 'Functional Programming': 'Backend', 'Monadic Programming': 'Backend', 'Algorithms': 'Backend', 'Random Generation': 'Backend', 'Systems Design': 'Backend', 'Mathematics': 'Backend',
+  // AI / ML / Robotics / Data Science
+  'AI': 'AI/ML', 'ML': 'AI/ML', 'Machine Learning': 'AI/ML', 'LLM': 'AI/ML', 'LLM Streaming': 'AI/ML', 'Groq': 'AI/ML', 'OpenAI GPT': 'AI/ML', 'Langchain': 'AI/ML', 'LLama.cpp': 'AI/ML', 'GGUF': 'AI/ML', 'TensorFlow': 'AI/ML', 'PyTorch': 'AI/ML', 'Computer Vision': 'AI/ML', 'NLP': 'AI/ML', 'NumPy': 'AI/ML', 'SciPy': 'AI/ML', 'Swarm Robotics': 'AI/ML', 'Robotics': 'AI/ML', 'LiDAR': 'AI/ML', 'Ultrasonic Sensing': 'AI/ML',
+  // Tools / DevOps / Design / Infrastructure
+  'Docker': 'Tools', 'AWS': 'Tools', 'Vercel': 'Tools', 'Git': 'Tools', 'Figma': 'Tools', 'Adobe Creative Suite': 'Tools', 'Prismic CMS': 'Tools', 'Slice Machine': 'Tools', 'PostCSS': 'Tools', 'Cloudflare': 'Tools', 'Rake': 'Tools', 'WSL': 'Tools', 'Gitlab': 'Tools', 'ShakerPacker': 'Tools', 'Markdown': 'Tools', 'Client Requirements': 'Tools', 'Iteration': 'Tools', 'Deployment': 'Tools', 'Domain Transfer': 'Tools', 'Technical Drawings': 'Tools', 'Business Planning': 'Tools', 'CAD': 'Tools', 'CFD': 'Tools'
 };
 
 interface RawSkill { name: string; count: number; weight: number; category: string; }
