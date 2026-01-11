@@ -5,6 +5,7 @@ import { Inter } from 'next/font/google';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://jacksmith.me'),
   title: 'Jack Smith - AI + Graphics Enthusiast',
   description: 'Full-stack developer specializing in AI integration and interactive web experiences. Building the future with modern technologies.',
   keywords: ['Full Stack Developer', 'AI Integration', 'React', 'Next.js', 'GSAP', 'Three.js'],
@@ -12,11 +13,11 @@ export const metadata: Metadata = {
   openGraph: {
     title: 'Jack Smith - AI + Graphics Enthusiast',
     description: 'Building Interactive Worlds with AI and Modern Web Technologies',
-    url: 'https://your-domain.com',
+    url: 'https://jacksmith.me',
     siteName: 'Jack Smith Portfolio',
     images: [
       {
-        url: 'https://your-domain.com/og-image.jpg',
+        url: 'https://jacksmith.me/Logo.png',
         width: 1200,
         height: 630,
       },
@@ -28,7 +29,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Jack Smith - AI + Graphics Enthusiast',
     description: 'Building Interactive Worlds with AI and Modern Web Technologies',
-    images: ['https://your-domain.com/og-image.jpg'],
+    images: ['https://jacksmith.me/Logo.png'],
   },
 };
 
@@ -40,6 +41,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="scroll-smooth overflow-x-hidden">
       <head>
+        <link rel="icon" href="/favicon.ico" sizes="any" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>
