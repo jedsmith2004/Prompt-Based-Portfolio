@@ -61,19 +61,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     for (const m of candidateModels) {
       tried.push(m);
       try {
+        // Build request body - different params for reasoning models
+        const isReasoningModel = m.includes('gpt-oss') || m.includes('deepseek-r1');
+        const requestBody: Record<string, unknown> = {
+          model: m,
+          messages: chatMessages,
+          stream: true,
+        };
+
+        if (isReasoningModel) {
+          // Reasoning models use max_completion_tokens and reasoning_effort
+          requestBody.max_completion_tokens = 2048;
+          requestBody.temperature = 1;
+          requestBody.top_p = 1;
+          requestBody.reasoning_effort = 'medium';
+        } else {
+          // Standard models use max_tokens
+          requestBody.max_tokens = 1024;
+          requestBody.temperature = 0.7;
+        }
+
         const attempt = await fetch('https://api.groq.com/openai/v1/chat/completions', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${apiKey}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            model: m,
-            messages: chatMessages,
-            stream: true,
-            max_tokens: 220,
-            temperature: 0.8,
-          }),
+          body: JSON.stringify(requestBody),
         });
         if (attempt.ok && attempt.body) {
           response = attempt;
@@ -104,6 +118,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       throw new Error('No response body');
     }
 
+    // Helper to decode HTML entities that models sometimes output
+    const decodeHtmlEntities = (text: string): string => {
+      return text
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/&apos;/g, "'")
+        .replace(/&#x27;/g, "'")
+        .replace(/&#x2F;/g, '/')
+        .replace(/&nbsp;/g, ' ');
+    };
+
     try {
       while (true) {
         const { done, value } = await reader.read();
@@ -122,8 +150,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
             try {
               const parsed = JSON.parse(data);
-              const content = parsed.choices?.[0]?.delta?.content;
+              let content = parsed.choices?.[0]?.delta?.content;
               if (content) {
+                // Clean HTML entities from model output
+                content = decodeHtmlEntities(content);
                 res.write(`data: ${JSON.stringify({ content })}\n\n`);
               }
             } catch (e) {

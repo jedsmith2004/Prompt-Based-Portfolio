@@ -38,12 +38,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="scroll-smooth">
+    <html lang="en" className="scroll-smooth overflow-x-hidden">
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
       </head>
-      <body className={`${inter.className} bg-[#0A0A0A] antialiased`}>
+      <body className={`${inter.className} bg-[#0A0A0A] antialiased overflow-x-hidden`}>
         {children}
       </body>
     </html>

@@ -31,7 +31,7 @@ export default function ChatWidget({ onActivate, isActive }: ChatWidgetProps) {
     'How does the offline AI app work?',
     'Explain your rasterizer pipeline',
     'What tech stack powers the language app?',
-    'How do you optimize model inference?',
+    'Can I see your CV?',
     'Describe your MNIST classifier approach',
     'What animations use GSAP?',
     'How do you structure large React apps?' 
@@ -283,8 +283,53 @@ export default function ChatWidget({ onActivate, isActive }: ChatWidgetProps) {
     }
   };
 
+  // CV Download Card component
+  const CVCard = ({ keyProp }: { keyProp: string }) => (
+    <div key={keyProp} className="my-3 p-4 rounded-xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 border border-blue-400/30 backdrop-blur-sm">
+      <div className="flex items-center gap-3">
+        <div className="p-2 rounded-lg bg-blue-500/20">
+          <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+        </div>
+        <div className="flex-1">
+          <p className="text-white font-medium text-sm">Jack Smith - CV</p>
+          <p className="text-gray-400 text-xs">PDF Document</p>
+        </div>
+        <a
+          href="/CV Jack Smith.pdf"
+          download="Jack Smith - CV.pdf"
+          className="flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-lg transition-all duration-200 hover:scale-105"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+          Download
+        </a>
+      </div>
+    </div>
+  );
+
   // Lightweight Markdown parser for limited formatting (bold, italics, inline/code blocks, links, lists)
   function renderFormattedMarkdown(text: string): React.ReactNode {
+    // Check for CV card marker and split around it
+    const cvParts = text.split(/\[CV_CARD\]/gi);
+    if (cvParts.length > 1) {
+      return (
+        <>
+          {cvParts.map((part, i) => (
+            <React.Fragment key={`cv-part-${i}`}>
+              {part && renderMarkdownContent(part)}
+              {i < cvParts.length - 1 && <CVCard keyProp={`cv-card-${i}`} />}
+            </React.Fragment>
+          ))}
+        </>
+      );
+    }
+    return renderMarkdownContent(text);
+  }
+
+  function renderMarkdownContent(text: string): React.ReactNode {
     const lines = text.split(/\r?\n/);
     const elements: React.ReactNode[] = [];
     let inCodeBlock = false;

@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { AnimationManager } from '../lib/animations';
 import { projects } from '../lib/projects-data';
 import { gsap } from 'gsap'; // added for pill hover animations
+import FloatingCV from './FloatingCV';
 
 export default function About() {
   useEffect(() => {
@@ -83,16 +84,20 @@ export default function About() {
         <div className="grid md:grid-cols-2 gap-12 items-center">
           <div className="animate-on-scroll">
             <div className="relative">
-              <div className="w-80 h-80 mx-auto relative">
+              {/* Profile Image */}
+              <div className="w-64 h-64 mx-auto relative mb-8">
                 <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-full blur-xl" />
                 <Image
                   src="/jack-avatar.jpg"
                   alt="Jack Smith"
-                  width={320}
-                  height={320}
+                  width={256}
+                  height={256}
                   className="relative z-10 w-full h-full object-cover rounded-full border-4 border-white/20"
                 />
               </div>
+              
+              {/* Floating CV beneath the photo */}
+              <FloatingCV />
             </div>
           </div>
 
