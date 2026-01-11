@@ -6,7 +6,7 @@ export default function Footer() {
           <div className="mb-6 md:mb-0">
             <h3 className="text-2xl font-bold text-white mb-2">Jack Smith</h3>
             <p className="text-gray-400">
-              Building the future, one pixel at a time.
+              From scratch. On purpose.
             </p>
           </div>
 
@@ -29,7 +29,7 @@ export default function Footer() {
                 LinkedIn
               </a>
               <a
-                href="mailto:jack@example.com"
+                href="mailto:jedsmith2004@gmail.com"
                 className="text-gray-400 hover:text-white transition-colors duration-200"
               >
                 Email

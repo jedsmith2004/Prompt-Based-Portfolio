@@ -71,8 +71,7 @@ export default function Contact() {
             Let's Connect
           </h2>
           <p className="text-xl text-gray-400 max-w-2xl mx-auto">
-            I'm actively seeking new opportunities and would love to discuss how my skills 
-            can contribute to your team's success.
+            I'm drawn to hard problems and teams that ship. If you're working on something technically interesting, I'd like to hear about it.
           </p>
         </div>
 
