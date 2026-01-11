@@ -1,6 +1,6 @@
 {
   "name": "prompt-based-portfolio",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Interactive AI-powered portfolio website built with Next.js, featuring real-time chat integration and stunning animations",
   "private": false,
   "author": "Jack Smith <jedsmith2004@gmail.com>",
