@@ -24,8 +24,7 @@ export default function ChatWidget({ onActivate, isActive }: ChatWidgetProps) {
   const [isStreaming, setIsStreaming] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const placeholderRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const rotatingExamples = useRef<string[]>([
     'What project are you most proud of?',
     'How does the offline AI app work?',
@@ -58,7 +57,7 @@ export default function ChatWidget({ onActivate, isActive }: ChatWidgetProps) {
 
     const el = inputRef.current;
     if (!el) return;
-    const inputElement = el as HTMLInputElement;
+    const inputElement = el as HTMLTextAreaElement;
 
     // Reset controller state entirely each mount of effect
     animationController.current.cancelled = false;
@@ -198,6 +197,13 @@ export default function ChatWidget({ onActivate, isActive }: ChatWidgetProps) {
 
     setMessages(prev => [...prev, userMessage]);
     setInputValue('');
+    
+    // Reset textarea height after sending
+    if (inputRef.current) {
+      inputRef.current.style.height = 'auto';
+      inputRef.current.style.overflowY = 'hidden';
+    }
+    
     setIsLoading(true);
     setIsStreaming(true);
     onActivate();
@@ -466,20 +472,34 @@ export default function ChatWidget({ onActivate, isActive }: ChatWidgetProps) {
   return (
     <div className="w-full max-w-2xl mx-auto">
       {!isActive && messages.length === 0 ? (
-        <form onSubmit={handleSubmit} className="relative">
-          <input
-            ref={inputRef}
-            type="text"
+        <form onSubmit={handleSubmit} className="relative flex items-end">
+          <textarea
+            ref={inputRef as React.RefObject<HTMLTextAreaElement>}
             value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
+            onChange={(e) => {
+              setInputValue(e.target.value);
+              // Auto-resize textarea, show scrollbar only when at max
+              const maxHeight = 120;
+              e.target.style.height = 'auto';
+              const newHeight = Math.min(e.target.scrollHeight, maxHeight);
+              e.target.style.height = newHeight + 'px';
+              e.target.style.overflowY = e.target.scrollHeight > maxHeight ? 'auto' : 'hidden';
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSubmit(e);
+              }
+            }}
             placeholder="Ask me anything..."
-            className="w-full px-6 py-4 text-lg bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl text-white placeholder-gray-400 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/50 transition-all duration-300 placeholder-opacity-transition"
+            rows={1}
+            className="w-full px-6 pr-14 py-4 text-lg bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl text-white placeholder-gray-400 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/50 transition-all duration-300 placeholder-opacity-transition resize-none overflow-hidden"
             disabled={isLoading}
           />
           <button
             type="submit"
             disabled={isLoading || !inputValue.trim()}
-            className="absolute right-2 top-1/2 transform -translate-y-1/2 p-3 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-600 rounded-xl transition-all duration-200 disabled:opacity-50"
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-3 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-600 rounded-xl transition-all duration-200 disabled:opacity-50"
           >
             <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
@@ -500,13 +520,13 @@ export default function ChatWidget({ onActivate, isActive }: ChatWidgetProps) {
                   className={`flex ${message.isUser ? 'justify-end' : 'justify-start'}`}
                 >
                   <div
-                    className={`max-w-[80%] p-3 rounded-2xl ${
+                    className={`max-w-[80%] p-3 rounded-2xl break-words overflow-hidden ${
                       message.isUser
                         ? 'bg-blue-500 text-white rounded-br-md'
                         : 'bg-white/10 text-white rounded-bl-md border border-white/20'
                     }`}
                   >
-                    <div className="text-sm leading-relaxed">
+                    <div className="text-sm leading-relaxed break-words whitespace-pre-wrap overflow-wrap-anywhere">
                       {renderFormattedMarkdown(message.text)}
                     </div>
                   </div>
@@ -528,26 +548,44 @@ export default function ChatWidget({ onActivate, isActive }: ChatWidgetProps) {
               <div ref={messagesEndRef} />
             </div>
 
-            <form onSubmit={handleSubmit} className="relative">
-              <input
-                ref={inputRef}
-                type="text"
+            <form onSubmit={handleSubmit} className="relative flex items-end">
+              <textarea
+                ref={inputRef as React.RefObject<HTMLTextAreaElement>}
                 value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
+                onChange={(e) => {
+                  setInputValue(e.target.value);
+                  // Auto-resize textarea, show scrollbar only when at max
+                  const maxHeight = 80;
+                  e.target.style.height = 'auto';
+                  const newHeight = Math.min(e.target.scrollHeight, maxHeight);
+                  e.target.style.height = newHeight + 'px';
+                  e.target.style.overflowY = e.target.scrollHeight > maxHeight ? 'auto' : 'hidden';
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSubmit(e);
+                  }
+                }}
                 placeholder="Ask another question..."
-                className="w-full px-4 py-3 bg-white/10 border border-white/20 rounded-2xl text-white placeholder-gray-400 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/50 transition-all duration-300"
+                rows={1}
+                className="w-full px-4 pr-12 py-3 bg-white/10 border border-white/20 rounded-2xl text-white placeholder-gray-400 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/50 transition-all duration-300 resize-none overflow-hidden"
                 disabled={isLoading}
               />
               <button
                 type="submit"
                 disabled={isLoading || !inputValue.trim()}
-                className="absolute right-2 top-1/2 transform -translate-y-1/2 p-2 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-600 rounded-xl transition-all duration-200 disabled:opacity-50"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-600 rounded-xl transition-all duration-200 disabled:opacity-50"
               >
                 <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                 </svg>
               </button>
             </form>
+            <p className="text-xs text-gray-500 text-center mt-2">
+              AI responses may be innacurate
+            </p>
+            
           </div>
         </div>
       )}

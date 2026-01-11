@@ -187,3 +187,9 @@ html::-webkit-scrollbar-thumb:active {
 .placeholder-transitioning::placeholder {
   opacity: 1 !important;
 }
+
+/* Word wrap utility for chat messages */
+.overflow-wrap-anywhere {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
