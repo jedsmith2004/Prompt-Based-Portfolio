@@ -25,6 +25,10 @@ export interface ContextData {
     github: string;
     demo: string;
     image: string;
+    linkedin: string;
+    status: string;
+    date: string;
+    features?: string[];
   }>;
   experience: Array<{
     company: string;
@@ -54,7 +58,11 @@ export function loadContext(): ContextData {
     tech: p.tech,
     github: p.github,
     demo: p.demo,
-    image: p.image
+    image: p.image,
+    linkedin: p.linkedin || 'N/A',
+    status: p.status,
+    date: p.date,
+    features: p.features
   }));
 
   return parsed;
@@ -74,7 +82,11 @@ ${context.projects?.map(project =>
   `• ${project.title}: ${project.description}
     Technologies used: ${project.tech.join(', ')}
     GitHub: ${project.github}
-    Demo: ${project.demo}`
+    Demo: ${project.demo}
+    LinkedIn Post: ${project.linkedin}
+    Status: ${project.status}
+    Date: ${project.date}
+    Key Features: ${project.features?.join('; ') || 'N/A'}`
 ).join('\n\n')}
 
 MY PROFESSIONAL EXPERIENCE:

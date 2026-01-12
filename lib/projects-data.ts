@@ -7,8 +7,8 @@ export interface Project {
   demo: string;
   image: string;
   // New optional metadata for enhanced project cards
-  status?: 'completed' | 'in-progress';
-  date?: string; // e.g. 'Jan 2025'
+  status: 'completed' | 'in-progress';
+  date: string; // e.g. 'Jan 2025'
   features?: string[]; // Key feature bullet points
   linkedin?: string; // Link to LinkedIn post about this project
 }
