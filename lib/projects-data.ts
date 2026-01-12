@@ -15,6 +15,28 @@ export interface Project {
 
 export const projects: Project[] = [
   {
+    id: 'neighbourly',
+    title: 'Neighbourly',
+    description: 'A community-focused web app connecting neighbors who need help with volunteers willing to assist. Users post requests for help (groceries, errands, companionship) and volunteers view them on an interactive map and offer assistance via real-time chat. An evolution of our HackSheffield 9 hackathon project where we won 1st place in the GitHub competition.',
+    tech: ['SvelteKit 5', 'TailwindCSS', 'Google Maps API', 'Python', 'Flask', 'SQLAlchemy', 'PostgreSQL', 'Neon', 'Auth0', 'Vercel', 'Fly.io', 'Real-time Chat'],
+    github: 'https://github.com/jedsmith2004/neighbourly',
+    demo: 'https://neighbourly.jacksmith.me',
+    linkedin: '',
+    image: '/neighbourly.png',
+    status: 'completed',
+    date: 'January 2026',
+    features: [
+      'Interactive map showing nearby help requests with Google Maps API integration',
+      'Real-time chat between requesters and helpers',
+      'Two-way map-address interaction: pin updates address field, typing address repositions pin',
+      'Secure authentication with Auth0 across separate frontend/backend domains',
+      'PostgreSQL-backed sessions for multi-instance server support',
+      'Mobile-responsive design',
+      'Cross-domain authentication handling with HTTPS behind reverse proxies',
+      'Evolution from HackSheffield 9 hackathon (1st place GitHub competition)'
+    ]
+  },
+  {
     id: 'client-website-sheffield',
     title: 'Client Website Delivery (Sheffield)',
     description: 'A real client website delivered end-to-end with a full requirements → prototype → feedback iteration loop, followed by deployment and domain transfer coordination with the client’s previous web provider.',
@@ -142,8 +164,8 @@ export const projects: Project[] = [
     demo: 'https://www.jacksmith.me',
     linkedin: 'https://www.linkedin.com/posts/jack-ed-smith_portfolio-webdevelopment-nextjs-activity-7414621831011381248-YeGo?utm_source=social_share_send&utm_medium=member_desktop_web&rcm=ACoAADuJDq8BCJQoqWvGoU-uR5GamfvCd_uNR6c',
     image: '/AI-Portfolio.png',
-    status: 'in-progress',
-    date: 'September 2025',
+    status: 'completed',
+    date: 'January 2026',
     features: [
       'Real-time streaming AI chat with conversation memory & fallback model chain',
       'RunId-based deterministic placeholder suggestion animator (no overlap)',
