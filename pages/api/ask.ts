@@ -58,52 +58,78 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     let response: Response | null = null;
     let lastError: any = null;
 
+    // Helper to wait with exponential backoff
+    const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
     for (const m of candidateModels) {
       tried.push(m);
-      try {
-        // Build request body - different params for reasoning models
-        const isReasoningModel = m.includes('gpt-oss') || m.includes('deepseek-r1');
-        const requestBody: Record<string, unknown> = {
-          model: m,
-          messages: chatMessages,
-          stream: true,
-        };
+      
+      // Only retry once for rate limits, then move to next model quickly
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          // Build request body - different params for reasoning models
+          const isReasoningModel = m.includes('gpt-oss') || m.includes('deepseek-r1');
+          const requestBody: Record<string, unknown> = {
+            model: m,
+            messages: chatMessages,
+            stream: true,
+          };
 
-        if (isReasoningModel) {
-          // Reasoning models use max_completion_tokens and reasoning_effort
-          requestBody.max_completion_tokens = 2048;
-          requestBody.temperature = 1;
-          requestBody.top_p = 1;
-          requestBody.reasoning_effort = 'medium';
-        } else {
-          // Standard models use max_tokens
-          requestBody.max_tokens = 1024;
-          requestBody.temperature = 0.7;
-        }
+          if (isReasoningModel) {
+            // Reasoning models use max_completion_tokens and reasoning_effort
+            requestBody.max_completion_tokens = 2048;
+            requestBody.temperature = 1;
+            requestBody.top_p = 1;
+            requestBody.reasoning_effort = 'medium';
+          } else {
+            // Standard models use max_tokens
+            requestBody.max_tokens = 1024;
+            requestBody.temperature = 0.7;
+          }
 
-        const attempt = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(requestBody),
-        });
-        if (attempt.ok && attempt.body) {
-          response = attempt;
-          chosenModel = m;
-          break;
-        } else {
-          lastError = new Error(`Model ${m} failed: ${attempt.status} ${attempt.statusText}`);
+          const apiResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${apiKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody),
+          });
+          
+          if (apiResponse.ok && apiResponse.body) {
+            response = apiResponse;
+            chosenModel = m;
+            break;
+          } else if (apiResponse.status === 429) {
+            // Rate limited - short wait then try next model (don't hang)
+            const waitTime = attempt === 0 ? 1500 : 0; // Only wait 1.5s on first attempt, then skip
+            if (waitTime > 0) {
+              console.log(`Rate limited on ${m}, waiting ${waitTime}ms then trying next model`);
+              await wait(waitTime);
+            }
+            lastError = new Error(`Model ${m} rate limited: 429 Too Many Requests`);
+            break; // Move to next model quickly
+          } else {
+            lastError = new Error(`Model ${m} failed: ${apiResponse.status} ${apiResponse.statusText}`);
+            break; // Try next model
+          }
+        } catch (err) {
+          lastError = err;
+          break; // Try next model on network errors
         }
-      } catch (err) {
-        lastError = err;
       }
+      
+      if (response && chosenModel) break; // Success, exit model loop
     }
 
     if (!response || !chosenModel) {
       console.error('All model attempts failed', { tried, lastError });
-      return res.status(502).json({ error: 'Upstream model failure', tried, detail: lastError instanceof Error ? lastError.message : String(lastError) });
+      const isRateLimit = lastError?.message?.includes('429') || lastError?.message?.includes('rate limit');
+      return res.status(isRateLimit ? 429 : 502).json({ 
+        error: isRateLimit ? 'Rate limit reached - please wait a moment and try again' : 'Upstream model failure', 
+        tried, 
+        detail: lastError instanceof Error ? lastError.message : String(lastError) 
+      });
     }
 
     res.setHeader('X-Model-Used', chosenModel);

@@ -227,6 +227,10 @@ export default function ChatWidget({ onActivate, isActive }: ChatWidgetProps) {
           statusText: response.statusText,
           body: errorText
         });
+        // Show user-friendly message for rate limits
+        if (response.status === 429) {
+          throw new Error('rate_limit');
+        }
         throw new Error(`API Error: ${response.status} - ${errorText}`);
       }
 
@@ -276,9 +280,12 @@ export default function ChatWidget({ onActivate, isActive }: ChatWidgetProps) {
       }
     } catch (error) {
       console.error('Chat error:', error);
+      const isRateLimit = error instanceof Error && error.message === 'rate_limit';
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
-        text: 'Sorry, I encountered an error. Please try again.',
+        text: isRateLimit 
+          ? "I'm getting a lot of questions right now! Please wait a moment and try again." 
+          : 'Sorry, I encountered an error. Please try again.',
         isUser: false,
         timestamp: new Date(),
       };
