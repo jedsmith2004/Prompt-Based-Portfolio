@@ -42,11 +42,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       { role: 'user', content: message }
     ];
 
-    // Model fallback chain (prefer OSS ~20B-class effective model first)
+    // Model fallback chain - updated Jan 2026 with current Groq models
     const fallbackChain = [
-      'mixtral-8x7b-32768',
-      'gemma2-9b-it',
-      'llama-3.1-8b-instant'
+      'llama-3.3-70b-versatile',
+      'llama3-70b-8192',
+      'llama3-8b-8192',
+      'gemma-7b-it'
     ];
     const explicit = process.env.GROQ_MODEL ? [process.env.GROQ_MODEL] : [];
     const dedup: Record<string, true> = {};
