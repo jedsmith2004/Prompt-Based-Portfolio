@@ -15,6 +15,31 @@ export interface Project {
 
 export const projects: Project[] = [
   {
+    id: 'habitflow',
+    title: 'HabitFlow',
+    description: 'A full-stack habit tracking and goal management web app with social features. Users set numeric goals (e.g. 100,000 push-ups), track daily habits, view AI-powered insights, and compete with friends. Features real-time activity feeds, event planning with Google Maps integration, and a GitHub-style consistency heatmap.',
+    tech: ['React', 'TypeScript', 'TailwindCSS', 'Firebase Auth', 'Express', 'PostgreSQL', 'Neon', 'Gemini AI', 'Recharts', 'Vercel', 'Railway'],
+    github: 'https://github.com/jedsmith2004/HabitTracker',
+    demo: 'https://habit.jacksmith.me',
+    linkedin: '',
+    image: '/habitflow.png',
+    status: 'completed',
+    date: 'February 2026',
+    features: [
+      'Numeric goal tracking with daily targets, deadlines, and below/on/above target badges',
+      'Daily habit tracker with week-by-week navigation and positive/negative habit support',
+      'AI-powered insights and personalised analytics using Google Gemini',
+      'GitHub-style 52×7 consistency heatmap and skill balance radar charts',
+      'Social features: friend requests, activity feeds, ping-to-workout notifications',
+      'Event planning with RSVP system, attendee badges, and Google Maps integration',
+      'Full activity history with edit and revert capabilities',
+      'Multi-stage onboarding flow with customisable goals and habits',
+      'Dark/light mode with persistent settings',
+      'Firebase Authentication with email/password and Google sign-in',
+      'Deployed with Vercel (frontend) and Railway (API) backed by Neon PostgreSQL'
+    ]
+  },
+  {
     id: 'neighbourly',
     title: 'Neighbourly',
     description: 'A community-focused web app connecting neighbors who need help with volunteers willing to assist. Users post requests for help (groceries, errands, companionship) and volunteers view them on an interactive map and offer assistance via real-time chat. An evolution of our HackSheffield 9 hackathon project where we won 1st place in the GitHub competition.',
