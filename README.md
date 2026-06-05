@@ -19,11 +19,11 @@
 
 My personal portfolio website showcasing my work, skills, and experience. Features an interactive AI-powered chat widget that can answer questions about my background and projects.
 
-**🔗 [www.jacksmith.me](https://www.jacksmith.me)**
+**[www.jacksmith.me](https://www.jacksmith.me)**
 
 ---
 
-## ✨ Features
+## Features
 
 | Feature | Description |
 |---------|-------------|
@@ -35,7 +35,7 @@ My personal portfolio website showcasing my work, skills, and experience. Featur
 
 ---
 
-## 🛠️ Built With
+## Built With
 
 - **[Next.js](https://nextjs.org/)** — React framework with App Router
 - **[TypeScript](https://www.typescriptlang.org/)** — Type-safe development
@@ -46,7 +46,7 @@ My personal portfolio website showcasing my work, skills, and experience. Featur
 
 ---
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
 
