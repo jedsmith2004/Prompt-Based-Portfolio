@@ -5,15 +5,52 @@ export interface Project {
   tech: string[];
   github: string;
   demo: string;
+  paper?: string; // Link to a paper / dissertation PDF (shown in place of a live demo)
   image: string;
   // New optional metadata for enhanced project cards
   status: 'completed' | 'in-progress';
   date: string; // e.g. 'Jan 2025'
   features?: string[]; // Key feature bullet points
   linkedin?: string; // Link to LinkedIn post about this project
+  stealth?: boolean; // Undisclosed / in-stealth project — renders a redacted teaser card
 }
 
 export const projects: Project[] = [
+  {
+    id: 'recensorium',
+    title: 'Recensorium',
+    description: "Something new is taking shape. The project I'm most excited about is in stealth for now, so the details are deliberately under wraps. Watch this space.",
+    tech: [],
+    github: '',
+    demo: '',
+    linkedin: '',
+    image: '',
+    status: 'in-progress',
+    date: 'Coming soon',
+    stealth: true,
+    features: ['Currently in stealth; details intentionally withheld']
+  },
+  {
+    id: 'motiongen',
+    title: 'MotionGen (Dissertation)',
+    description: 'My BSc dissertation, "Beyond Simple Prompts": a Unity editor plugin for controllable, interactive 3D human motion generation that runs entirely locally. A local Python backend (over gRPC) serves multiple text-to-motion models (T2M-GPT, MoMask, MDM) and writes results straight back into Unity as humanoid AnimationClip assets. In a within-subjects user study it outperformed Unity\'s own Muse Animate across all four headline workflows.',
+    tech: ['Unity', 'C#', 'Python', 'gRPC', 'Generative AI', 'Text-to-Motion', 'T2M-GPT', 'MoMask', 'MDM', 'Local Inference', '3D Animation'],
+    github: 'https://github.com/jedsmith2004/MotionGen',
+    demo: '',
+    paper: '/MotionGen-Dissertation.pdf',
+    linkedin: '',
+    image: '/MotionGen.png',
+    status: 'completed',
+    date: 'May 2026',
+    features: [
+      'Fully local text-to-motion generation inside the Unity editor, with no cloud or external account',
+      'Serves T2M-GPT, MoMask and MDM through a local Python backend over gRPC',
+      'Single and batched generation, text-prompted segment regeneration, two-clip inbetweening and multi-segment composition',
+      'Local Gemma planner splits a complex prompt into a per-segment JSON plan (models, durations, transitions, scene anchors)',
+      'Variant ranker scores clips on foot skating, jerk, root drift and ground penetration',
+      'Writes results directly as humanoid AnimationClip assets; evaluated in four studies, leading Unity AI on all four headline workflows'
+    ]
+  },
   {
     id: 'habitflow',
     title: 'HabitFlow',
@@ -59,6 +96,42 @@ export const projects: Project[] = [
       'Mobile-responsive design',
       'Cross-domain authentication handling with HTTPS behind reverse proxies',
       'Evolution from HackSheffield 9 hackathon (1st place GitHub competition)'
+    ]
+  },
+  {
+    id: 'alexnet-transfer-classifier',
+    title: 'AlexNet Transfer-Learning Image Classifier',
+    description: 'An image classification study built by fine-tuning AlexNet and selectively re-training specific convolutional layers, followed by a range of analyses comparing training strategies, layer behaviour, and classification performance.',
+    tech: ['Python', 'PyTorch', 'CNNs', 'Transfer Learning', 'AlexNet', 'Computer Vision', 'Analysis'],
+    github: '',
+    demo: '',
+    linkedin: '',
+    image: '',
+    status: 'completed',
+    date: 'March 2026',
+    features: [
+      'Fine-tuned AlexNet and probed individual convolutional layers',
+      'Compared full fine-tuning against selective layer re-training',
+      'Layer-wise and performance analysis of the learned features',
+      'Applied transfer learning to a new classification task'
+    ]
+  },
+  {
+    id: 'natural-systems-and-rl',
+    title: 'Modelling Natural Systems & Reinforcement Learning',
+    description: 'A set of modelling and analysis studies of natural and dynamical systems, including the Duffing oscillator and a Predator-Prey agent-based model, alongside an exploration of tabular Q-learning.',
+    tech: ['Python', 'NumPy', 'Dynamical Systems', 'Agent-Based Modelling', 'Reinforcement Learning', 'Q-Learning', 'Analysis'],
+    github: '',
+    demo: '',
+    linkedin: '',
+    image: '',
+    status: 'completed',
+    date: 'February 2026',
+    features: [
+      'Analysed the Duffing oscillator as a nonlinear dynamical system',
+      'Built and studied a Predator-Prey agent-based model',
+      'Implemented and evaluated tabular Q-learning',
+      'Focused on system behaviour, stability, and emergent dynamics'
     ]
   },
   {

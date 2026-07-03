@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Jack Smith — CV</title>
+<style>
+  :root{
+    --ink:#0f172a;
+    --body:#334155;
+    --muted:#64748b;
+    --faint:#94a3b8;
+    --line:#e2e8f0;
+    --panel:#f8fafc;
+    --blue:#2563eb;
+    --red:#ef4444;
+    --blue-soft:#eff6ff;
+    --red-soft:#fef2f2;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  @page{ size:A4; margin:8mm 9mm; }
+  html,body{ font-family:"Segoe UI", -apple-system, Roboto, Helvetica, Arial, sans-serif; color:var(--body); font-size:9.4px; line-height:1.46; }
+  body{ background:#fff; }
+
+  /* ---------- HEADER ---------- */
+  .header{
+    position:relative;
+    border-radius:14px;
+    overflow:hidden;
+    background:
+      radial-gradient(120% 160% at 100% 0%, rgba(239,68,68,.28) 0%, rgba(239,68,68,0) 45%),
+      radial-gradient(120% 160% at 0% 100%, rgba(37,99,235,.32) 0%, rgba(37,99,235,0) 50%),
+      linear-gradient(135deg,#0b1220 0%, #111a2e 55%, #0b1220 100%);
+    color:#fff;
+    padding:15px 22px 14px;
+  }
+  .header::after{
+    content:""; position:absolute; left:0; right:0; bottom:0; height:3px;
+    background:linear-gradient(90deg,var(--blue),#a855f7,var(--red));
+  }
+  .name{
+    font-size:27px; font-weight:800; letter-spacing:-.6px; line-height:1;
+    color:#fff;
+  }
+  .name .dot{ background:linear-gradient(90deg,#60a5fa,#f87171); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .role{
+    margin-top:7px; font-size:11px; font-weight:600; letter-spacing:.2px;
+    color:#cbd5e1;
+  }
+  .role b{ color:#93c5fd; font-weight:700; }
+  .contact{
+    margin-top:11px; display:flex; flex-wrap:wrap; gap:6px 15px;
+    font-size:9px; color:#e2e8f0;
+  }
+  .contact a{ color:#e2e8f0; text-decoration:none; }
+  .c-item{ display:inline-flex; align-items:center; gap:5px; white-space:nowrap; }
+  .c-item svg{ width:11px; height:11px; opacity:.85; }
+  .c-item .ic{ color:#93c5fd; }
+
+  /* ---------- LAYOUT ---------- */
+  .grid{ display:flex; gap:18px; margin-top:12px; }
+  .col-main{ flex:1 1 62%; min-width:0; }
+  .col-side{ flex:0 0 33%; }
+
+  /* ---------- SECTION TITLES ---------- */
+  .sec{ margin-bottom:11px; }
+  .sec-title{
+    display:flex; align-items:center; gap:8px;
+    font-size:11px; font-weight:800; letter-spacing:1.4px; text-transform:uppercase;
+    color:var(--ink); margin-bottom:9px;
+  }
+  .sec-title .bar{ width:15px; height:3px; border-radius:2px; background:linear-gradient(90deg,var(--blue),var(--red)); }
+  .side .sec-title{ font-size:10px; letter-spacing:1.2px; }
+
+  /* ---------- PROFILE ---------- */
+  .profile{ font-size:9.7px; line-height:1.62; color:var(--body); }
+  .profile b{ color:var(--ink); font-weight:600; }
+
+  /* ---------- ENTRIES (experience / projects) ---------- */
+  .entry{ position:relative; padding-left:15px; margin-bottom:9px; break-inside:avoid; }
+  .entry::before{ content:""; position:absolute; left:0; top:3px; bottom:3px; width:2px; border-radius:2px;
+    background:linear-gradient(180deg,var(--blue),var(--red)); opacity:.55; }
+  .entry-head{ display:flex; justify-content:space-between; align-items:baseline; gap:10px; }
+  .entry-title{ font-size:10.5px; font-weight:700; color:var(--ink); }
+  .entry-org{ font-size:9.3px; font-weight:600; color:var(--blue); margin-top:1px; }
+  .entry-date{ font-size:8.4px; font-weight:600; color:var(--muted); white-space:nowrap; letter-spacing:.2px; }
+  ul.pts{ list-style:none; margin-top:5px; }
+  ul.pts li{ position:relative; padding-left:12px; margin-bottom:2.5px; font-size:9.3px; line-height:1.5; color:var(--body); }
+  ul.pts li::before{ content:""; position:absolute; left:1px; top:6px; width:4px; height:4px; border-radius:50%;
+    background:linear-gradient(135deg,var(--blue),var(--red)); }
+  .tags{ margin-top:5px; display:flex; flex-wrap:wrap; gap:4px; }
+  .tag{ font-size:7.7px; font-weight:600; color:#1e3a8a; background:var(--blue-soft);
+    border:1px solid #dbeafe; border-radius:20px; padding:1.5px 7px; letter-spacing:.2px; }
+
+  /* ---------- EDUCATION ---------- */
+  .edu{ margin-bottom:9px; break-inside:avoid; }
+  .edu-title{ font-size:10px; font-weight:700; color:var(--ink); }
+  .edu-sub{ font-size:9px; color:var(--muted); margin:1px 0 3px; display:flex; justify-content:space-between; gap:8px; }
+  .edu-sub .grade{ color:var(--blue); font-weight:700; }
+  .edu p{ font-size:8.9px; color:var(--body); line-height:1.5; }
+
+  /* ---------- SIDEBAR ---------- */
+  .side{ background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:15px 15px 6px; }
+  .skill-group{ margin-bottom:11px; }
+  .skill-cat{ font-size:8.5px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); margin-bottom:5px; }
+  .pills{ display:flex; flex-wrap:wrap; gap:4px; }
+  .pill{ font-size:8px; font-weight:600; color:var(--ink); background:#fff; border:1px solid var(--line);
+    border-radius:20px; padding:2px 8px; }
+  .pill.b{ border-color:#dbeafe; background:var(--blue-soft); color:#1e3a8a; }
+
+  .award{ display:flex; gap:8px; margin-bottom:9px; break-inside:avoid; }
+  .medal{ flex:0 0 auto; width:16px; height:16px; border-radius:50%; margin-top:1px;
+    display:flex; align-items:center; justify-content:center; font-size:8px; font-weight:800; color:#fff;
+    background:linear-gradient(135deg,var(--blue),var(--red)); }
+  .award-b{ min-width:0; }
+  .award-t{ font-size:9px; font-weight:700; color:var(--ink); line-height:1.25; }
+  .award-m{ font-size:8.2px; color:var(--muted); margin-top:1px; line-height:1.35; }
+  .award-m b{ color:var(--red); font-weight:700; }
+
+  .kv{ font-size:8.7px; color:var(--body); margin-bottom:5px; line-height:1.4; }
+  .kv b{ color:var(--ink); font-weight:700; }
+
+  .interest{ display:flex; gap:6px; margin-bottom:6px; font-size:8.7px; line-height:1.4; }
+  .interest .em{ font-size:11px; line-height:1; }
+  .interest b{ color:var(--ink); }
+
+  .divider{ height:1px; background:var(--line); margin:2px 0 12px; }
+  .side-note{ font-size:7.6px; color:var(--faint); text-align:center; padding:4px 0 6px; }
+</style>
+</head>
+<body>
+
+  <!-- ============ HEADER ============ -->
+  <div class="header">
+    <div class="name">Jack <span class="dot">Smith</span></div>
+    <div class="role">Computer Science <b>·</b> AI, Computer Graphics &amp; Full-Stack Engineering</div>
+    <div class="contact">
+      <span class="c-item"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zM2 12h20M12 2a15 15 0 010 20M12 2a15 15 0 000 20" stroke-linecap="round"/></svg><a href="https://www.jacksmith.me">www.jacksmith.me</a></span>
+      <span class="c-item"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5h16v14H4z" stroke-linejoin="round"/><path d="M4 6l8 6 8-6" stroke-linecap="round" stroke-linejoin="round"/></svg><a href="mailto:jedsmith2004@gmail.com">jedsmith2004@gmail.com</a></span>
+      <span class="c-item"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h4l2 5-2.5 1.5a11 11 0 006 6L15 14l5 2v4a2 2 0 01-2 2A16 16 0 012 6a2 2 0 012-2z" stroke-linejoin="round"/></svg><span>(+44) 7717 402339</span></span>
+      <span class="c-item"><svg class="ic" viewBox="0 0 24 24" fill="currentColor"><path d="M20.45 20.45h-3.55v-5.57c0-1.33-.02-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.35V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28zM5.34 7.43a2.06 2.06 0 110-4.13 2.06 2.06 0 010 4.13zM7.12 20.45H3.55V9h3.57v11.45zM22.22 0H1.77C.79 0 0 .77 0 1.73v20.54C0 23.22.79 24 1.77 24h20.45c.98 0 1.78-.78 1.78-1.73V1.73C24 .77 23.2 0 22.22 0z"/></svg><a href="https://linkedin.com/in/jack-ed-smith">jack-ed-smith</a></span>
+      <span class="c-item"><svg class="ic" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5a11.5 11.5 0 00-3.64 22.42c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.36-3.88-1.36-.53-1.34-1.3-1.7-1.3-1.7-1.06-.72.08-.71.08-.71 1.17.08 1.79 1.2 1.79 1.2 1.04 1.79 2.73 1.27 3.4.97.1-.75.4-1.27.74-1.56-2.56-.29-5.26-1.28-5.26-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 015.8 0c2.2-1.5 3.17-1.18 3.17-1.18.63 1.59.24 2.76.12 3.05.74.81 1.19 1.84 1.19 3.1 0 4.43-2.7 5.4-5.28 5.69.42.36.79 1.06.79 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0012 .5z"/></svg><a href="https://github.com/jedsmith2004">jedsmith2004</a></span>
+      <span class="c-item"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-6.2-7-11a7 7 0 0114 0c0 4.8-7 11-7 11z" stroke-linejoin="round"/><circle cx="12" cy="10" r="2.5"/></svg><span>Sheffield, UK</span></span>
+    </div>
+  </div>
+
+  <!-- ============ BODY ============ -->
+  <div class="grid">
+
+    <!-- ---------- MAIN COLUMN ---------- -->
+    <div class="col-main">
+
+      <div class="sec">
+        <div class="sec-title"><span class="bar"></span>Profile</div>
+        <div class="profile">
+          Final-year <b>Computer Science</b> student at the University of Sheffield with a strong builder's mindset and a focus on <b>AI, computer graphics and interactive systems</b>. I design and ship technically demanding software — from full-stack applications for real clients to low-level graphics pipelines and generative-AI tools. My dissertation explores <b>text-driven 3D human motion generation and editing</b>. I'm most drawn to problems where AI systems must stay <b>controllable, usable and expressive</b> in real-world contexts.
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-title"><span class="bar"></span>Experience</div>
+
+        <div class="entry">
+          <div class="entry-head">
+            <div>
+              <div class="entry-title">Co-Founder &amp; Full-Stack Developer</div>
+              <div class="entry-org">Freelance Web Studio — Sheffield</div>
+            </div>
+            <div class="entry-date">2024 — Present</div>
+          </div>
+          <ul class="pts">
+            <li>Co-founded a small web-development studio delivering modern, responsive websites to local Sheffield businesses with outdated web presences.</li>
+            <li>Owned projects end-to-end — client discovery, design, full-stack build and deployment — using React, Tailwind/CSS, GSAP and Cloudflare/Vercel.</li>
+            <li>Built B2B sales, client-communication and discovery skills by pitching services, writing proposals and maintaining long-term customer relationships.</li>
+          </ul>
+        </div>
+
+        <div class="entry">
+          <div class="entry-head">
+            <div>
+              <div class="entry-title">Missions Engineer</div>
+              <div class="entry-org">Project Falcon — IMechE Student Team</div>
+            </div>
+            <div class="entry-date">2023 — 2024</div>
+          </div>
+          <ul class="pts">
+            <li>Team designed and built a fixed-wing quadcopter to compete in the IMechE UAS Challenge.</li>
+            <li>Developed the Flight Ground Control System (FGCS) in Node.js and Python to monitor the drone, record and display telemetry, and receive real-world data live.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-title"><span class="bar"></span>Selected Projects</div>
+
+        <div class="entry">
+          <div class="entry-head">
+            <div class="entry-title">HabitFlow — Full-Stack Habit &amp; Goal Platform</div>
+            <div class="entry-date">2026 · Live</div>
+          </div>
+          <ul class="pts">
+            <li>Full-stack habit and goal tracker with social feeds, AI-powered insights (Google Gemini) and a GitHub-style consistency heatmap.</li>
+          </ul>
+          <div class="tags"><span class="tag">React</span><span class="tag">TypeScript</span><span class="tag">Express</span><span class="tag">PostgreSQL / Neon</span><span class="tag">Firebase Auth</span><span class="tag">Gemini AI</span></div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-head">
+            <div class="entry-title">Neighbourly — Community Help Network <span style="color:var(--red);font-size:8px;font-weight:700"> · HackSheffield 9 Winner</span></div>
+            <div class="entry-date">2026 · Live</div>
+          </div>
+          <ul class="pts">
+            <li>Map-based app matching neighbours needing help with nearby volunteers, with real-time chat. Evolved from our 1st-place (Best Repository) HackSheffield 9 build.</li>
+          </ul>
+          <div class="tags"><span class="tag">SvelteKit</span><span class="tag">Flask</span><span class="tag">PostgreSQL</span><span class="tag">Google Maps API</span><span class="tag">Auth0</span></div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-head">
+            <div class="entry-title">Text-Driven 3D Human Motion Editing Tool <span style="color:var(--muted);font-size:8px;font-weight:700"> · Dissertation</span></div>
+            <div class="entry-date">2025 — 2026</div>
+          </div>
+          <ul class="pts">
+            <li>Unity-integrated tool for generating and editing AI-generated 3D human motion from text prompts.</li>
+            <li>Enables keyframe-based local regeneration while preserving semantic intent, continuity and physical plausibility.</li>
+          </ul>
+          <div class="tags"><span class="tag">Unity</span><span class="tag">Generative AI</span><span class="tag">Python</span><span class="tag">3D Motion</span></div>
+        </div>
+
+        <div class="entry">
+          <div class="entry-head">
+            <div class="entry-title">MNIST From-Scratch Classifier &amp; 3D Rasterizer Engine</div>
+            <div class="entry-date">2023 — 2024</div>
+          </div>
+          <ul class="pts">
+            <li>Built a complete ML pipeline from scratch in Python/NumPy — custom SVM &amp; KNN, PCA and augmentation — reaching 99.8% accuracy on noisy test data.</li>
+            <li>Implemented a full software 3D graphics pipeline from scratch (projection, rasterization, z-buffering, .obj loading) to understand how GPUs work at a low level.</li>
+          </ul>
+          <div class="tags"><span class="tag">Python</span><span class="tag">NumPy / SciPy</span><span class="tag">Computer Vision</span><span class="tag">Computer Graphics</span></div>
+        </div>
+      </div>
+
+      <div class="sec">
+        <div class="sec-title"><span class="bar"></span>Education</div>
+        <div class="edu">
+          <div class="edu-title">BSc Computer Science — The University of Sheffield</div>
+          <div class="edu-sub"><span>Modules across AI, Software Engineering &amp; Mathematics</span><span class="grade">First-Class (on track) · 2026</span></div>
+          <p>Consistently strong coursework and exam performance. Dissertation in text-driven 3D human motion generation and editing.</p>
+        </div>
+        <div class="edu">
+          <div class="edu-title">John F. Kennedy School &amp; Sixth Form — Hemel Hempstead</div>
+          <div class="edu-sub"><span>A-Levels &amp; 10 GCSEs (incl. Maths, English, Computer Science)</span><span class="grade">2016 — 2023</span></div>
+          <p>A-Levels: Maths (A*), Computer Science (A), Further Mathematics (B), Physics (B).</p>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ---------- SIDEBAR ---------- -->
+    <div class="col-side">
+      <div class="side">
+
+        <div class="sec">
+          <div class="sec-title"><span class="bar"></span>Skills</div>
+          <div class="skill-group">
+            <div class="skill-cat">Languages</div>
+            <div class="pills"><span class="pill b">Python</span><span class="pill b">TypeScript</span><span class="pill b">JavaScript</span><span class="pill">Haskell</span><span class="pill">Ruby</span><span class="pill">SQL</span></div>
+          </div>
+          <div class="skill-group">
+            <div class="skill-cat">AI / ML</div>
+            <div class="pills"><span class="pill">PyTorch</span><span class="pill">Generative AI</span><span class="pill">Computer Vision</span><span class="pill">On-device Inference</span><span class="pill">From-scratch ML</span></div>
+          </div>
+          <div class="skill-group">
+            <div class="skill-cat">Graphics &amp; 3D</div>
+            <div class="pills"><span class="pill">Unity</span><span class="pill">Three.js</span><span class="pill">Shaders</span><span class="pill">Rasterization</span><span class="pill">Blender</span></div>
+          </div>
+          <div class="skill-group">
+            <div class="skill-cat">Web &amp; Full-Stack</div>
+            <div class="pills"><span class="pill">React</span><span class="pill">Next.js</span><span class="pill">SvelteKit</span><span class="pill">Node.js</span><span class="pill">Flask</span><span class="pill">Rails</span><span class="pill">Tailwind</span><span class="pill">GSAP</span></div>
+          </div>
+          <div class="skill-group">
+            <div class="skill-cat">Data &amp; DevOps</div>
+            <div class="pills"><span class="pill">PostgreSQL</span><span class="pill">Firebase</span><span class="pill">Docker</span><span class="pill">Vercel</span><span class="pill">Cloudflare</span><span class="pill">Git</span></div>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="sec">
+          <div class="sec-title"><span class="bar"></span>Honours &amp; Awards</div>
+          <div class="award"><div class="medal">1</div><div class="award-b"><div class="award-t">HackSheffield 9 — Best Repository</div><div class="award-m">1st place · Nov 2024</div></div></div>
+          <div class="award"><div class="medal">3</div><div class="award-b"><div class="award-t">Engineering You're Hired</div><div class="award-m">3rd of cohort · swarm-robotics pipe inspection · 2025</div></div></div>
+          <div class="award"><div class="medal">1</div><div class="award-b"><div class="award-t">Dragon's Apprentice + Creativity Prize</div><div class="award-m">Led team turning <b>£100 → £1,000+</b> for charity</div></div></div>
+          <div class="award"><div class="medal">2</div><div class="award-b"><div class="award-t">Regional Public Speaking</div><div class="award-m">Runner-up before senior public officials</div></div></div>
+          <div class="award"><div class="medal">★</div><div class="award-b"><div class="award-t">SELSA Leadership Academy</div><div class="award-m">Led 3 interdisciplinary engineering teams</div></div></div>
+          <div class="award"><div class="medal">★</div><div class="award-b"><div class="award-t">Snapchat Lens Competition</div><div class="award-m"><b>1M+</b> uses · £1,500 prize</div></div></div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="sec">
+          <div class="sec-title"><span class="bar"></span>Languages</div>
+          <div class="kv"><b>English</b> — Native</div>
+          <div class="kv"><b>Arabic</b> — Intermediate</div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="sec" style="margin-bottom:4px">
+          <div class="sec-title"><span class="bar"></span>Beyond Engineering</div>
+          <div class="interest"><span class="em">🧗</span><div><b>Bouldering</b> — outdoor/indoor to f7B+ across the Peak, Lake District, Portland &amp; Fontainebleau.</div></div>
+          <div class="interest"><span class="em">🚗</span><div><b>Charity hitchhiking</b> — Sheffield→Porto, Sheffield→Bratislava &amp; Croatia→Morocco; society has raised £1.3M+.</div></div>
+          <div class="interest"><span class="em">🥋</span><div><b>Judo</b> — competed nationally at BUCS.</div></div>
+          <div class="interest"><span class="em">🎸</span><div><b>Guitar</b> — Grade 8 qualified.</div></div>
+        </div>
+
+      </div>
+      <div class="side-note">References &amp; portfolio available at www.jacksmith.me</div>
+    </div>
+
+  </div>
+
+</body>
+</html>

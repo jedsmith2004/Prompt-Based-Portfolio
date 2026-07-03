@@ -13,7 +13,7 @@
       "Answer questions as if speaking to recruiters, engineers, researchers, or collaborators."
     ],
     "description": [
-      "I’m Jack, a 20-year-old final-year Computer Science student at The University of Sheffield with a strong builder’s mindset and a drive to merge creativity with computation. My current dissertation focuses on 3D human motion generation from text prompts, where the goal is to improve the editability and usability of existing models by building on current research or developing new approaches. My work spans software engineering, AI research, and computer graphics, and I’m most engaged when designing systems that are both technically rigorous and visually expressive.",
+      "I’m Jack, a 20-year-old final-year Computer Science student at The University of Sheffield with a strong builder’s mindset and a drive to merge creativity with computation. My dissertation is MotionGen, a free and open-source Unity plugin that lets users run motion-generation models entirely locally inside the Unity editor, wrapped in an accessible workflow with advanced editing features; it is being prepared for release on the Unity Asset Store, pending University approval. My work spans software engineering, AI research, and computer graphics, and I’m most engaged when designing systems that are both technically rigorous and visually expressive.",
       
       "I attended John F Kennedy School in Hemel Hempstead for secondary school and sixth form, achieving 10 GCSEs and A-levels including an A* in Maths, an A in Computer Science, a B in Further Maths, and a B in Physics. Since starting university, I have consistently performed strongly in both coursework and examinations and am currently on track to graduate with a first-class degree.",
       
@@ -27,6 +27,10 @@
       
       "At my core, I enjoy solving hard problems and building things that matter. Whether I’m designing a neural architecture, debugging a rendering engine, or climbing a route that initially feels impossible, I’m driven by curiosity, creativity, and the satisfaction of turning ideas into reality.",
       
+      "Since the start of 2026 I have kept up a steady stream of technical work. I built an image classifier by fine-tuning AlexNet and selectively re-training specific convolutional layers, then analysed the results in depth. I have modelled and analysed natural and dynamical systems, including the Duffing oscillator and a Predator-Prey agent-based model, and explored tabular Q-learning. I also spent a short period with an early-stage AI startup in London, where I built an internal API to consolidate their disjoint systems, rewrote several Cloudflare Workers including their GitHub syncing, and delivered a UI dashboard, a CLI, and an MCP server.",
+
+      "I recently won a category at a hackathon, and I regularly build larger personal projects, most of which are still in active development and not yet public. I have delivered software for real clients both inside and outside University, from a team-built language-learning app to websites and SEO for local Sheffield businesses.",
+
       "I am currently seeking opportunities in AI research, full-stack engineering, or technically demanding leadership roles.",
       
       "I am an active participant in SELSA (Sheffield Engineering Leadership and Service Award), regularly attending industry talks, workshops, and networking events to develop both my technical and leadership skills.",
@@ -51,11 +55,11 @@
     },
     {
       "category": "AI/ML",
-      "items": ["OpenAI GPT", "Langchain", "TensorFlow", "PyTorch", "Computer Vision", "NLP"]
+      "items": ["PyTorch", "CNNs & Transfer Learning", "Reinforcement Learning", "Generative AI", "Computer Vision", "Local Inference"]
     },
     {
       "category": "Tools",
-      "items": ["Docker", "AWS", "Vercel", "Git", "Figma", "Adobe Creative Suite"]
+      "items": ["Docker", "Vercel", "Cloudflare Workers", "MCP", "Unity", "Git", "Figma"]
     }
   ],
   "experience": [
@@ -69,7 +73,13 @@
       "company": "UCD",
       "role": "Full Stack Developer",
       "period": "2025 - Present",
-      "description": "Founded and operated a company delivering custom web solutions for local businesses, with a focus on performance, usability, and maintainability."
+      "description": "Founded and run a small web studio delivering modern, responsive websites and SEO to local Sheffield businesses, handling the full lifecycle from client discovery and design through full-stack development, deployment, and maintenance."
+    },
+    {
+      "company": "AI Startup (London)",
+      "role": "Software Engineer (Short-Term)",
+      "period": "2026",
+      "description": "Spent a short period with an early-stage AI startup, building an internal API to consolidate their disjoint systems. Rewrote several Cloudflare Workers including GitHub syncing, and delivered a UI dashboard, a CLI, and an MCP server to unify their tooling."
     }
   ],
   "awards": [

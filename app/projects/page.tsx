@@ -177,6 +177,71 @@ export default function AllProjectsPage() {
 }
 
 function ProjectCard({ project, index }: { project: Project; index: number }) {
+  if (project.stealth) {
+    const Lock = ({ className }: { className?: string }) => (
+      <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+      </svg>
+    );
+    return (
+      <div
+        className="project-card reveal-once relative group rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-xl overflow-hidden transition-all hover:border-blue-500/40 hover:bg-white/[0.06]"
+        data-reveal-delay={(index * 0.08).toFixed(2)}
+      >
+        <div className="absolute -right-24 -top-24 w-72 h-72 rounded-full bg-gradient-to-br from-blue-500/15 to-red-500/15 blur-3xl opacity-60 group-hover:opacity-100 transition-opacity" />
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-blue-400/10 to-transparent stealth-scan" />
+        <div className="pointer-events-none absolute inset-0 stealth-grid opacity-40" />
+
+        <div className="relative p-10 md:p-14">
+          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-5 mb-6">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-3 flex-wrap">
+                <h2 className="text-3xl md:text-4xl font-bold tracking-tight group-hover:text-blue-300 transition-colors">
+                  {project.title}
+                </h2>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold uppercase tracking-wider bg-gradient-to-r from-blue-500/20 to-red-500/20 text-gray-200 border border-white/15">
+                  <Lock className="w-3.5 h-3.5" /> Stealth
+                </span>
+              </div>
+              <p className="text-gray-300/90 leading-relaxed text-sm md:text-base max-w-2xl mt-3">
+                {project.description}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 text-sm font-medium text-gray-400 whitespace-nowrap shrink-0">
+              <Lock className="w-4 h-4" />
+              <span>{project.date}</span>
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-5 gap-8 mt-8">
+            <div className="md:col-span-2 space-y-4">
+              <h3 className="text-xs uppercase tracking-wider text-gray-400">Tech Stack</h3>
+              <div className="flex flex-wrap gap-2">
+                <span className="redaction-bar h-6 w-20 rounded-full border border-white/10 inline-block" />
+                <span className="redaction-bar h-6 w-14 rounded-full border border-white/10 inline-block" />
+                <span className="redaction-bar h-6 w-24 rounded-full border border-white/10 inline-block" />
+                <span className="redaction-bar h-6 w-16 rounded-full border border-white/10 inline-block" />
+              </div>
+            </div>
+            <div className="md:col-span-3 space-y-4">
+              <h3 className="text-xs uppercase tracking-wider text-gray-400">Key Features</h3>
+              <div className="space-y-2.5">
+                <div className="redaction-bar h-3 w-full rounded" />
+                <div className="redaction-bar h-3 w-11/12 rounded" />
+                <div className="redaction-bar h-3 w-4/5 rounded" />
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-10 flex flex-wrap gap-4">
+            <span className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/5 text-sm font-medium text-gray-400 border border-white/10 cursor-default select-none">
+              <Lock className="w-5 h-5" /> In stealth — coming soon
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
   return (
     <div
       className="project-card reveal-once relative group rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-xl overflow-hidden transition-all hover:border-blue-500/40 hover:bg-white/[0.06]"
@@ -282,7 +347,17 @@ function ProjectCard({ project, index }: { project: Project; index: number }) {
               <span>Live</span>
             </a>
           )}
-          {!project.demo && (
+          {!project.demo && project.paper && (
+            <a
+              href={project.paper}
+              target="_blank"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-red-600 hover:from-blue-500 hover:to-red-500 text-sm font-medium text-white transition-all"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
+              <span>Read Dissertation</span>
+            </a>
+          )}
+          {!project.demo && !project.paper && (
             <button disabled className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/5 text-sm font-medium text-gray-500 border border-white/10 cursor-not-allowed">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
               <span>No Demo</span>

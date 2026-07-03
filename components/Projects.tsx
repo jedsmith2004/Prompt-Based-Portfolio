@@ -44,7 +44,59 @@ export default function Projects() {
         </div>
 
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 stagger-animation">
-          {projects.slice(0,3).map((project) => (
+          {projects.slice(0,3).map((project) => {
+            if (project.stealth) {
+              return (
+                <div
+                  key={project.id}
+                  className="stealth-card stagger-item group relative bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl overflow-hidden transition-all duration-300 hover:border-blue-400/40"
+                >
+                  {/* Ambient gradient glow */}
+                  <div className="pointer-events-none absolute -inset-px rounded-2xl bg-gradient-to-br from-blue-500/20 via-transparent to-red-500/20 opacity-70 group-hover:opacity-100 transition-opacity duration-500" />
+
+                  {/* Classified panel (replaces image) */}
+                  <div className="relative h-48 overflow-hidden stealth-grid flex flex-col items-center justify-center">
+                    <div className="pointer-events-none absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-blue-400/25 to-transparent stealth-scan" />
+                    <div className="relative w-14 h-14 rounded-2xl bg-white/5 border border-white/15 flex items-center justify-center mb-3 shadow-[0_0_30px_-6px_rgba(59,130,246,0.6)]">
+                      <svg className="w-7 h-7 text-blue-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                    </div>
+                    <span className="relative text-[10px] font-semibold tracking-[0.35em] text-gray-300 stealth-flicker">CLASSIFIED</span>
+                    <div className="relative mt-3 flex flex-col items-center gap-1.5 w-2/3">
+                      <div className="redaction-bar h-2 rounded w-full" />
+                      <div className="redaction-bar h-2 rounded w-4/5" />
+                    </div>
+                  </div>
+
+                  {/* Body */}
+                  <div className="relative p-6">
+                    <div className="flex items-center gap-2 mb-3">
+                      <h3 className="text-xl font-bold text-white group-hover:text-blue-300 transition-colors">
+                        {project.title}
+                      </h3>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide bg-gradient-to-r from-blue-500/20 to-red-500/20 text-gray-200 border border-white/15">
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                        Stealth
+                      </span>
+                    </div>
+                    <p className="text-gray-300 text-sm leading-relaxed mb-4">
+                      {project.description}
+                    </p>
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      <span className="px-6 py-1 rounded-full redaction-bar border border-white/10 select-none" />
+                      <span className="px-4 py-1 rounded-full redaction-bar border border-white/10 select-none" />
+                      <span className="px-3 py-1 bg-white/10 text-gray-400 text-xs rounded-full">redacted</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-gray-500 text-sm">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                      <span>Currently in stealth</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+            return (
             <div
               key={project.id}
               className="project-card stagger-item group cursor-pointer bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl overflow-hidden hover:border-blue-400/50 transition-all duration-300"
@@ -135,6 +187,20 @@ export default function Projects() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                       </svg>
                     </a>
+                  ) : project.paper ? (
+                    <a
+                      href={project.paper}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="Read the dissertation"
+                      className="flex items-center gap-1 text-gray-400 hover:text-blue-400 transition-colors"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                      </svg>
+                      <span className="text-xs">Paper</span>
+                    </a>
                   ) : (
                     <button
                       disabled
@@ -151,7 +217,8 @@ export default function Projects() {
                 </div>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Project Modal */}
@@ -256,6 +323,18 @@ export default function Projects() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                       </svg>
                       <span>Live Demo</span>
+                    </a>
+                  ) : selectedProject.paper ? (
+                    <a
+                      href={selectedProject.paper}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-red-600 hover:from-blue-500 hover:to-red-500 rounded-xl text-white transition-all duration-200"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                      </svg>
+                      <span>Read Dissertation</span>
                     </a>
                   ) : (
                     <button
