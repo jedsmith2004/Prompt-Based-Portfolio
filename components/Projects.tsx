@@ -62,7 +62,7 @@ export default function Projects() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.6} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                       </svg>
                     </div>
-                    <span className="relative text-[10px] font-semibold tracking-[0.35em] text-gray-300 stealth-flicker">CLASSIFIED</span>
+                    <span className="relative text-[10px] font-semibold tracking-[0.35em] text-gray-300 stealth-flicker">Coming Soon</span>
                     <div className="relative mt-3 flex flex-col items-center gap-1.5 w-2/3">
                       <div className="redaction-bar h-2 rounded w-full" />
                       <div className="redaction-bar h-2 rounded w-4/5" />
@@ -77,7 +77,7 @@ export default function Projects() {
                       </h3>
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide bg-gradient-to-r from-blue-500/20 to-red-500/20 text-gray-200 border border-white/15">
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-                        Stealth
+                        Coming Soon
                       </span>
                     </div>
                     <p className="text-gray-300 text-sm leading-relaxed mb-4">
@@ -90,7 +90,7 @@ export default function Projects() {
                     </div>
                     <div className="flex items-center gap-2 text-gray-500 text-sm">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-                      <span>Currently in stealth</span>
+                      <span>Coming Soon</span>
                     </div>
                   </div>
                 </div>

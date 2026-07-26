@@ -200,7 +200,7 @@ function ProjectCard({ project, index }: { project: Project; index: number }) {
                   {project.title}
                 </h2>
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold uppercase tracking-wider bg-gradient-to-r from-blue-500/20 to-red-500/20 text-gray-200 border border-white/15">
-                  <Lock className="w-3.5 h-3.5" /> Stealth
+                  <Lock className="w-3.5 h-3.5" /> Coming Soon
                 </span>
               </div>
               <p className="text-gray-300/90 leading-relaxed text-sm md:text-base max-w-2xl mt-3">
@@ -235,7 +235,7 @@ function ProjectCard({ project, index }: { project: Project; index: number }) {
 
           <div className="mt-10 flex flex-wrap gap-4">
             <span className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/5 text-sm font-medium text-gray-400 border border-white/10 cursor-default select-none">
-              <Lock className="w-5 h-5" /> In stealth — coming soon
+              <Lock className="w-5 h-5" /> Coming Soon
             </span>
           </div>
         </div>

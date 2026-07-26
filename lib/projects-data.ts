@@ -19,7 +19,7 @@ export const projects: Project[] = [
   {
     id: 'recensorium',
     title: 'Recensorium',
-    description: "Something new is taking shape. The project I'm most excited about is in stealth for now, so the details are deliberately under wraps. Watch this space.",
+    description: "Something new is taking shape. The project I'm most excited about is in redacted for now, so the details are deliberately under wraps. Watch this space.",
     tech: [],
     github: '',
     demo: '',
@@ -28,7 +28,7 @@ export const projects: Project[] = [
     status: 'in-progress',
     date: 'Coming soon',
     stealth: true,
-    features: ['Currently in stealth; details intentionally withheld']
+    features: ['Coming Soon; details intentionally withheld']
   },
   {
     id: 'motiongen',
