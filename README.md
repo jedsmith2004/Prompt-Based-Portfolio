@@ -37,18 +37,18 @@ My personal portfolio website showcasing my work, skills, and experience. Featur
 
 ## Built With
 
-- **[Next.js](https://nextjs.org/)** — React framework with App Router
-- **[TypeScript](https://www.typescriptlang.org/)** — Type-safe development
-- **[Tailwind CSS](https://tailwindcss.com/)** — Utility-first styling
-- **[GSAP](https://greensock.com/gsap/)** — Professional-grade animations
-- **[Radix UI](https://www.radix-ui.com/)** — Accessible component primitives
-- **[Groq](https://groq.com/)** — Lightning-fast AI inference
+- **[Next.js](https://nextjs.org/)** - React framework with App Router
+- **[TypeScript](https://www.typescriptlang.org/)** - Type-safe development
+- **[Tailwind CSS](https://tailwindcss.com/)** - Utility-first styling
+- **[GSAP](https://greensock.com/gsap/)** - Professional-grade animations
+- **[Radix UI](https://www.radix-ui.com/)** - Accessible component primitives
+- **[Groq](https://groq.com/)** - Lightning-fast AI inference
 
 ---
 
 ## License
 
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 

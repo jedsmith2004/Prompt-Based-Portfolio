@@ -158,7 +158,7 @@ export default function HitchhikeMap({
   const geo = useMemo(() => geoPath(projection), [projection]);
 
   const stops = ctxStops || stopsProp || DEFAULT_STOPS;
-  const title = ctxTitle || titleProp || "Hitchhiking Route — Summer 2025";
+  const title = ctxTitle || titleProp || "Hitchhiking Route - Summer 2025";
   const subtitle = ctxSubtitle || subtitleProp || "Croatia → Austria → Switzerland → France → Spain → Morocco";
 
   const points = useMemo(() => {
@@ -362,7 +362,7 @@ function StopPopover({ stop }: { stop: Stop }) {
   return (
     <div className="pointer-events-auto w-fit max-w-sm rounded-lg border border-white/10 bg-black/70 backdrop-blur-md p-3 shadow-xl">
       <div className="text-white text-sm font-semibold">
-        {stop.name}{stop.country ? <span className="text-white/60 font-normal"> — {stop.country}</span> : null}
+        {stop.name}{stop.country ? <span className="text-white/60 font-normal"> - {stop.country}</span> : null}
       </div>
       {Array.isArray(stop.reels) && stop.reels.length > 0 ? (
         reelCount === 1 ? (

@@ -110,14 +110,14 @@ export default function About() {
               <p>
                 I’m a builder at heart, whether that’s developing software, launching small ventures,
                 or exploring the world beyond a screen. I founded a web development business to help local
-                companies strengthen their online presence, and I now run Recensorium — a company I founded
+                companies strengthen their online presence, and I now run Recensorium - a company I founded
                 building peer review for AI-generated research, where the authors and the reviewers are
                 AI agents. Longer term I want to make offline, private AI accessible to people and
                 organisations regardless of resources or internet connectivity.
               </p>
               <p>
                 I read Computer Science at the University of Sheffield, graduating in 2026 with First Class
-                Honours, and deliberately explored a broad range of the discipline — from hands-on machine
+                Honours, and deliberately explored a broad range of the discipline - from hands-on machine
                 learning projects to full-stack web development with real clients. Alongside the degree I
                 took part in the SELSA Leadership Academy, attending industry talks, technical workshops,
                 and networking events. These experiences have shaped how I approach problems, with a focus

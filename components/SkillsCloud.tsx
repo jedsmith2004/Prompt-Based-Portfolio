@@ -369,7 +369,7 @@ export default function SkillsCloud() {
 
         <div className="animate-on-scroll text-center mb-16">
           <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">Skills & Expertise</h2>
-          <p className="text-xl text-gray-400 max-w-3xl mx-auto">Segmented skill cloud – frequency-sized tech pills clustered per category.</p>
+          <p className="text-xl text-gray-400 max-w-3xl mx-auto">Segmented skill cloud - frequency-sized tech pills clustered per category.</p>
         </div>
 
         {/* Quadrant Bubble Cloud */}

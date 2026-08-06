@@ -91,7 +91,7 @@ export default function AwardsSection() {
         {/* Awards Section dynamic */}
         <div className="relative animate-on-scroll" id="awards">
           <h3 className="text-3xl font-bold text-white mb-4 text-center tracking-tight">Awards & Distinctions</h3>
-          <p className="text-center text-gray-400 mb-14 max-w-3xl mx-auto text-sm md:text-base">A constellation of recognitions – visualised as radiant tokens in an orbital field. Hover to unlock layered glow, motion, and metadata.</p>
+          <p className="text-center text-gray-400 mb-14 max-w-3xl mx-auto text-sm md:text-base">A constellation of recognitions - visualised as radiant tokens in an orbital field. Hover to unlock layered glow, motion, and metadata.</p>
 
           <div className="relative grid gap-10 sm:gap-12 md:gap-14 lg:grid-cols-2 xl:grid-cols-3">
             {awards.map((a, i) => {

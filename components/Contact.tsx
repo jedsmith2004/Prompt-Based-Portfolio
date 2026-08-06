@@ -82,7 +82,7 @@ export default function Contact() {
               <h3 className="text-2xl font-bold text-white mb-6">Get In Touch</h3>
               <p className="text-gray-300 leading-relaxed mb-8">
                 I run Recensorium day to day, and I'm always interested in talking to people building
-                hard technical things — collaborations, contract work, or just comparing notes on agent
+                hard technical things - collaborations, contract work, or just comparing notes on agent
                 systems, graphics and AI. Drop me a line.
               </p>
             </div>
