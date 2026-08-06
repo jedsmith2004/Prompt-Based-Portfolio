@@ -81,9 +81,9 @@ export default function Contact() {
             <div>
               <h3 className="text-2xl font-bold text-white mb-6">Get In Touch</h3>
               <p className="text-gray-300 leading-relaxed mb-8">
-                I'm passionate about creating innovative solutions and would be excited to join a team 
-                where I can make a meaningful impact. Whether you're looking for a software engineer, 
-                AI specialist, or creative problem solver, I'd love to hear about opportunities.
+                I run Recensorium day to day, and I'm always interested in talking to people building
+                hard technical things — collaborations, contract work, or just comparing notes on agent
+                systems, graphics and AI. Drop me a line.
               </p>
             </div>
 
@@ -121,8 +121,9 @@ export default function Contact() {
                   </svg>
                 </div>
                 <div>
-                  <p className="text-white font-medium">Availability</p>
-                  <p className="text-gray-400">Open to new opportunities</p>
+                  <p className="text-white font-medium">Currently</p>
+                  <p className="text-gray-400">Building Recensorium</p>
+                  <p className="text-gray-400">Open to interesting conversations</p>
                 </div>
               </div>
             </div>
@@ -130,7 +131,7 @@ export default function Contact() {
             {/* Social Links */}
             <div className="flex space-x-4 pt-8">
               <a
-                href="https://github.com"
+                href="https://github.com/jedsmith2004"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-12 h-12 bg-white/10 hover:bg-white/20 border border-white/20 rounded-full flex items-center justify-center text-gray-400 hover:text-white transition-all duration-200"
@@ -140,7 +141,7 @@ export default function Contact() {
                 </svg>
               </a>
               <a
-                href="https://linkedin.com"
+                href="https://www.linkedin.com/in/jack-ed-smith/"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-12 h-12 bg-white/10 hover:bg-white/20 border border-white/20 rounded-full flex items-center justify-center text-gray-400 hover:text-white transition-all duration-200"
@@ -150,13 +151,14 @@ export default function Contact() {
                 </svg>
               </a>
               <a
-                href="https://twitter.com"
+                href="https://www.instagram.com/5001km.sidequest/"
                 target="_blank"
                 rel="noopener noreferrer"
+                aria-label="Instagram"
                 className="w-12 h-12 bg-white/10 hover:bg-white/20 border border-white/20 rounded-full flex items-center justify-center text-gray-400 hover:text-white transition-all duration-200"
               >
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M23.953 4.57a10 10 0 01-2.825.775 4.958 4.958 0 002.163-2.723c-.951.555-2.005.959-3.127 1.184a4.92 4.92 0 00-8.384 4.482C7.69 8.095 4.067 6.13 1.64 3.162a4.822 4.822 0 00-.666 2.475c0 1.71.87 3.213 2.188 4.096a4.904 4.904 0 01-2.228-.616v.06a4.923 4.923 0 003.946 4.827 4.996 4.996 0 01-2.212.085 4.936 4.936 0 004.604 3.417 9.867 9.867 0 01-6.102 2.105c-.39 0-.779-.023-1.17-.067a13.995 13.995 0 007.557 2.209c9.053 0 13.998-7.496 13.998-13.985 0-.21 0-.42-.015-.63A9.935 9.935 0 0024 4.59z"/>
+                  <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/>
                 </svg>
               </a>
             </div>
@@ -209,7 +211,7 @@ export default function Contact() {
                   required
                   rows={5}
                   className="w-full px-4 py-3 bg-white/5 backdrop-blur-md border border-white/20 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/50 transition-all duration-300 resize-none"
-                  placeholder="Tell me about the role or opportunity..."
+                  placeholder="Tell me what you're working on..."
                 />
               </div>
 

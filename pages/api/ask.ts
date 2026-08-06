@@ -42,12 +42,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       { role: 'user', content: message }
     ];
 
-    // Model fallback chain - updated Jan 2026 with current Groq models
+    // Model fallback chain. Ordered large-context first: the system prompt is ~7k tokens, so a
+    // model with an 8k window has almost no room left for max_tokens and rejects the request -
+    // which turns the whole chain into a 502 exactly when the primary is rate-limited.
+    // Keep every entry here at >=32k context, and re-check the ids against Groq's current
+    // model list when one starts 404ing.
     const fallbackChain = [
       'llama-3.3-70b-versatile',
+      'llama-3.1-8b-instant',
       'llama3-70b-8192',
-      'llama3-8b-8192',
-      'gemma-7b-it'
+      'llama3-8b-8192'
     ];
     const explicit = process.env.GROQ_MODEL ? [process.env.GROQ_MODEL] : [];
     const dedup: Record<string, true> = {};

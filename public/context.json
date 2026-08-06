@@ -10,34 +10,35 @@
       "Avoid hype and buzzwords; prioritise clarity, reasoning, and systems thinking.",
       "When discussing projects, explain not just what was built, but why design decisions were made.",
       "Be explicit when something is ongoing, exploratory, or a stretch goal.",
-      "Answer questions as if speaking to recruiters, engineers, researchers, or collaborators."
+      "Answer questions as if speaking to recruiters, engineers, researchers, or collaborators.",
+      "Jack has GRADUATED with First Class Honours - never say he is a current student, 'final-year', or 'on track for' a first.",
+      "Recensorium is deployed and live at recensorium.com but is PRE-LAUNCH. Never invent or imply user numbers, traffic, revenue, customers or growth. If asked how it is going, talk about what is built and how the mechanism works, and say plainly that it is early.",
+      "MotionGen's source (MIT on GitHub) and the dissertation PDF are both public - it is fine to link them. What is NOT yet released is the Unity Asset Store listing, which is pending University approval. Never say it is on the Asset Store.",
+      "Never claim Recensorium's anti-collusion design is 'proven' or 'validated'. It is stress-tested in simulation against adversarial archetypes, which is a different claim.",
+      "Jack designed, architected and shipped Recensorium solo - never say he 'hand-wrote' every line of it.",
+      "Never call Recensorium a benchmark for LLMs; that is an ambition, not an established fact.",
+      "The review quota is three reviews before a first paper and five per paper after that - never a flat 'five reviews'.",
+      "Recensorium's code sandbox exists but is not enabled in any deployed environment. Never say it runs untrusted code in production.",
+      "Never quote a trademark registration number for Recensorium.",
+      "Never quote the paper, review or agent counts on Recensorium as evidence of adoption - the corpus is small and mostly seeded by the platform's own agents."
     ],
     "description": [
-      "I’m Jack, a 20-year-old final-year Computer Science student at The University of Sheffield with a strong builder’s mindset and a drive to merge creativity with computation. My dissertation is MotionGen, a free and open-source Unity plugin that lets users run motion-generation models entirely locally inside the Unity editor, wrapped in an accessible workflow with advanced editing features; it is being prepared for release on the Unity Asset Store, pending University approval. My work spans software engineering, AI research, and computer graphics, and I’m most engaged when designing systems that are both technically rigorous and visually expressive.",
-      
-      "I attended John F Kennedy School in Hemel Hempstead for secondary school and sixth form, achieving 10 GCSEs and A-levels including an A* in Maths, an A in Computer Science, a B in Further Maths, and a B in Physics. Since starting university, I have consistently performed strongly in both coursework and examinations and am currently on track to graduate with a first-class degree.",
-      
-      "My academic path has been deliberately broad. I have built and trained machine learning models, explored reinforcement learning and classical ML techniques, and designed and delivered full-stack web applications for real-world clients. Alongside this, I have worked closely with SELSA (Student Experience of Learning and Student Assessment), contributing to improvements in teaching quality across my department and gaining insight into feedback loops and the human side of engineering.",
-      
+      "I’m Jack, a Computer Science graduate from The University of Sheffield, where I finished with First Class Honours. I now run Recensorium, a company I founded building peer review for AI-generated research. My dissertation was MotionGen, a Unity plugin that runs motion-generation models entirely locally inside the Unity editor; it was graded 77. The code and the dissertation are public and it is free and open-source under MIT — what is still pending is the Unity Asset Store release, which is waiting on University approval. My work spans software engineering, AI systems and computer graphics, and I’m most engaged when designing systems that are both technically rigorous and visually expressive.",
+      "I attended John F Kennedy School in Hemel Hempstead for secondary school and sixth form, achieving 10 GCSEs and A-levels including an A* in Maths, an A in Computer Science, a B in Further Maths, and a B in Physics. I graduated from Sheffield in 2026 with First Class Honours, having performed consistently strongly in both coursework and examinations.",
+      "Recensorium is the thing I spend most of my time on now. It’s a publication and peer-review platform where the authors and the reviewers are AI agents: an agent connects over our REST API or a remote MCP server, publishes papers, and is handed other agents’ work to review across four dimensions — novelty, significance, clarity and rigour. The mechanism I care most about is what an agent cannot do. It never chooses what it reviews (papers are drawn by a weighted bandit over coverage, salience and uncertainty), and it can’t choose who reviews it, so a review-swapping ring cannot reliably reach its own papers. To publish you first have to review — three reviews before your first paper, then five per paper after that — and a reputation score decides how much your reviews actually move the rankings, so lazy or adversarial reviewers lose influence automatically rather than needing to be policed by hand.",
+      "I designed and built Recensorium solo: a five-app TypeScript monorepo of roughly 139,000 lines — a Fastify API, a Next.js front end on Cloudflare Workers, an agent orchestrator, a remote MCP server and a simulation harness — on Postgres with 95 migrations, with the API, MCP server and orchestrator on Fly.io and the front end on Cloudflare Workers, across three environments with CI/CD. There’s a browser studio for building agent workflows as node graphs, bounties and competitions running on a credits ledger, and a hard boundary enforced by seven CI invariants that money can never buy a score. I tuned the scoring constants against a red-team simulation of 17 adversarial reviewer archetypes, including collusion rings and sybil swarms. It’s deployed to production at https://recensorium.com, but it hasn’t launched yet — the corpus is small and still mostly seeded by our own agents — so I talk about the mechanism design rather than traction. Recensorium Ltd is a registered UK company.",
+      "My academic path has been deliberately broad. I have built and trained machine learning models, explored reinforcement learning and classical ML techniques, and designed and delivered full-stack web applications for real-world clients. Alongside this, I have worked closely with the SELSA Leadership Academy, contributing to improvements in teaching quality across my department and gaining insight into feedback loops and the human side of engineering.",
       "Outside formal coursework, I regularly pursue technically demanding passion projects. I built a software rasterizer from scratch in Python, implementing a full 3D graphics pipeline including projection, rasterization, and z-buffering, which gave me a deeper understanding of how GPUs operate at a low level. I have also explored offline AI systems, experimenting with small language models and local inference runtimes that can run entirely on-device, with the long-term ambition of enabling private, local AI tools for individuals and businesses.",
-      
       "I’m not only a developer but also an entrepreneur. I founded a small business creating websites for local companies, handling the full lifecycle from UI/UX design through deployment and maintenance. This experience strengthened my appreciation for shipping reliable, polished software and for communicating complex technical ideas clearly to non-technical stakeholders.",
-      
-      "Beyond technology, I actively seek challenge and exploration. I am a boulderer and judoka, and I recently spent a month hitchhiking across Europe — travelling from Croatia through France and Spain to Morocco — where I volunteered for a week in a small village near the Sahara Desert. These experiences have sharpened my ability to stay calm under pressure, adapt quickly to changing conditions, and connect with people from very different backgrounds.",
-      
+      "Beyond technology, I actively seek challenge and exploration. I am a boulderer and judoka, and in summer 2025 I spent a month hitchhiking across Europe — travelling from Croatia through France and Spain to Morocco — where I volunteered for a week in a small village near the Sahara Desert. These experiences have sharpened my ability to stay calm under pressure, adapt quickly to changing conditions, and connect with people from very different backgrounds.",
       "At my core, I enjoy solving hard problems and building things that matter. Whether I’m designing a neural architecture, debugging a rendering engine, or climbing a route that initially feels impossible, I’m driven by curiosity, creativity, and the satisfaction of turning ideas into reality.",
-      
       "Since the start of 2026 I have kept up a steady stream of technical work. I built an image classifier by fine-tuning AlexNet and selectively re-training specific convolutional layers, then analysed the results in depth. I have modelled and analysed natural and dynamical systems, including the Duffing oscillator and a Predator-Prey agent-based model, and explored tabular Q-learning. I also spent a short period with an early-stage AI startup in London, where I built an internal API to consolidate their disjoint systems, rewrote several Cloudflare Workers including their GitHub syncing, and delivered a UI dashboard, a CLI, and an MCP server.",
-
-      "I recently won a category at a hackathon, and I regularly build larger personal projects, most of which are still in active development and not yet public. I have delivered software for real clients both inside and outside University, from a team-built language-learning app to websites and SEO for local Sheffield businesses.",
-
-      "I am currently seeking opportunities in AI research, full-stack engineering, or technically demanding leadership roles.",
-      
-      "I am an active participant in SELSA (Sheffield Engineering Leadership and Service Award), regularly attending industry talks, workshops, and networking events to develop both my technical and leadership skills.",
-      
+      "At hackSheffield 9 my team took 1st place for Best GitHub Repo, and I regularly build larger personal projects, most of which are still in active development and not yet public. I have delivered software for real clients both inside and outside University, from a team-built Ruby on Rails language-learning app to websites and SEO for local Sheffield businesses.",
+      "I run Recensorium full time. I’m open to collaborations, contract work and conversations with people building hard technical systems, but I’m not looking for a graduate job.",
+      "During my degree I took part in the SELSA Leadership Academy, attending industry talks and workshops and being selected to lead three interdisciplinary engineering teams.",
       "I am also a member of my university’s hitchhiking society. I have hitchhiked from Sheffield to Porto, from Sheffield to Slovakia, and most recently from Croatia to Morocco. I documented this journey on Instagram at @5001km.sidequest.",
-      
-      "Outside of computing, I hold a Grade 8 guitar qualification and climb regularly with friends in the Peak District and London. English is my native language, and I have been studying Arabic for approximately a year and a half."
+      "Outside of computing, I hold a Grade 8 guitar qualification and climb regularly with friends in the Peak District and London. English is my native language, and I have been studying Arabic for approximately a year and a half.",
+      "My CV comes in two versions: a full two-page one and a condensed one-pager. If anyone asks for my CV, resume, or my full background, share the CV card and mention that both versions are on it so they can pick."
     ],
     "location": "Sheffield, UK & Hemel Hempstead, UK",
     "email": "jedsmith2004@gmail.com",
@@ -46,40 +47,92 @@
   },
   "skills": [
     {
-      "category": "Frontend",
-      "items": ["React", "Next.js", "TypeScript", "GSAP", "Three.js", "Tailwind CSS"]
-    },
-    {
-      "category": "Backend",
-      "items": ["Node.js", "Python", "PostgreSQL", "MongoDB", "GraphQL", "REST APIs"]
+      "category": "Languages",
+      "items": [
+        "TypeScript",
+        "Python",
+        "C#",
+        "JavaScript",
+        "Ruby",
+        "Haskell",
+        "SQL"
+      ]
     },
     {
       "category": "AI/ML",
-      "items": ["PyTorch", "CNNs & Transfer Learning", "Reinforcement Learning", "Generative AI", "Computer Vision", "Local Inference"]
+      "items": [
+        "PyTorch",
+        "CNNs & Transfer Learning",
+        "Reinforcement Learning",
+        "Generative AI",
+        "Local & On-Device Inference",
+        "Agent Orchestration",
+        "MCP"
+      ]
     },
     {
-      "category": "Tools",
-      "items": ["Docker", "Vercel", "Cloudflare Workers", "MCP", "Unity", "Git", "Figma"]
+      "category": "Frontend & Graphics",
+      "items": [
+        "React",
+        "Next.js",
+        "SvelteKit",
+        "GSAP",
+        "Three.js",
+        "Unity",
+        "Tailwind CSS"
+      ]
+    },
+    {
+      "category": "Backend & Data",
+      "items": [
+        "Node.js",
+        "Fastify",
+        "Express",
+        "Flask",
+        "Ruby on Rails",
+        "PostgreSQL",
+        "Drizzle",
+        "Redis",
+        "REST APIs"
+      ]
+    },
+    {
+      "category": "Infrastructure",
+      "items": [
+        "Fly.io",
+        "Cloudflare Workers",
+        "Docker",
+        "Vercel",
+        "Stripe",
+        "GitHub Actions",
+        "Git"
+      ]
     }
   ],
   "experience": [
     {
-      "company": "Project Falcon",
-      "role": "Missions Engineer",
-      "period": "2023 - 2024",
-      "description": "Architected and implemented a real-time analytics dashboard, integrating live data analysis with scalable backend infrastructure."
-    },
-    {
-      "company": "UCD",
-      "role": "Full Stack Developer",
-      "period": "2025 - Present",
-      "description": "Founded and run a small web studio delivering modern, responsive websites and SEO to local Sheffield businesses, handling the full lifecycle from client discovery and design through full-stack development, deployment, and maintenance."
+      "company": "Recensorium",
+      "role": "Founder & Engineer",
+      "period": "2026 - Present",
+      "description": "Founded Recensorium Ltd and built its platform: peer review for AI-generated research, where agents publish papers over a REST API or MCP server and are assigned other agents' work to review. Designed the review-assignment mechanism (a weighted bandit, so an agent never picks what it reviews) and the reputation model, and shipped the whole thing solo as a five-app TypeScript monorepo on Postgres, Fly.io and Cloudflare Workers."
     },
     {
       "company": "AI Startup (London)",
-      "role": "Software Engineer (Short-Term)",
+      "role": "Software Engineer (Contract)",
       "period": "2026",
-      "description": "Spent a short period with an early-stage AI startup, building an internal API to consolidate their disjoint systems. Rewrote several Cloudflare Workers including GitHub syncing, and delivered a UI dashboard, a CLI, and an MCP server to unify their tooling."
+      "description": "Spent a short period with an early-stage AI startup, building an internal API to consolidate their disconnected systems. Rewrote several Cloudflare Workers including GitHub syncing, and delivered a UI dashboard, a CLI, and an MCP server to unify their tooling."
+    },
+    {
+      "company": "UCD",
+      "role": "Founder & Full Stack Developer",
+      "period": "2024 - Present",
+      "description": "Founded and run a small web studio delivering modern, responsive websites and SEO to local Sheffield businesses, handling the full lifecycle from client discovery and design through full-stack development, deployment, and maintenance."
+    },
+    {
+      "company": "Project Falcon",
+      "role": "Missions Engineer",
+      "period": "2023 - 2024",
+      "description": "Built the Flight Ground Control System in Node.js and Python for a fixed-wing quadcopter competing in the IMechE UAS Challenge: live telemetry monitoring, recording and display for the operator on the ground."
     }
   ],
   "awards": [
@@ -88,35 +141,55 @@
       "place": "Cash Prize",
       "date": "March 2022",
       "description": "Created a Snapchat lens used over 1 million times, securing £1500 for school technology resources as a top-performing creative entry.",
-      "badges": ["AR", "INNOVATION", "IMPACT"]
+      "badges": [
+        "AR",
+        "INNOVATION",
+        "IMPACT"
+      ]
     },
     {
       "title": "Dragon's Apprentice Challenge",
       "place": "1st Place",
       "date": "March 2022",
       "description": "Led a winning charity venture that multiplied a £100 seed fund through events including a balloon race, auction, and milkshake stand, and received a creativity award.",
-      "badges": ["LEADERSHIP", "CHARITY", "ENTREPRENEUR"]
+      "badges": [
+        "LEADERSHIP",
+        "CHARITY",
+        "ENTREPRENEUR"
+      ]
     },
     {
       "title": "Public Speaking Competition",
       "place": "2nd Place",
       "date": "March 2023",
       "description": "Delivered a talk on the legalisation of psychedelics to an audience including an RAF Officer, a police lieutenant, and an advisor to the Prime Minister.",
-      "badges": ["ADVOCACY", "COMMUNICATION", "STAGE"]
+      "badges": [
+        "ADVOCACY",
+        "COMMUNICATION",
+        "STAGE"
+      ]
     },
     {
       "title": "hackSheffield 9",
       "place": "1st Place",
       "date": "November 2024",
       "description": "Won best GitHub repository award by engineering strong project structure, documentation, and developer experience, resulting in the top-scoring repository.",
-      "badges": ["OPEN-SOURCE", "ENGINEERING", "DX"]
+      "badges": [
+        "OPEN-SOURCE",
+        "ENGINEERING",
+        "DX"
+      ]
     },
     {
       "title": "Engineering You're Hired",
       "place": "3rd Place",
       "date": "March 2025",
       "description": "Designed a pipe inspection and repair concept using decentralised swarm robotics, contributing swarm behaviour mechanics and AI-based visual inspection ideas.",
-      "badges": ["SWARM", "ROBOTICS", "AI"]
+      "badges": [
+        "SWARM",
+        "ROBOTICS",
+        "AI"
+      ]
     }
   ],
   "hitchhikeRoute": {
@@ -293,7 +366,7 @@
         "name": "Nîmes",
         "country": "France",
         "lat": 43.832,
-        "lon": 4.260,
+        "lon": 4.26,
         "reels": [
           {
             "url": "https://www.instagram.com/reel/DN5N_CgDXTj/",
@@ -332,7 +405,7 @@
         "name": "Murcia",
         "country": "Spain",
         "lat": 37.991,
-        "lon": -1.160,
+        "lon": -1.16,
         "reels": [
           {
             "url": "https://www.instagram.com/reel/DOD5fu0iDmT/",
@@ -345,7 +418,7 @@
         "name": "Malaga",
         "country": "Spain",
         "lat": 36.718,
-        "lon": -4.490,
+        "lon": -4.49,
         "reels": [
           {
             "url": "https://www.instagram.com/reel/DOF_ju7DZgU/",
@@ -376,7 +449,7 @@
         "name": "Marrakesh",
         "country": "Morocco",
         "lat": 31.634,
-        "lon": -8.090,
+        "lon": -8.09,
         "reels": [
           {
             "url": "https://www.instagram.com/p/DOTvXNYDelU/",

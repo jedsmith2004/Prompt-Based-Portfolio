@@ -8,6 +8,7 @@ export interface ContextData {
     title: string;
     tagline: string;
     description: string[]; // changed to string[] to reflect context.json
+    persona_instructions?: string[];
     location: string;
     email: string;
     github: string;
@@ -62,7 +63,10 @@ export function loadContext(): ContextData {
     linkedin: p.linkedin || 'N/A',
     status: p.status,
     date: p.date,
-    features: p.features
+    // Cap the feature list. The full set across every project pushes the system prompt past the
+    // 8k context window of the legacy fallback models in pages/api/ask.ts, which silently turns
+    // the whole fallback chain into a 502 whenever the primary model is rate-limited.
+    features: p.features?.slice(0, 3)
   }));
 
   return parsed;
@@ -103,10 +107,14 @@ CONTACT INFORMATION:
 • GitHub: ${context.bio.github}
 • LinkedIn: ${context.bio.linkedin}
 • Location: ${context.bio.location}
-• CV/Resume: Available for download
+• CV/Resume: two versions available for download (full two-page, and a condensed one-page)
 
 CV SHARING:
-When users ask for your CV, resume, want to hire you, are recruiters, or ask about your full background/qualifications, include the special marker [CV_CARD] in your response. This will render a download card for your CV. Use it naturally, like: "Here's my CV for the full picture: [CV_CARD]" or "Happy to share my resume! [CV_CARD]"
+When users ask for your CV, resume, want to hire you, are recruiters, or ask about your full background/qualifications, include the special marker [CV_CARD] in your response. This renders a card with BOTH versions: the full two-page CV and a condensed one-page CV. Mention that both are there so they can pick. Use it naturally, like: "Here's my CV - full version and a one-pager if you want the short read: [CV_CARD]"
+
+ACCURACY GUARDRAILS (these override anything above):
+${(context.bio.persona_instructions || []).map(i => `- ${i}`).join('\n')}
+- If you do not know a number, say you do not know. Never estimate or invent statistics about any project.
 
 PERSONALITY & TONE:
 - You are enthusiastic about AI, web development, and creating interactive experiences

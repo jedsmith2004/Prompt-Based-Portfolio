@@ -19,21 +19,30 @@ export const projects: Project[] = [
   {
     id: 'recensorium',
     title: 'Recensorium',
-    description: "Something new is taking shape. The project I'm most excited about is redacted for now, so the details are deliberately under wraps. Watch this space.",
-    tech: [],
+    description: "Peer review for AI-generated research. Agents connect over a REST API or a remote MCP server, publish papers, and are handed other agents' work to review across four dimensions — novelty, significance, clarity and rigour. The interesting part is what they can't do: an agent never chooses what it reviews, and it can't choose who reviews it. I founded the company and designed and built the platform solo — a five-app monorepo with four deployed services, the scoring and reputation model, and the incentive mechanics that keep it honest.",
+    tech: ['TypeScript', 'Fastify', 'Next.js', 'PostgreSQL', 'Drizzle', 'Redis', 'BullMQ', 'MCP', 'OAuth 2.1', 'Cloudflare Workers', 'Fly.io', 'Stripe', 'WorkOS', 'Docker', 'GitHub Actions'],
     github: '',
-    demo: '',
+    demo: 'https://recensorium.com',
     linkedin: '',
-    image: '',
+    image: '/recensorium.png',
     status: 'in-progress',
-    date: 'Coming soon',
-    stealth: true,
-    features: ['Coming Soon; details intentionally withheld']
+    date: 'August 2026',
+    features: [
+      'Agents publish and review over a REST API or a remote MCP server exposing 32 tools, behind an in-house OAuth 2.1 server so the raw API key never reaches the model',
+      'Review assignment is a weighted bandit over coverage, salience and uncertainty — papers are drawn for you, so a review-swapping ring cannot reliably reach its own work',
+      'Publishing is gated behind completed reviews: three before a first paper, five per paper after that',
+      'A reputation score weights how much an agent moves the rankings, so lazy or adversarial reviewers lose influence automatically rather than needing to be policed by hand',
+      'Self, same-owner and same-lab exclusions plus a redraw cooldown close the obvious collusion routes',
+      'Browser studio for building agent workflows as node graphs — 20 node kinds across triggers, models, agents, tools and flow control, plus an assistant that edits the graph for you',
+      'Bounties and competitions on a credits ledger, with a hard boundary that money can never buy a score, enforced by seven CI invariants',
+      'Scoring constants tuned against a red-team simulation of 17 adversarial reviewer archetypes, including collusion rings and sybil swarms',
+      'Five-app TypeScript monorepo (~139k lines, 95 migrations) on Postgres, deployed to Fly.io and Cloudflare Workers across three environments'
+    ]
   },
   {
     id: 'motiongen',
     title: 'MotionGen (Dissertation)',
-    description: 'My BSc dissertation, "Beyond Simple Prompts": a Unity editor plugin for controllable, interactive 3D human motion generation that runs entirely locally. A local Python backend (over gRPC) serves multiple text-to-motion models (T2M-GPT, MoMask, MDM) and writes results straight back into Unity as humanoid AnimationClip assets. In a within-subjects user study it outperformed Unity\'s own Muse Animate across all four headline workflows.',
+    description: 'My BSc dissertation, "Beyond Simple Prompts": a Unity editor plugin for controllable, interactive 3D human motion generation that runs entirely locally. A local Python backend (over gRPC) serves multiple text-to-motion models (T2M-GPT, MoMask, MDM) and writes results straight back into Unity as humanoid AnimationClip assets. In a comparative within-subjects user study it beat Unity\'s own AI tooling on all four measures — SUS, NASA-TLX workload, task time and ease — with large effect sizes. Graded 77. Free and open-source (MIT); the Unity Asset Store release is pending University approval.',
     tech: ['Unity', 'C#', 'Python', 'gRPC', 'Generative AI', 'Text-to-Motion', 'T2M-GPT', 'MoMask', 'MDM', 'Local Inference', '3D Animation'],
     github: 'https://github.com/jedsmith2004/MotionGen',
     demo: '',
@@ -48,7 +57,7 @@ export const projects: Project[] = [
       'Single and batched generation, text-prompted segment regeneration, two-clip inbetweening and multi-segment composition',
       'Local Gemma planner splits a complex prompt into a per-segment JSON plan (models, durations, transitions, scene anchors)',
       'Variant ranker scores clips on foot skating, jerk, root drift and ground penetration',
-      'Writes results directly as humanoid AnimationClip assets; evaluated in four studies, leading Unity AI on all four headline workflows'
+      'Writes results directly as humanoid AnimationClip assets; evaluated with four methods — a comparative user study, an internal model-fit pre-screen, a local planner latency benchmark and a variant-ranker calibration'
     ]
   },
   {

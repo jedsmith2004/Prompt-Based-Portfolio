@@ -13,7 +13,12 @@ const techCategoryMap: Record<string, string> = {
   // AI / ML / Robotics / Data Science
   'AI': 'AI/ML', 'ML': 'AI/ML', 'Machine Learning': 'AI/ML', 'LLM': 'AI/ML', 'LLM Streaming': 'AI/ML', 'Groq': 'AI/ML', 'OpenAI GPT': 'AI/ML', 'Langchain': 'AI/ML', 'LLama.cpp': 'AI/ML', 'GGUF': 'AI/ML', 'TensorFlow': 'AI/ML', 'PyTorch': 'AI/ML', 'Computer Vision': 'AI/ML', 'NLP': 'AI/ML', 'NumPy': 'AI/ML', 'SciPy': 'AI/ML', 'Swarm Robotics': 'AI/ML', 'Robotics': 'AI/ML', 'LiDAR': 'AI/ML', 'Ultrasonic Sensing': 'AI/ML',
   // Tools / DevOps / Design / Infrastructure
-  'Docker': 'Tools', 'AWS': 'Tools', 'Vercel': 'Tools', 'Git': 'Tools', 'Figma': 'Tools', 'Adobe Creative Suite': 'Tools', 'Prismic CMS': 'Tools', 'Slice Machine': 'Tools', 'PostCSS': 'Tools', 'Cloudflare': 'Tools', 'Rake': 'Tools', 'WSL': 'Tools', 'Gitlab': 'Tools', 'ShakerPacker': 'Tools', 'Markdown': 'Tools', 'Client Requirements': 'Tools', 'Iteration': 'Tools', 'Deployment': 'Tools', 'Domain Transfer': 'Tools', 'Technical Drawings': 'Tools', 'Business Planning': 'Tools', 'CAD': 'Tools', 'CFD': 'Tools'
+  'Docker': 'Tools', 'AWS': 'Tools', 'Vercel': 'Tools', 'Git': 'Tools', 'Figma': 'Tools', 'Adobe Creative Suite': 'Tools', 'Prismic CMS': 'Tools', 'Slice Machine': 'Tools', 'PostCSS': 'Tools', 'Cloudflare': 'Tools', 'Rake': 'Tools', 'WSL': 'Tools', 'Gitlab': 'Tools', 'ShakerPacker': 'Tools', 'Markdown': 'Tools', 'Client Requirements': 'Tools', 'Iteration': 'Tools', 'Deployment': 'Tools', 'Domain Transfer': 'Tools', 'Technical Drawings': 'Tools', 'Business Planning': 'Tools', 'CAD': 'Tools', 'CFD': 'Tools',
+  // Recensorium-era additions (keep in step with public/context.json skills + the recensorium tech list)
+  'Fastify': 'Backend', 'Express': 'Backend', 'Drizzle': 'Backend', 'Redis': 'Backend', 'BullMQ': 'Backend', 'SQL': 'Backend', 'C#': 'Backend', 'Ruby': 'Backend', 'OAuth 2.1': 'Backend',
+  'MCP': 'AI/ML', 'Agent Orchestration': 'AI/ML', 'Local & On-Device Inference': 'AI/ML', 'Local Inference': 'AI/ML', 'Generative AI': 'AI/ML', 'Reinforcement Learning': 'AI/ML', 'CNNs & Transfer Learning': 'AI/ML', 'Text-to-Motion': 'AI/ML', 'Gemini AI': 'AI/ML',
+  'SvelteKit': 'Frontend', 'Unity': 'Frontend',
+  'Fly.io': 'Tools', 'Cloudflare Workers': 'Tools', 'Stripe': 'Tools', 'GitHub Actions': 'Tools', 'Railway': 'Tools', 'Neon': 'Tools', 'Firebase Auth': 'Tools', 'Auth0': 'Tools'
 };
 
 interface RawSkill { name: string; count: number; weight: number; category: string; }

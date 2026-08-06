@@ -3,6 +3,23 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { gsap } from 'gsap';
+import { projects } from '../lib/projects-data';
+
+/** Both CV cuts are published; the two-page one is the canonical link. */
+export const CV_VERSIONS = [
+  {
+    label: 'Full CV',
+    blurb: 'Two pages, complete project list',
+    href: '/CV Jack Smith.pdf',
+    download: 'Jack Smith - CV.pdf',
+  },
+  {
+    label: 'One-page CV',
+    blurb: 'Condensed, for a quick read',
+    href: '/CV Jack Smith - One Page.pdf',
+    download: 'Jack Smith - CV (one page).pdf',
+  },
+];
 
 export default function FloatingCV() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -255,48 +272,66 @@ export default function FloatingCV() {
               {/* Quick stats */}
               <div className="grid grid-cols-3 gap-4 mb-8">
                 <div className="bg-white/5 rounded-lg p-3 border border-white/10">
-                  <div className="text-2xl font-bold text-white">3+</div>
-                  <div className="text-xs text-gray-500">Years Exp</div>
+                  <div className="text-2xl font-bold text-white">1st</div>
+                  <div className="text-xs text-gray-500">Class Honours</div>
                 </div>
                 <div className="bg-white/5 rounded-lg p-3 border border-white/10">
-                  <div className="text-2xl font-bold text-white">10+</div>
+                  <div className="text-2xl font-bold text-white">77</div>
+                  <div className="text-xs text-gray-500">Dissertation</div>
+                </div>
+                <div className="bg-white/5 rounded-lg p-3 border border-white/10">
+                  <div className="text-2xl font-bold text-white">{projects.length}</div>
                   <div className="text-xs text-gray-500">Projects</div>
                 </div>
-                <div className="bg-white/5 rounded-lg p-3 border border-white/10">
-                  <div className="text-2xl font-bold text-white">1st</div>
-                  <div className="text-xs text-gray-500">Class (exp)</div>
-                </div>
               </div>
 
-              {/* Download button */}
-              <a
-                href="/CV Jack Smith.pdf"
-                download="Jack Smith - CV.pdf"
-                className="inline-flex items-center justify-center gap-3 w-full px-6 py-4 bg-white text-black font-semibold rounded-xl transition-all duration-300 hover:bg-gray-200 hover:scale-[1.02]"
+              {/* Two versions - full CV is the primary download */}
+              <div className="space-y-3">
+                {CV_VERSIONS.map((cv, i) => (
+                  <div
+                    key={cv.href}
+                    className={`flex items-center gap-3 rounded-xl border p-3 ${
+                      i === 0
+                        ? 'bg-white/10 border-white/20'
+                        : 'bg-white/[0.03] border-white/10'
+                    }`}
+                  >
+                    <div className="flex-1 text-left">
+                      <p className="text-sm font-semibold text-white">{cv.label}</p>
+                      <p className="text-xs text-gray-500">{cv.blurb}</p>
+                    </div>
+                    <a
+                      href={cv.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-2 text-xs text-gray-300 hover:text-white transition-colors"
+                    >
+                      View
+                    </a>
+                    <a
+                      href={cv.href}
+                      download={cv.download}
+                      className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg transition-all duration-300 hover:scale-[1.03] ${
+                        i === 0
+                          ? 'bg-white text-black hover:bg-gray-200'
+                          : 'bg-white/10 text-white border border-white/20 hover:bg-white/15'
+                      }`}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                      Download
+                    </a>
+                  </div>
+                ))}
+              </div>
+
+              <button
+                onClick={closeModal}
+                className="w-full mt-4 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/20 text-gray-300 text-sm rounded-lg transition-colors"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                </svg>
-                Download CV
-              </a>
-
-              {/* Secondary actions */}
-              <div className="flex gap-4 mt-4">
-                <a
-                  href="/CV Jack Smith.pdf"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-1 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/20 text-gray-300 text-sm rounded-lg transition-colors"
-                >
-                  View in Browser
-                </a>
-                <button
-                  onClick={closeModal}
-                  className="flex-1 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/20 text-gray-300 text-sm rounded-lg transition-colors"
-                >
-                  Close
-                </button>
-              </div>
+                Close
+              </button>
             </div>
           </div>
         </div>,

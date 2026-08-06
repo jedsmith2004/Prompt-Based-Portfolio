@@ -8,12 +8,12 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata: Metadata = {
   metadataBase: new URL('https://jacksmith.me'),
   title: 'Jack Smith - AI + Graphics Enthusiast',
-  description: 'Full-stack developer specializing in AI integration and interactive web experiences. Building the future with modern technologies.',
-  keywords: ['Full Stack Developer', 'AI Integration', 'React', 'Next.js', 'GSAP', 'Three.js'],
+  description: 'Founder of Recensorium, peer review for AI-generated research. First Class Computer Science graduate building AI systems, computer graphics and full-stack applications.',
+  keywords: ['Full Stack Developer', 'AI Integration', 'Recensorium', 'AI Agents', 'React', 'Next.js', 'GSAP', 'Three.js', 'Unity'],
   authors: [{ name: 'Jack Smith' }],
   openGraph: {
     title: 'Jack Smith - AI + Graphics Enthusiast',
-    description: 'Building Interactive Worlds with AI and Modern Web Technologies',
+    description: 'Founder of Recensorium. Building AI systems, interactive graphics and full-stack applications.',
     url: 'https://jacksmith.me',
     siteName: 'Jack Smith Portfolio',
     images: [
@@ -29,7 +29,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'Jack Smith - AI + Graphics Enthusiast',
-    description: 'Building Interactive Worlds with AI and Modern Web Technologies',
+    description: 'Founder of Recensorium. Building AI systems, interactive graphics and full-stack applications.',
     images: ['https://jacksmith.me/Logo.png'],
   },
 };
