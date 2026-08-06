@@ -30,33 +30,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
-    const apiKey = process.env.GROQ_API_KEY;
-    
-    if (!apiKey) {
-      return res.status(500).json({ error: 'Groq API key not configured' });
-    }
-
     const chatMessages = [
       { role: 'system', content: systemPrompt },
       ...normalizedHistory,
       { role: 'user', content: message }
     ];
 
-    // Model fallback chain. Ordered large-context first: the system prompt is ~7k tokens, so a
-    // model with an 8k window has almost no room left for max_tokens and rejects the request -
-    // which turns the whole chain into a 502 exactly when the primary is rate-limited.
-    // Keep every entry here at >=32k context, and re-check the ids against Groq's current
-    // model list when one starts 404ing.
-    const fallbackChain = [
-      'llama-3.3-70b-versatile',
-      'llama-3.1-8b-instant',
-      'llama3-70b-8192',
-      'llama3-8b-8192'
-    ];
-    const explicit = process.env.GROQ_MODEL ? [process.env.GROQ_MODEL] : [];
-    const dedup: Record<string, true> = {};
-    const candidateModels: string[] = [];
-    [...explicit, ...fallbackChain].forEach(m => { if (!dedup[m]) { dedup[m] = true; candidateModels.push(m); } });
+    // DeepSeek is the only provider. Its API implements the OpenAI chat-completions dialect,
+    // so the request body, the SSE framing and the streaming parser below are all unchanged
+    // from the previous provider.
+    const DEEPSEEK_URL = 'https://api.deepseek.com/chat/completions';
+    const apiKey = process.env.DEEPSEEK_API_KEY;
+
+    if (!apiKey) {
+      return res.status(500).json({ error: 'DeepSeek API key not configured' });
+    }
+
+    // DeepSeek V4 Flash has a 1M-token context window, so the ~7k system prompt built in
+    // lib/ai-utils.ts is a rounding error and needs no trimming to fit.
+    const candidateModels = [process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash'];
 
     const tried: string[] = [];
     let chosenModel: string | null = null;
@@ -68,12 +60,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     for (const m of candidateModels) {
       tried.push(m);
-      
-      // Only retry once for rate limits, then move to next model quickly
+
+      // Only retry once for rate limits, then give up quickly rather than hanging
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
-          // Build request body - different params for reasoning models
-          const isReasoningModel = m.includes('gpt-oss') || m.includes('deepseek-r1');
+          // Build request body - reasoning models take different params
+          const isReasoningModel = m.includes('reasoner') || m.includes('deepseek-r1');
           const requestBody: Record<string, unknown> = {
             model: m,
             messages: chatMessages,
@@ -92,7 +84,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             requestBody.temperature = 0.7;
           }
 
-          const apiResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          const apiResponse = await fetch(DEEPSEEK_URL, {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${apiKey}`,
@@ -100,44 +92,46 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             },
             body: JSON.stringify(requestBody),
           });
-          
+
           if (apiResponse.ok && apiResponse.body) {
             response = apiResponse;
             chosenModel = m;
             break;
           } else if (apiResponse.status === 429) {
-            // Rate limited - short wait then try next model (don't hang)
-            const waitTime = attempt === 0 ? 1500 : 0; // Only wait 1.5s on first attempt, then skip
+            // Rate limited - one short wait, then surface it rather than hanging
+            const waitTime = attempt === 0 ? 1500 : 0;
             if (waitTime > 0) {
-              console.log(`Rate limited on ${m}, waiting ${waitTime}ms then trying next model`);
+              console.log(`Rate limited on ${m}, waiting ${waitTime}ms before retrying`);
               await wait(waitTime);
+              continue; // retry the same model once
             }
             lastError = new Error(`Model ${m} rate limited: 429 Too Many Requests`);
-            break; // Move to next model quickly
+            break;
           } else {
             lastError = new Error(`Model ${m} failed: ${apiResponse.status} ${apiResponse.statusText}`);
-            break; // Try next model
+            break;
           }
         } catch (err) {
           lastError = err;
-          break; // Try next model on network errors
+          break; // Network error - stop retrying this model
         }
       }
-      
-      if (response && chosenModel) break; // Success, exit model loop
+
+      if (response && chosenModel) break;
     }
 
     if (!response || !chosenModel) {
       console.error('All model attempts failed', { tried, lastError });
       const isRateLimit = lastError?.message?.includes('429') || lastError?.message?.includes('rate limit');
-      return res.status(isRateLimit ? 429 : 502).json({ 
-        error: isRateLimit ? 'Rate limit reached - please wait a moment and try again' : 'Upstream model failure', 
-        tried, 
-        detail: lastError instanceof Error ? lastError.message : String(lastError) 
+      return res.status(isRateLimit ? 429 : 502).json({
+        error: isRateLimit ? 'Rate limit reached - please wait a moment and try again' : 'Upstream model failure',
+        tried,
+        detail: lastError instanceof Error ? lastError.message : String(lastError)
       });
     }
 
     res.setHeader('X-Model-Used', chosenModel);
+    res.setHeader('X-Model-Provider', 'deepseek');
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
@@ -204,7 +198,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     console.error('Error details:', {
       message: error instanceof Error ? error.message : 'Unknown error',
       stack: error instanceof Error ? error.stack : 'No stack trace',
-      apiKey: process.env.GROQ_API_KEY ? 'Present' : 'Missing'
+      deepseekKey: process.env.DEEPSEEK_API_KEY ? 'Present' : 'Missing'
     });
     
     if (!res.headersSent) {

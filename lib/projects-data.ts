@@ -265,8 +265,8 @@ export const projects: Project[] = [
   {
     id: 'interactive-ai-portfolio',
     title: 'Interactive AI Portfolio',
-    description: 'This live portfolio you\'re browsing: an AI-augmented, animation-rich Next.js site with streaming Groq chat, contextual system prompt generation, markdown rendering, and dynamic placeholder suggestion engine.',
-    tech: ['Next.js', 'React', 'TypeScript', 'Tailwind CSS', 'GSAP', 'LLM Streaming', 'Groq', 'Markdown', 'Node.js', 'Edge Patterns', 'AI', 'LLM', 'API'],
+    description: 'This live portfolio you\'re browsing: an AI-augmented, animation-rich Next.js site with streaming DeepSeek V4 Flash chat, contextual system prompt generation, markdown rendering, and dynamic placeholder suggestion engine.',
+    tech: ['Next.js', 'React', 'TypeScript', 'Tailwind CSS', 'GSAP', 'LLM Streaming', 'DeepSeek', 'Markdown', 'Node.js', 'Edge Patterns', 'AI', 'LLM', 'API'],
     github: 'https://github.com/jedsmith2004/Prompt-Based-Portfolio',
     demo: 'https://www.jacksmith.me',
     linkedin: 'https://www.linkedin.com/posts/jack-ed-smith_portfolio-webdevelopment-nextjs-activity-7414621831011381248-YeGo?utm_source=social_share_send&utm_medium=member_desktop_web&rcm=ACoAADuJDq8BCJQoqWvGoU-uR5GamfvCd_uNR6c',
@@ -274,12 +274,12 @@ export const projects: Project[] = [
     status: 'completed',
     date: 'January 2026',
     features: [
-      'Real-time streaming AI chat with conversation memory & fallback model chain',
+      'Real-time streaming AI chat on DeepSeek V4 Flash, with conversation memory and rate-limit retry',
       'RunId-based deterministic placeholder suggestion animator (no overlap)',
       'Lightweight custom markdown renderer with links, code & lists',
       'Dynamic system prompt built from structured JSON context & project injection',
       'Responsive glass UI with particle & hero entrance animations (GSAP)',
-      'Model fallback chain (Mixtral → Gemma2 → Llama 8B) for resilience',
+      'Server-side streaming proxy that keeps the model key off the client entirely',
       'Type-safe project metadata with extended feature lists',
       'Optimized minimal message rendering and scroll management'
     ]

@@ -42,7 +42,7 @@ My personal portfolio website showcasing my work, skills, and experience. Featur
 - **[Tailwind CSS](https://tailwindcss.com/)** - Utility-first styling
 - **[GSAP](https://greensock.com/gsap/)** - Professional-grade animations
 - **[Radix UI](https://www.radix-ui.com/)** - Accessible component primitives
-- **[Groq](https://groq.com/)** - Lightning-fast AI inference
+- **[DeepSeek](https://www.deepseek.com/)** - DeepSeek V4 Flash powers the streaming chat
 
 ---
 
