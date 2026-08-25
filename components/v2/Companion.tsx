@@ -702,7 +702,28 @@ const PERCH_TILT_SLOP = 3;
 const PERCH_MIN_OPACITY = 0.9;
 
 /** Middle 70% of the viewport. Outside it he starts working his way back. */
-const BAND_MARGIN = 0.15;
+/**
+ * The edge fifths.
+ *
+ * > "In those edge regions (top and bottom 20% maybe), he wants to jump down
+ * > into the middle 60%, bit by bit."
+ *
+ * 0.20 rather than the 0.15 it was, so the band he settles into is Jack's
+ * middle 60% exactly. This is the ONLY thing that decides where he tries to
+ * stand: urgency is zero inside it and rises the further outside it he gets.
+ */
+const BAND_MARGIN = 0.2;
+
+/**
+ * How far past the viewport edge counts as gone, and for how long.
+ *
+ * Only being GONE licenses an ability — see the trigger in update(). A hop
+ * arc rises up to 620px and can clip the top edge on the way somewhere
+ * sensible, so this has to sit past what an ordinary hop does without sitting
+ * so far out that he is visibly absent before anything happens.
+ */
+const OFF_SCREEN_MARGIN = 60;
+const OFF_SCREEN_SUSTAIN = 260;
 /** How far in from the viewport edge a wall kick happens. */
 const WALL_INSET = 26;
 /** One body width, in document px. The pace every walk translates at. */
@@ -722,10 +743,9 @@ const CORRECT_SPEED = 460;
 const FALL_TERMINAL = 1250;
 /** No single fall substep may travel further than this. */
 const FALL_STEP_PX = 16;
-/** Smoothed px/frame that counts as a fast scroll. About 840 px/s. */
-const TRANSIT_VEL = 14;
-/** ...held for this long, so one wheel notch cannot launch a balloon. */
-const TRANSIT_SUSTAIN = 80;
+/* TRANSIT_VEL and TRANSIT_SUSTAIN lived here. They defined "a fast scroll",
+   which is no longer what licenses an ability: being off the screen is. See
+   the trigger in update(). */
 
 /** Move `cur` toward `target` by at most one frame of travel. */
 function approach(cur: number, target: number, dt: number, speed = CORRECT_SPEED): number {
@@ -1150,8 +1170,85 @@ export default function Companion({
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    const pageCtx0 = canvas.getContext('2d');
+    if (!pageCtx0) return;
+    const pageCtx: CanvasRenderingContext2D = pageCtx0;
+
+    /* ====================================================================
+       THE SCROLL FIX — a second canvas that lives in the document
+
+       Browsers scroll on the compositor thread without waiting for the main
+       thread. A rAF callback reading `window.scrollY` gets the last COMMITTED
+       offset, which during a fling is behind what the compositor has already
+       painted. Drawing the bird at `bird.y - window.scrollY` on a fixed canvas
+       therefore puts him at a position derived from an older scroll offset
+       every single frame, and he corrects on the next one. That is the lag
+       Jack reported three times, and it cannot be fixed by reading scroll
+       "more freshly": the main thread is structurally behind.
+
+       The only fix is to take JS out of the scroll path, so this is a strip of
+       canvas in NORMAL DOCUMENT FLOW. It scrolls with the page for free, on
+       the compositor, and the draw call never reads scrollY at all.
+
+       A full-document canvas is not an option — 13,000px at DPR 2 is ~66M
+       pixels — so the strip is a band that follows him, moved with
+       `translate3d` in DOCUMENT coordinates. The transform only changes when
+       he moves under his own power. While he is perched it is a constant, and
+       a constant transform on a composited layer is exactly what "stays where
+       it is on the page" means.
+
+       The band NEVER extends past the bottom of the document (see the clamp in
+       draw), because an absolutely positioned box that hangs off the end would
+       grow the scroll height, which would let him go lower, which would grow
+       it again.
+
+       What stays on the fixed viewport canvas: the chat window and the drawn
+       cursor. Both are genuinely viewport-anchored and neither has a lag
+       problem, because neither moves while you scroll.
+       ==================================================================== */
+    /** CSS px of band above his feet: sprite, tall props, bubble and tail. */
+    const BAND_UP = 420;
+    /** And below: the shadow, the low props, and anything that drips. */
+    const BAND_DOWN = 140;
+    const BAND_H = BAND_UP + BAND_DOWN;
+
+    const band = document.createElement('div');
+    band.setAttribute('aria-hidden', 'true');
+    /* Styled inline rather than by class. The element is created here, so its
+       appearance should not depend on a stylesheet having loaded. */
+    band.style.cssText =
+      'position:absolute;top:0;left:0;width:100%;height:0;z-index:39;' +
+      'pointer-events:none;will-change:transform;contain:layout style;';
+    const bandCanvas = document.createElement('canvas');
+    bandCanvas.style.cssText =
+      'position:absolute;top:0;left:0;image-rendering:pixelated;pointer-events:none;';
+    band.appendChild(bandCanvas);
+    document.body.appendChild(band);
+    const bandCtx0 = bandCanvas.getContext('2d');
+    if (!bandCtx0) {
+      band.remove();
+      return;
+    }
+    const bandCtx: CanvasRenderingContext2D = bandCtx0;
+
+    /** Where the band's top edge sits in document space, in CSS px. */
+    let bandTop = -1;
+    /** Document height, re-read whenever the page is measured. */
+    let docH = 0;
+    /** False on a page too short to hold a band without growing it. */
+    let useBand = false;
+
+    /**
+     * The context the puppet is currently being painted into.
+     *
+     * Deliberately the same NAME the whole draw path already used, so that
+     * every blit in `drawPart`, `drawPropAt`, `drawPropInSprite` and the
+     * bubble follows the surface without a single call site changing. `draw`
+     * points it at the band, paints him, and points it back at the viewport
+     * canvas for the chat and the cursor. It is never observable outside one
+     * synchronous `draw`.
+     */
+    let ctx: CanvasRenderingContext2D = pageCtx;
 
     const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
     let reduced = motionQuery.matches;
@@ -1193,9 +1290,39 @@ export default function Companion({
       H = window.innerHeight;
       canvas!.width = Math.round(W * dpr);
       canvas!.height = Math.round(H * dpr);
-      ctx!.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx!.imageSmoothingEnabled = false;
+      pageCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      pageCtx.imageSmoothingEnabled = false;
+
+      bandCanvas.width = Math.round(W * dpr);
+      bandCanvas.height = Math.round(BAND_H * dpr);
+      bandCanvas.style.width = W + 'px';
+      bandCanvas.style.height = BAND_H + 'px';
+      bandCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      bandCtx.imageSmoothingEnabled = false;
+
+      measureDoc();
       chatUi.dirty = true;
+    }
+
+    /**
+     * How tall the document is, and therefore whether a band fits in it.
+     *
+     * `scrollHeight` includes the band itself, which looks circular and is
+     * not: the band is clamped so its bottom edge can never pass `docH`, so
+     * the measurement is a fixed point rather than a feedback loop. It cannot
+     * make the page grow, so it cannot make itself grow.
+     */
+    function measureDoc() {
+      docH = Math.max(
+        document.body.scrollHeight,
+        document.documentElement.scrollHeight,
+        window.innerHeight
+      );
+      /* On a page shorter than the band there is nowhere to put it that does
+         not add scroll height, so we keep the old viewport-canvas path. It
+         lags, but a page that short cannot be scrolled far enough to see it. */
+      useBand = docH >= BAND_H + 8;
+      band.style.display = useBand ? '' : 'none';
     }
 
     /* ---- perches, measured from real page furniture ------------------- */
@@ -1490,6 +1617,8 @@ export default function Companion({
       restUntil: 0,
       sinceMove: 0,
       settledMs: 0,
+      /** How long he has been off the screen, in ms. Only this fires an
+          ability; see the trigger in update(). */
       strandedMs: 0,
       /* continuous drift for locomotion idles — see BUG 1 cause (c) */
       driftVx: 0,
@@ -1726,23 +1855,98 @@ export default function Companion({
      * body ended up. `dir` is +1 for a bubble above him (the wedge hangs down
      * off the underside) and -1 for one below (it points back up).
      */
-    function drawBubbleTail(bx: number, by: number, sx: number, dir: 1 | -1) {
+    /**
+     * @param edge which edge of the body the tail hangs off, which is also
+     *   the way it points: 'down' for a bubble sitting above him, 'up' for one
+     *   below, 'left' for one to his RIGHT, 'right' for one to his LEFT.
+     */
+    function drawBubbleTail(
+      bx: number,
+      by: number,
+      sx: number,
+      sy: number,
+      edge: 'up' | 'down' | 'left' | 'right'
+    ) {
       const P = FONT_PX;
       const tail = bubble.tailCells;
-      /* the TIP is the narrow end, so solve for the tip landing on him */
-      const want = Math.round((sx - bx) / P) - tail + 1;
-      const tx = Math.max(2, Math.min(Math.max(2, bubble.bodyW - tail - 3), want));
-      for (let r = 0; r < tail; r++) {
-        const wCells = tail - r + 1;
-        const x = bx + (tx + r) * P;
-        const y = dir === 1 ? by + (bubble.bodyH + r) * P : by - (r + 1) * P;
-        ctx!.fillStyle = theme.ink;
-        ctx!.fillRect(x, y, wCells * P, P);
-        if (wCells > 2) {
-          ctx!.fillStyle = theme.paper;
-          ctx!.fillRect(x, y, (wCells - 2) * P, P);
+      ctx!.save();
+      if (edge === 'up' || edge === 'down') {
+        /* the TIP is the narrow end, so solve for the tip landing on him */
+        const want = Math.round((sx - bx) / P) - tail + 1;
+        const tx = Math.max(2, Math.min(Math.max(2, bubble.bodyW - tail - 3), want));
+        for (let r = 0; r < tail; r++) {
+          const wCells = tail - r + 1;
+          const x = bx + (tx + r) * P;
+          const y = edge === 'down' ? by + (bubble.bodyH + r) * P : by - (r + 1) * P;
+          ctx!.fillStyle = theme.ink;
+          ctx!.fillRect(x, y, wCells * P, P);
+          if (wCells > 2) {
+            ctx!.fillStyle = theme.paper;
+            ctx!.fillRect(x, y, (wCells - 2) * P, P);
+          }
+        }
+      } else {
+        /* The same wedge turned through ninety degrees: rows become columns
+           and the taper runs down the side instead of across the bottom. */
+        const want = Math.round((sy - by) / P) - tail + 1;
+        const ty = Math.max(2, Math.min(Math.max(2, bubble.bodyH - tail - 3), want));
+        for (let r = 0; r < tail; r++) {
+          const hCells = tail - r + 1;
+          const y = by + (ty + r) * P;
+          const x = edge === 'right' ? bx + (bubble.bodyW + r) * P : bx - (r + 1) * P;
+          ctx!.fillStyle = theme.ink;
+          ctx!.fillRect(x, y, P, hCells * P);
+          if (hCells > 2) {
+            ctx!.fillStyle = theme.paper;
+            ctx!.fillRect(x, y, P, (hCells - 2) * P);
+          }
         }
       }
+      ctx!.restore();
+    }
+
+    /**
+     * The props being drawn on the puppet this frame.
+     *
+     * The three lists were inlined in three places in `draw`; the bubble needs
+     * to know the same thing, so they are one function now.
+     */
+    function activeProps(): readonly PropName[] {
+      if (bird.mode === 'transit') return transit.props;
+      if (bird.mode === 'sleep') return DREAM_BUBBLE_PARTS;
+      if (bird.mode === 'chat') {
+        const list = CHAT_PROP_MAP[chat.current.perch] ?? EMPTY_PROPS;
+        const cyc = cycledProps(chat.current.perch, bird.clock);
+        return cyc.length ? list.concat(cyc) : list;
+      }
+      return EMPTY_PROPS;
+    }
+
+    /**
+     * Is anything drawn in the space over his head right now?
+     *
+     * > "when he has an animation with something above his head like an
+     * > umbrella, make the speech bubble appear to the side or below him, so
+     * > it doesn't block it."
+     *
+     * DERIVED, not a list of animation names. A prop's `oy` is its offset from
+     * the top of the 28-row sprite box, so anything negative is drawn ABOVE the
+     * bird — which is exactly and only the set of things that would be covered:
+     * the parachute, the umbrella, the balloon and its rope, the UFO and its
+     * beam, the rope. A hand-kept list of those would be wrong the first time
+     * anyone authors a seventh one.
+     *
+     * The propeller beanie is the exception the geometry cannot see, because it
+     * is a `hat` VARIANT on the puppet rather than a prop, so it has no `oy` of
+     * its own. It is named.
+     */
+    function headBlocked(): boolean {
+      const list = activeProps();
+      for (let i = 0; i < list.length; i++) {
+        if (PROPS[list[i]].oy < 0) return true;
+      }
+      const hat = POSE.hat;
+      return !!hat && (hat.variant === 'propellerA' || hat.variant === 'propellerB');
     }
 
     /* ---- chat window ---------------------------------------------------- */
@@ -2105,8 +2309,6 @@ export default function Companion({
     let lastScrollY = 0;
     /** How far the page moved since the last frame. A transit rides this. */
     let scrollDelta = 0;
-    /** How long the scroll has been over TRANSIT_VEL, in ms. */
-    let fastMs = 0;
     function trackScroll(dt: number) {
       const y = window.scrollY;
       scrollDelta = y - lastScrollY;
@@ -2204,6 +2406,79 @@ export default function Companion({
       return best ?? nearestPerch();
     }
 
+    /**
+     * The perch to come DOWN onto: the one nearly underneath him.
+     *
+     * > "he should slide down it until he jumps off to a perch location near
+     * > underneath him. This should be a similar mechanic with the parachute,
+     * > umbrella, etc."
+     *
+     * `pickBandPerch` scores almost entirely on vertical position — it wants
+     * whatever is nearest the middle of the screen — and weights horizontal
+     * distance at 0.16. That is right for a bird chasing a scrolling page and
+     * completely wrong for one coming down: it sends him diagonally across the
+     * whole viewport under a parachute, which is the thing Jack is describing.
+     * Nothing falls sideways.
+     *
+     * So this inverts the weights. Horizontal distance dominates, height only
+     * breaks ties, and anything ABOVE him is rejected outright: you cannot
+     * descend onto it, and a descent that ends higher than it started reads as
+     * the animation having failed.
+     *
+     * The jitter is scaled the same way as the band picker so an unhurried
+     * descent still has some choice in it, but it is a quarter of the width —
+     * enough that he does not always take the same perch, not enough to send
+     * him across the room.
+     */
+    function pickDescentPerch(urgency: number): Perch | null {
+      const scrollY = window.scrollY;
+      const jitter = 24 * Math.max(0, 1 - urgency);
+      /**
+       * @param below require the perch to be at or under him
+       */
+      let best: Perch | null = null;
+      let bs = -Infinity;
+      for (let i = 0; i < perches.length; i++) {
+        const p = perches[i];
+        const sy = p.y - scrollY;
+        if (sy < -20 || sy > H + 20) continue;
+        if (p === bird.perch) continue;
+        /* Standing ON the perch counts as directly underneath, so the distance
+           is to the nearest point of the SPAN, not to its centre. A 1000px
+           plate heading should not be penalised for being wide. */
+        const dx =
+          bird.x < p.x0 ? p.x0 - bird.x : bird.x > p.x1 ? bird.x - p.x1 : 0;
+        const dy = p.y - bird.y;
+        let s = -dx;
+        /*
+         * BELOW HIM IS STRONGLY PREFERRED, NOT REQUIRED, and the difference is
+         * the whole design of this function.
+         *
+         * A hard "must be below" rule looks right and measures badly. On the
+         * left of the delivery plate there is a stretch where the only things
+         * under him are four narrow chips six hundred pixels to the right, and
+         * the two full-width headings are a couple of hundred pixels ABOVE.
+         * With the hard rule he flew the six hundred sideways — which is the
+         * exact behaviour being complained about — rather than hopping up onto
+         * the heading directly over his head.
+         *
+         * So above is allowed, at a price: a flat 60 to break ties in favour
+         * of down, and then half a pixel per pixel of climb. Descending is
+         * charged at 0.18. A bird that glides down and then hops up onto the
+         * line it was heading for reads fine; one that crosses the room does
+         * not.
+         */
+        s -= dy >= -24 ? Math.abs(dy) * 0.18 : 60 + -dy * 0.5;
+        if (p.w > 200) s += 18;
+        s += Math.random() * jitter;
+        if (s > bs) {
+          bs = s;
+          best = p;
+        }
+      }
+      return best ?? nearestPerch();
+    }
+
     function targetXOn(p: Perch): number {
       const lo = p.x0 + 12;
       const hi = Math.max(lo, p.x1 - 12);
@@ -2212,16 +2487,39 @@ export default function Companion({
     }
 
     /**
+     * Where to put his feet when he is coming DOWN onto something.
+     *
+     * `targetXOn` aims at the CENTRE of the span, which is right for a bird
+     * choosing a nice spot on a heading and wrong for one descending onto it.
+     * It is also the reason picking a perch underneath him was not enough on
+     * its own: `pickDescentPerch` would correctly choose the full-width plate
+     * heading he was already above, and then this would walk him seven hundred
+     * pixels sideways to its middle. Measured over twenty forced descents, the
+     * median horizontal move was 291px and the worst was 699 — which is
+     * exactly the "halfway across the room" that was being complained about,
+     * arriving one function later than anyone was looking.
+     *
+     * So: land under himself, plus a hand's width of wobble so twenty descents
+     * onto the same heading are not twenty identical landings.
+     */
+    function targetXUnder(p: Perch): number {
+      const lo = p.x0 + 12;
+      const hi = Math.max(lo, p.x1 - 12);
+      const wobble = (Math.random() - 0.5) * 48;
+      return Math.max(lo, Math.min(hi, bird.x + wobble));
+    }
+
+    /**
      * Build a hop chain to a perch. Big moves get help: an intermediate perch
      * to break the climb into two hops, or a kick off the wall behind him.
      * Both are just extra waypoints; the land handler walks the chain.
      */
-    function planTo(p: Perch | null, urgency: number) {
+    function planTo(p: Perch | null, urgency: number, underneath = false) {
       if (!p) {
         enterFall();
         return;
       }
-      const tx = targetXOn(p);
+      const tx = underneath ? targetXUnder(p) : targetXOn(p);
       const dy = p.y - bird.y;
       const dx = tx - bird.x;
       beginPlan();
@@ -2242,10 +2540,19 @@ export default function Companion({
             mid = q;
           }
         }
-        if (mid) pushWp('perch', targetXOn(mid), mid.y, mid, 0);
+        /*
+         * The STEPPING STONE has to obey `underneath` too. This was the last
+         * 631px of sideways travel on a descent, and it was hiding one level
+         * down: the descent picked a perch under him, and then the chain put
+         * an intermediate stop on it using `targetXOn`, which aims at the
+         * middle of a span. On the full-width plate heading that is the middle
+         * of the page, and he arrived there before the final hop had a say.
+         */
+        if (mid) pushWp('perch', underneath ? targetXUnder(mid) : targetXOn(mid), mid.y, mid, 0);
       }
 
       if (
+        !underneath &&
         planLen === 0 &&
         urgency > 0.32 &&
         (Math.abs(dy) > 260 || Math.abs(dx) > W * 0.46) &&
@@ -2710,15 +3017,35 @@ export default function Companion({
         }
       }
 
-      /* (b) cursor still for a long time → he goes and lands on it */
+      /*
+       * (b) cursor still for a long time → he goes and lands on it.
+       *
+       * Jack: "Make him not perch on your mouse as often." It used to need
+       * 4.5s of stillness on a 22s cooldown, which on a page you read slowly
+       * is most of the time — the cursor sits while you read a paragraph, and
+       * he was on it again before you had finished the next one. It became his
+       * default behaviour rather than a surprise.
+       *
+       * Three changes, and they do different jobs. 9s of stillness means he
+       * only comes when you have genuinely stopped, rather than while you are
+       * reading. 80s of cooldown makes it a visit rather than a habit. And the
+       * coin flip stops it being metronomic: without it, "he lands on the
+       * cursor every 80 seconds" is a rule a reader works out, and a companion
+       * whose rules you can recite is furniture. A refusal costs only 25s, so
+       * declining does not put him away for another full cooldown.
+       */
       if (
         bird.clock > gate.cursorPerch &&
-        pointer.stillMs > 4500 &&
+        pointer.stillMs > 9000 &&
         !onCursor &&
         Math.hypot(px - bird.x, py - bird.y) > 60
       ) {
-        gate.cursorPerch = bird.clock + 22000;
-        perchOnPointer();
+        if (Math.random() < 0.55) {
+          gate.cursorPerch = bird.clock + 80000;
+          perchOnPointer();
+        } else {
+          gate.cursorPerch = bird.clock + 25000;
+        }
       }
 
       void dt;
@@ -3145,7 +3472,21 @@ export default function Companion({
        * back exactly as it was: not marked seen, and the pity clock not
        * reset, so it is still owed and comes round again shortly.
        */
-      if (!anim.loop && !forced && (startSy < 40 || startSy > H - 40)) {
+      /*
+       * REVISED 2026-08-25 for descents only. Jack: "The rope should come from
+       * right at the top of the screen when coming down and he should slide
+       * down it until he jumps off to a perch location near underneath him."
+       *
+       * The rule above still holds for anything going UP — a scripted ascent
+       * that begins below the fold plays its payoff off the bottom of the page
+       * and is simply wasted. But for a descent the fix is not to give up on
+       * the animation, it is to move the START: he enters at the top edge and
+       * the whole slide happens in view, which is both what was asked for and
+       * a better answer than the fallback was.
+       */
+      const offTop = startSy < 40;
+      const offBottom = startSy > H - 40;
+      if (!anim.loop && !forced && (up ? offTop || offBottom : offBottom)) {
         if (wasRare) {
           seenRare.delete(name);
           sinceRare = sinceBefore + 1;
@@ -3160,16 +3501,29 @@ export default function Companion({
       transit.held = 0;
       transit.props = TRANSIT_PROP_MAP[name] ?? EMPTY_PROPS;
       transit.sy0 = bird.y - window.scrollY;
+      /*
+       * A descent that begins above the top edge begins AT the top edge
+       * instead. He is off-screen either way, so nothing a reader can see
+       * moves; what changes is that the slide, the chute or the tumble now
+       * starts where they can watch it rather than four hundred pixels above
+       * the fold. -26 rather than 0 so he clears the edge on the way in.
+       */
+      if (!up && transit.sy0 < -26) {
+        transit.sy0 = -26;
+        bird.y = window.scrollY + transit.sy0;
+      }
       if (anim.loop) {
         /* Loops cover any distance: hold for the flight, hand over to `land`. */
         transit.dur = 0;
         transit.sy1 = transit.sy0;
       } else {
-        /* The three scripted descents carry a payoff. Give them exactly the
-           travel time their own duration asks for or the punchline lands
-           somewhere the reader is not looking. */
+        /* The scripted descents carry a payoff. Give them exactly the travel
+           time their own duration asks for or the punchline lands somewhere
+           the reader is not looking. */
         transit.dur = animDuration(anim);
-        const p = pickBandPerch(0.9);
+        /* Coming down: aim at something underneath him. Going up: the old
+           picker, which wants whatever is nearest the middle of the screen. */
+        const p = up ? pickBandPerch(0.9) : pickDescentPerch(0.9);
         transit.sy1 = p ? p.y - window.scrollY : H * 0.62;
         transit.sy1 = Math.max(H * 0.24, Math.min(H * 0.82, transit.sy1));
       }
@@ -3194,8 +3548,10 @@ export default function Companion({
          */
         bird.y = scrollY + transit.sy0 + (transit.sy1 - transit.sy0) * smoothstep(u);
         if (transit.t >= transit.dur) {
-          const p = pickBandPerch(0.8);
-          if (p) planTo(p, 0.8);
+          /* Same rule as the one that set sy1: he steps off a descent onto
+             something under him, not across the room. */
+          const p = transit.up ? pickBandPerch(0.8) : pickDescentPerch(0.8);
+          if (p) planTo(p, 0.8, !transit.up);
           else enterFall();
         }
       } else {
@@ -3254,8 +3610,8 @@ export default function Companion({
              one stretch of this page has no perch in view at all — there, the
              right answer is to keep flying, which is what a bird with nowhere
              to sit actually does. */
-          const p = pickBandPerch(0.7);
-          if (p && perchUrgency(p) < 0.3) planTo(p, 0.7);
+          const p = transit.up ? pickBandPerch(0.7) : pickDescentPerch(0.7);
+          if (p && perchUrgency(p) < 0.3) planTo(p, 0.7, !transit.up);
           else transit.t = 200; // hold the hover, re-check shortly
         }
       }
@@ -3342,16 +3698,38 @@ export default function Companion({
       trackCursorPerch(dt);
 
       /*
-       * TRANSIT VARIETY. Not while chatting, and not mid lawn defence.
+       * ==================================================================
+       * WHEN AN ABILITY IS ALLOWED TO FIRE
        *
-       * BUG 3, the other half of it. The old gate was |vel| > 38 px/frame:
-       * 2280 px/s of SMOOTHED velocity, which on useSpine's 0.24 lowpass
-       * needs a sustained flick north of 3000 px/s to reach. In ordinary
-       * reading it fired essentially never — so no transit played, so no
-       * rare transit could play, so the balloon did not exist. The gate is
-       * now a firm scroll held briefly, which is what "fast scroll" means to
-       * a reader; the sustain window is what stops a single wheel notch from
-       * launching him into the sky.
+       * Jack, 2026-08-25, correcting what I had built from "fast scroll":
+       *
+       *   "when I meant fast scroll before I meant when you scroll fast
+       *   enough that he goes off the screen and can't jump down in time. In
+       *   those edge regions (top and bottom 20% maybe), he wants to jump
+       *   down into the middle 60%, bit by bit, but if you scroll too far and
+       *   he goes off the screen, he uses one of his 'abilities' (rope, ufo,
+       *   etc.) to catch up to you and come back on the screen."
+       *
+       * So there is exactly ONE trigger, and it is not a speed: he is off the
+       * screen. Everything short of that is the comfort band's job — see the
+       * idle case, where the edge fifths drive ordinary hops back toward the
+       * middle three fifths, one perch at a time.
+       *
+       * Both of the old triggers were speed-based and both were wrong for the
+       * same reason. A firm flick fired a transit while he was still sitting
+       * comfortably in the middle of the screen, so the abilities read as a
+       * reaction to the WHEEL rather than to his own position, and a reader
+       * who scrolls hard got a parachute for no visible reason. The second
+       * one, `strandedMs` against `|scrollVel| > 300`, did the same thing more
+       * quietly. Both are gone, along with TRANSIT_VEL and TRANSIT_SUSTAIN.
+       *
+       * The 60px margin is not decoration. A hop arc rises up to 620px, so
+       * from a perch near the top of the viewport he can legitimately clip
+       * above the edge for a few frames on his way somewhere sensible; firing
+       * an ability at 0px would interrupt his own recovery to do the same job
+       * worse. 60px plus a 260ms sustain is comfortably past what an arc does
+       * and comfortably inside what "he has gone" looks like.
+       * ==================================================================
        */
       /* Being held is not a scroll problem. A transit fired mid-drag would
          tear him out of the reader's hand for reasons neither of them
@@ -3361,40 +3739,16 @@ export default function Companion({
         bird.mode !== 'transit' &&
         bird.mode !== 'pvz' &&
         bird.mode !== 'drag';
-      if (Math.abs(vel) > TRANSIT_VEL) fastMs += dt * 1000;
-      else fastMs = 0;
-      if (transitOk && fastMs > TRANSIT_SUSTAIN) {
-        fastMs = 0;
-        startTransit(vel < 0);
-      } else {
-        /*
-         * CATCH-UP. There is a whole band of scroll speeds — a firm trackpad
-         * drag, say — that is too slow to read as a flick but far too fast to
-         * out-hop: a hop covers a few hundred pixels in half a second while
-         * the page is eating five hundred a second, so he loses ground on
-         * every single one and ends up stranded off the top of the screen
-         * flailing. That is precisely the "stays at the top of the screen,
-         * only coming down when it's too late" complaint, and no amount of
-         * hopping harder fixes it, because hopping is the thing that cannot
-         * win. So: if he has been pinned at full urgency for a third of a
-         * second, he stops hopping and flies, which always keeps up because a
-         * transit tracks the viewport rather than the document.
-         */
-        if (bandUrgency() > 0.9) bird.strandedMs += dt * 1000;
-        else bird.strandedMs = 0;
+      {
         const sy = bird.y - window.scrollY;
-        /* Only take to the air when hopping genuinely cannot win: the page is
-           moving faster than a hop nets, or he is already off the edge. Being
-           merely a little low on a static page is not a reason to fly — it is
-           a reason to sit, which the idle branch now does. */
-        const losingGround = Math.abs(scrollVel) > 300 || sy < -20 || sy > H + 20;
-        /* `fly` used to be excluded here on the theory that he was already
-           on his way. He was, at 780px/s, against a page doing three thousand
-           — which is the same losing race hopping runs, so it gets the same
-           answer. It is by far the largest remaining contributor to time
-           spent off the top of the screen. */
-        if (transitOk && bird.strandedMs > 340 && losingGround) {
+        const gone = sy < -OFF_SCREEN_MARGIN || sy > H + OFF_SCREEN_MARGIN;
+        if (gone) bird.strandedMs += dt * 1000;
+        else bird.strandedMs = 0;
+        if (transitOk && bird.strandedMs > OFF_SCREEN_SUSTAIN) {
           bird.strandedMs = 0;
+          /* Off the TOP means the page has run on ahead of him and he has to
+             come down; off the bottom means it has run back and he has to go
+             up. Nothing here reads the scroll direction, only where he is. */
           startTransit(sy > H * 0.5);
         }
       }
@@ -4294,29 +4648,64 @@ export default function Companion({
     }
 
     function draw() {
-      ctx!.clearRect(0, 0, W, H);
-      const scrollX = window.scrollX;
-      const scrollY = window.scrollY;
-      const sx = bird.x - scrollX;
-      const sy = bird.y - scrollY;
+      ctx = pageCtx;
+      pageCtx.clearRect(0, 0, W, H);
 
       const anim = currentAnim();
       sampleInto(anim, bird.animT);
       applyRig();
       const frameIndex = SAMPLED_FRAME;
 
-      const onScreen = sy > -260 && sy < H + 260;
+      /*
+       * CULLING ONLY. This is the one place in the paint path still allowed to
+       * read scrollY, because a stale value here costs at worst one wasted
+       * frame or one frame skipped while he is 260px outside the viewport.
+       * It never decides WHERE he is drawn — see THE SCROLL FIX above.
+       */
+      const onScreen =
+        bird.y - window.scrollY > -260 && bird.y - window.scrollY < H + 260;
+
+      /* ---- pick the surface, and the space that comes with it ---- */
+      /*
+       * `docOffX/Y` is what turns a document coordinate into a coordinate on
+       * whichever canvas we are painting. On the band it is the band's own
+       * top edge, a number we chose, so it is exact. On the fallback path it
+       * is the scroll offset, which is the thing that lags.
+       *
+       * scrollX is 0 on this site — `overflow-x: hidden` is set on both html
+       * and body in globals.css — so the band's x needs no offset, and the
+       * bubble's viewport clamp below stays correct without one.
+       */
+      let docOffX: number;
+      let docOffY: number;
+      if (useBand) {
+        const maxTop = Math.max(0, docH - BAND_H);
+        const top = Math.max(0, Math.min(maxTop, Math.round(bird.y) - BAND_UP));
+        if (top !== bandTop) {
+          bandTop = top;
+          band.style.transform = `translate3d(0,${top}px,0)`;
+        }
+        docOffX = 0;
+        docOffY = bandTop;
+        bandCtx.clearRect(0, 0, W, BAND_H);
+        ctx = bandCtx;
+      } else {
+        docOffX = window.scrollX;
+        docOffY = window.scrollY;
+      }
+      const sx = bird.x - docOffX;
+      const sy = bird.y - docOffY;
 
       /* ---- the lawn, behind him ---- */
       if (bird.mode === 'pvz') {
-        const floor = pvz.floorY - scrollY;
+        const floor = pvz.floorY - docOffY;
         const zName = ZOMBIE_WALK[pvz.frame];
         const zImg = atlas.get(`prop:${zName}`);
         const zh = zImg ? zImg.height * PIXEL_SCALE : 0;
         const zw = zImg ? zImg.width * PIXEL_SCALE : 0;
         const mirror = pvz.side === -1; // authored facing LEFT
-        if (pvz.z1Alive) drawPropAt(zName, pvz.z1x - scrollX - zw * 0.5, floor - zh, mirror);
-        if (pvz.z0Alive) drawPropAt(zName, pvz.z0x - scrollX - zw * 0.5, floor - zh, mirror);
+        if (pvz.z1Alive) drawPropAt(zName, pvz.z1x - docOffX - zw * 0.5, floor - zh, mirror);
+        if (pvz.z0Alive) drawPropAt(zName, pvz.z0x - docOffX - zw * 0.5, floor - zh, mirror);
       }
 
       if (onScreen) {
@@ -4373,25 +4762,11 @@ export default function Companion({
           ctx!.translate(originX, originY);
         }
 
-        /* props behind the puppet */
-        if (bird.mode === 'transit') {
-          for (let i = 0; i < transit.props.length; i++) {
-            if (PROPS[transit.props[i]].layer === 'behind') drawPropInSprite(transit.props[i]);
-          }
-        } else if (bird.mode === 'chat') {
-          const list = CHAT_PROP_MAP[chat.current.perch] ?? EMPTY_PROPS;
-          for (let i = 0; i < list.length; i++) {
-            if (PROPS[list[i]].layer === 'behind') drawPropInSprite(list[i]);
-          }
-          const cyc = cycledProps(chat.current.perch, bird.clock);
-          for (let i = 0; i < cyc.length; i++) {
-            if (PROPS[cyc[i]].layer === 'behind') drawPropInSprite(cyc[i]);
-          }
-        } else if (bird.mode === 'sleep') {
-          for (let i = 0; i < DREAM_BUBBLE_PARTS.length; i++) {
-            if (PROPS[DREAM_BUBBLE_PARTS[i]].layer === 'behind')
-              drawPropInSprite(DREAM_BUBBLE_PARTS[i]);
-          }
+        /* props behind the puppet. One list, shared with headBlocked(), so
+           the bubble can never disagree with what was actually drawn. */
+        const props = activeProps();
+        for (let i = 0; i < props.length; i++) {
+          if (PROPS[props[i]].layer === 'behind') drawPropInSprite(props[i]);
         }
 
         for (let k = 0; k < DRAW_ORDER.length; k++) {
@@ -4414,24 +4789,10 @@ export default function Companion({
         }
 
         /* props in front */
-        if (bird.mode === 'transit') {
-          for (let i = 0; i < transit.props.length; i++) {
-            if (PROPS[transit.props[i]].layer === 'front') drawPropInSprite(transit.props[i]);
-          }
-        } else if (bird.mode === 'chat') {
-          const list = CHAT_PROP_MAP[chat.current.perch] ?? EMPTY_PROPS;
-          for (let i = 0; i < list.length; i++) {
-            if (PROPS[list[i]].layer === 'front') drawPropInSprite(list[i]);
-          }
-          const cyc = cycledProps(chat.current.perch, bird.clock);
-          for (let i = 0; i < cyc.length; i++) {
-            if (PROPS[cyc[i]].layer === 'front') drawPropInSprite(cyc[i]);
-          }
-        } else if (bird.mode === 'sleep') {
-          for (let i = 0; i < DREAM_BUBBLE_PARTS.length; i++) {
-            if (PROPS[DREAM_BUBBLE_PARTS[i]].layer === 'front')
-              drawPropInSprite(DREAM_BUBBLE_PARTS[i]);
-          }
+        for (let i = 0; i < props.length; i++) {
+          if (PROPS[props[i]].layer === 'front') drawPropInSprite(props[i]);
+        }
+        if (bird.mode === 'sleep') {
           /* the dream itself, centred in the bubble */
           const item = DREAM_ITEMS[bird.dreamIdx];
           const img = atlas.get(`prop:${item}`);
@@ -4451,15 +4812,64 @@ export default function Companion({
         ctx!.restore();
       }
 
+      /* ---- the line he came down on ---- */
+      /*
+       * > "The rope should come from right at the top of the screen when
+       * > coming down and he should slide down it until he jumps off."
+       *
+       * The rope prop is 28 sprite rows — exactly one sprite height — and its
+       * own comment has always said the rig can "tile it upward for as long as
+       * the drop needs". Nothing ever did: `drawPropInSprite` blits it once, so
+       * what the reader actually saw was a bird holding a 112px offcut of rope
+       * that began in mid-air a hand's width above his head.
+       *
+       * So this tiles it, on the VIEWPORT canvas rather than the band, because
+       * the top of the screen is the one end of it that is anchored. That is
+       * also consistent rather than an exception: a transit is the one mode
+       * that deliberately rides the viewport (see the sanctioned screen-space
+       * move in updateTransit), so during one there is nothing to lag behind.
+       *
+       * The column is centred on him because the prop is: it sits at ox 8 and
+       * is 4 wide, so its centre is sprite column 10, which is the sprite's own
+       * centre line. The sprite-space copy still draws in his beak; this picks
+       * up where that one's top edge is and carries on to the ceiling.
+       */
+      if (bird.mode === 'transit' && transit.name === 'downRope' && onScreen) {
+        const rope = atlas.get('prop:rope');
+        if (rope) {
+          const prev = ctx;
+          ctx = pageCtx;
+          const rw = rope.width * PIXEL_SCALE;
+          const rh = rope.height * PIXEL_SCALE;
+          const vx = bird.x - window.scrollX;
+          const vy = bird.y - window.scrollY;
+          /* Where the sprite-space copy's top edge lands, in viewport space:
+             puppet origin is vy - BASELINE_Y*scale, and the prop sits at
+             oy -20 above that. */
+          const spriteRopeTop =
+            vy - BASELINE_Y * PIXEL_SCALE + PROPS.rope.oy * PIXEL_SCALE;
+          for (let y = spriteRopeTop - rh; y > -rh; y -= rh) {
+            drawPropAt('rope', vx - rw / 2, y, false);
+          }
+          ctx = prev;
+        }
+      }
+
       /* ---- the pea and its splat, in front of everything ---- */
       if (bird.mode === 'pvz') {
-        if (pvz.peaLive) drawPropAt('pea', pvz.peaX - scrollX, pvz.peaY - scrollY, false);
+        if (pvz.peaLive) drawPropAt('pea', pvz.peaX - docOffX, pvz.peaY - docOffY, false);
         if (pvz.splatT > 0)
-          drawPropAt('peaSplat', pvz.splatX - scrollX, pvz.splatY - scrollY, pvz.side === -1);
+          drawPropAt('peaSplat', pvz.splatX - docOffX, pvz.splatY - docOffY, pvz.side === -1);
       }
 
       /* ---- chat window ---- */
       if (chat.current.open) {
+        /* Back to the viewport surface. The chat window is anchored to the
+           screen, not to the page, so it belongs on the fixed canvas — and it
+           has no lag problem there, because it does not move while you
+           scroll. The bubble, two branches down, is the opposite: it hangs off
+           his beak and has to travel with him, so it stays on the band. */
+        ctx = pageCtx;
         /* the input is mounted a frame late; keep it over the pixel row */
         positionInput();
         const draft = chatDraft();
@@ -4491,17 +4901,62 @@ export default function Companion({
         if (bubble.w) {
           const tailPx = bubble.tailCells * FONT_PX;
           const headY = sy - SPRITE_HEIGHT * PIXEL_SCALE + 10;
-          let bx = Math.round(sx - bubble.bodyW * FONT_PX * 0.5);
-          bx = Math.max(8, Math.min(Math.max(8, W - bubble.w - 8), bx));
-          let by = Math.round(headY - bubble.h - tailPx);
-          let dir: 1 | -1 = 1;
-          if (by < 8) {
-            /* no room above him: sit below and turn the tail over */
-            by = Math.round(sy + 18 + tailPx);
-            dir = -1;
+          /*
+           * ROOM is measured in VIEWPORT space; PLACEMENT happens in surface
+           * space. The two differ now that the bird is drawn on a band that
+           * scrolls with the document — his surface y is about 420 whatever the
+           * scroll is doing, so "would the bubble go off the top of the screen"
+           * is a question the band cannot answer about itself. `vy` is a frame
+           * stale during a fling, which for a placement decision is invisible:
+           * the worst case is one late flip.
+           */
+          const vy = bird.y - window.scrollY;
+          const roomAbove = vy - SPRITE_HEIGHT * PIXEL_SCALE + 10 - bubble.h - tailPx;
+          let bx: number;
+          let by: number;
+          let edge: 'up' | 'down' | 'left' | 'right';
+
+          if (headBlocked()) {
+            /*
+             * Something is over his head — a chute, an umbrella, a balloon,
+             * the rope, the beanie — and a bubble above him would cover the
+             * one thing worth looking at. Go alongside, on whichever side has
+             * the room, and only fall back to underneath when neither side
+             * does.
+             */
+            /* From his SHOULDER, not his centre. The first version measured
+               18px off `sx` and the sprite is 80px wide, so the bubble landed
+               on top of the bird it was supposed to be avoiding. */
+            const gapPx = (SPRITE_WIDTH * PIXEL_SCALE) / 2 + 14;
+            const fitsRight = sx + gapPx + bubble.w <= W - 8;
+            const fitsLeft = sx - gapPx - bubble.w >= 8;
+            /* His own facing breaks the tie: a bubble behind his head reads as
+               someone else talking. */
+            const preferRight = fitsRight && (!fitsLeft || bird.facing === 1);
+            if (fitsRight || fitsLeft) {
+              bx = Math.round(preferRight ? sx + gapPx : sx - gapPx - bubble.w);
+              edge = preferRight ? 'left' : 'right';
+              /* level with his chest rather than his feet */
+              by = Math.round(sy - SPRITE_HEIGHT * PIXEL_SCALE * 0.55 - bubble.h * 0.5);
+            } else {
+              bx = Math.round(sx - bubble.bodyW * FONT_PX * 0.5);
+              bx = Math.max(8, Math.min(Math.max(8, W - bubble.w - 8), bx));
+              by = Math.round(sy + 18 + tailPx);
+              edge = 'up';
+            }
+          } else {
+            bx = Math.round(sx - bubble.bodyW * FONT_PX * 0.5);
+            bx = Math.max(8, Math.min(Math.max(8, W - bubble.w - 8), bx));
+            by = Math.round(headY - bubble.h - tailPx);
+            edge = 'down';
+            if (roomAbove < 8) {
+              /* no room above him: sit below and turn the tail over */
+              by = Math.round(sy + 18 + tailPx);
+              edge = 'up';
+            }
           }
           ctx!.drawImage(bubbleCanvas, bx, by);
-          drawBubbleTail(bx, by, sx, dir);
+          drawBubbleTail(bx, by, sx, sy - SPRITE_HEIGHT * PIXEL_SCALE * 0.55, edge);
         }
       } else if (bubble.text && bubble.until <= bird.clock) {
         bubble.text = '';
@@ -4509,7 +4964,11 @@ export default function Companion({
 
       /* LAST. On top of the bird, the bubble and the chat window, because a
          real cursor is on top of everything — and after them, so the class
-         can only ever be turned on by a frame that got this far. */
+         can only ever be turned on by a frame that got this far.
+
+         On the viewport canvas, unconditionally: a cursor that scrolled with
+         the page would not be a cursor. */
+      ctx = pageCtx;
       syncCursorSwap(drawCursor());
     }
 
@@ -4931,6 +5390,10 @@ export default function Companion({
       clearInterval(cursorWatchdog);
       cancelAnimationFrame(raf);
       cancelAnimationFrame(measureRaf);
+      /* The band is appended to document.body rather than rendered, so React
+         will not take it away for us. Leaving one behind on every mount is
+         how you end up with a page full of invisible canvases. */
+      band.remove();
       window.removeEventListener('resize', remeasure);
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerdown', onDown);
