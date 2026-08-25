@@ -722,6 +722,20 @@ const BAND_MARGIN = 0.2;
  * sensible, so this has to sit past what an ordinary hop does without sitting
  * so far out that he is visibly absent before anything happens.
  */
+/**
+ * How far above the baseline his head sits, in device px.
+ *
+ * BASELINE_Y is row 25 of a 28-row sprite and the head anchor is row 7, so the
+ * head centre is about 15 sprite pixels up, times PIXEL_SCALE. Used to aim a
+ * peck from his head rather than from his feet: aiming from the feet makes a
+ * cursor level with his eye read as being below him, and he pecks at the floor.
+ */
+const HEAD_ABOVE_BASE = (BASELINE_Y - 10) * PIXEL_SCALE;
+
+/** The parts a peck's aim re-points. Body and tail follow the pose, not the
+ *  cursor: a bird turning its head is not a bird turning round. */
+const AIM_PARTS = ['head', 'eye', 'beak'] as const;
+
 const OFF_SCREEN_MARGIN = 60;
 const OFF_SCREEN_SUSTAIN = 260;
 
@@ -1699,7 +1713,23 @@ export default function Companion({
       gazeDir: 0,
       /** struggle shake, sprite px, applied to the whole puppet. */
       shakeX: 0,
-      shakeY: 0
+      shakeY: 0,
+      /**
+       * WHERE A PECK IS AIMED, as a unit vector in SPRITE space.
+       *
+       * > "When he pecks you, his head should actually turn up/down if you are
+       * > above/below, diagonally if your mouse is there."
+       *
+       * `aimX` is forward along his facing and `aimY` is down the screen, so
+       * (1, 0) is the straight-ahead peck the frames were authored as and
+       * nothing changes. Anything else re-points the SAME authored reach at
+       * the cursor — see the aim block in applyRig, which rotates the reach
+       * rather than adding to it, so a peck upward travels exactly as far as a
+       * peck forward does and no pose can be driven off the sprite.
+       */
+      aim: 0,
+      aimX: 1,
+      aimY: 0
     };
 
     /* ---- plan (a chain of waypoints) ---------------------------------- */
@@ -4427,6 +4457,52 @@ export default function Companion({
       }
       rig.gaze = approach(rig.gaze, wantGaze, dt, 4.5);
 
+      /*
+       * PECK AIM. Only while a peck is actually running: outside one there is
+       * no reach to re-point, and leaving it live would tilt his head during
+       * every other animation that happens to move a beak.
+       *
+       * Measured from his HEAD rather than his feet. `bird.y` is the baseline
+       * he stands on, and the head sits about 18 device pixels above it, so
+       * aiming from the feet makes a cursor level with his eye read as being
+       * below him and he pecks at the floor.
+       */
+      const pecking = bird.anim === 'peckAtCursor' || bird.anim === 'peck';
+      if (pecking && pointerOnScreen()) {
+        const dx = pointerDocX() - bird.x;
+        const dy = pointerDocY() - (bird.y - HEAD_ABOVE_BASE);
+        /* into sprite space: +x is forward along his facing */
+        const fx = dx * bird.facing;
+        const len = Math.hypot(fx, dy);
+        if (len > 6) {
+          let ux = fx / len;
+          let uy = dy / len;
+          /*
+           * He cannot peck backwards. The sprite has no rear-facing head and
+           * a negative forward component would drive the beak through the back
+           * of his own skull, so the aim is clamped into the forward half and
+           * the turn is left to `bird.facing`, which the interaction sets
+           * before the peck starts.
+           */
+          if (ux < 0.08) {
+            uy = uy < 0 ? -1 : 1;
+            ux = 0.08;
+            const n = Math.hypot(ux, uy);
+            ux /= n;
+            uy /= n;
+          }
+          rig.aimX = ux;
+          /* Down is charged less than up. He is standing on something: a peck
+             driven hard downward puts the head through his own feet, and the
+             one animation that genuinely does that (`peck` at the floor) has
+             it authored in already. */
+          rig.aimY = uy < 0 ? uy : uy * 0.55;
+          rig.aim = 1;
+        }
+      } else if (rig.aim !== 0) {
+        rig.aim = approach(rig.aim, 0, dt, 9);
+      }
+
       /* STRUGGLE SHAKE. Amplitude scales with anger, exactly as the client
          asked. Capped at three sprite pixels and driven by two incommensurate
          sines, so it is violent-looking, continuous, and cannot ever be
@@ -4566,6 +4642,32 @@ export default function Companion({
           POSE.tail.dx -= p * 0.9;
           POSE.tail.dy -= p * 0.55;
           POSE.body.dy += p * 0.2;
+        }
+      }
+      /*
+       * THE AIM, applied by ROTATING the authored reach rather than adding to
+       * it. Each part's sampled `dx` is how far this frame's keyframe has
+       * driven it forward in sprite space; that magnitude is preserved and
+       * only its direction changes. A peck at a cursor straight ahead is
+       * therefore byte-identical to what the frames say, and a peck at one
+       * overhead travels the same distance upward.
+       *
+       * dy is scaled by 1.25 because the head is nine pixels wide and the
+       * sprite twenty-eight tall: equal pixel travel reads as less movement
+       * vertically than horizontally.
+       */
+      if (rig.aim > 0.001 && (rig.aimY !== 0 || rig.aimX !== 1)) {
+        const a = rig.aim;
+        const kx = 1 + (rig.aimX - 1) * a;
+        const ky = rig.aimY * a * 1.25;
+        for (let i = 0; i < AIM_PARTS.length; i++) {
+          const part = AIM_PARTS[i];
+          const p = POSE[part];
+          if (!p) continue;
+          const reach = p.dx;
+          if (reach === 0) continue;
+          p.dx = reach * kx;
+          p.dy += reach * ky;
         }
       }
       if (rig.gaze > 0.001) {
