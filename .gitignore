@@ -58,4 +58,12 @@ temp/
 .claude/
 
 # local design prototypes (not shipped)
-public/_proto/
+#
+# The contents rather than the directory: git cannot re-include a file whose
+# parent DIRECTORY is excluded, so `public/_proto/` followed by a negation
+# silently does nothing. This form works.
+public/_proto/*
+# ...except the probe. It has to live under public/ to be loadable by URL, and
+# it carries four rounds of instrumentation lessons that cost more to learn
+# than the bugs they were looking for. See docs/spec.md section 8.
+!public/_proto/probe.js
