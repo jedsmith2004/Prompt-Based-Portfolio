@@ -795,17 +795,39 @@ const FALL_STEP_PX = 16;
  * cord released him and he did not move a pixel.
  */
 const FALL_CLEARANCE = 2;
-/**
- * How long after a palette change to re-read the theme, ms.
- *
- * Longer than the 940ms token transition in v2.css, because a value sampled
- * while a registered custom property is interpolating is a colour that belongs
- * to neither plate.
- */
-const PALETTE_SETTLE_MS = 1080;
 /* TRANSIT_VEL and TRANSIT_SUSTAIN lived here. They defined "a fast scroll",
    which is no longer what licenses an ability: being off the screen is. See
    the trigger in update(). */
+
+/**
+ * Longest step the movement integrators may take, seconds.
+ *
+ * `FRAME_MS_MAX` is 100ms, which is the right ceiling for "the tab was in the
+ * background" but the wrong one for "that frame took a while". Integrating a
+ * whole tenth of a second in one step moves him as far as six ordinary frames
+ * would, all at once, and it reads as a teleport rather than as flight. Held
+ * to a thirtieth, he runs slow through a stall instead of jumping through it,
+ * which is what everything else on the screen is doing anyway.
+ *
+ * The rate ESTIMATES -- scroll velocity, pointer velocity -- still get the
+ * real elapsed time. They divide a delta that accumulated over the whole
+ * frame, so giving them a shorter one would report a scroll three times
+ * faster than the reader's, and send him diving for cover from a gesture that
+ * never happened.
+ */
+const UPDATE_DT_MAX = 1 / 30;
+
+/**
+ * How long the page has to stop moving before furniture is re-measured, ms.
+ *
+ * The reveal on a plate is forty transitions staggered across about a second,
+ * and every one of them ends with a `transitionend`. Measuring on each is
+ * measuring forty times while the marks are still arriving; measuring once
+ * they have stopped is measuring the page the reader is actually looking at.
+ * Long enough to swallow a stagger, short enough that a perch is never
+ * unavailable for a noticeable beat.
+ */
+const MEASURE_QUIET_MS = 150;
 
 /** Move `cur` toward `target` by at most one frame of travel. */
 function approach(cur: number, target: number, dt: number, speed = CORRECT_SPEED): number {
@@ -4052,7 +4074,11 @@ export default function Companion({
     /** The dt the last update ran with. draw() borrows it; see drawCursor. */
     let lastDt = 1 / 60;
 
-    function update(dt: number) {
+    /**
+     * @param dt   integration step, already clamped to UPDATE_DT_MAX
+     * @param wall real elapsed time for this frame, for the rate estimates
+     */
+    function update(dt: number, wall: number = dt) {
       lastDt = dt;
       bird.clock += dt * 1000;
       bird.modeT += dt;
@@ -4076,7 +4102,9 @@ export default function Companion({
       bird.animT +=
         dt * 1000 * (bird.mode === 'transit' ? 1 / TRANSIT_TIME[transit.up ? 'up' : 'down'] : 1);
 
-      trackScroll(dt);
+      /* Real elapsed time: scrollDelta accumulated over the whole frame, so
+         dividing it by a clamped step would overstate the gesture. */
+      trackScroll(wall);
       serviceErrand();
       /* velocityRef is px/frame; scrollVel is px/sec. Compare like for like
          and take whichever is reporting the faster gesture. */
@@ -4092,8 +4120,9 @@ export default function Companion({
       pointer.prevY = pointer.y;
       const travel = Math.hypot(pdx, pdy);
       pointer.jerk = travel;
-      pointer.vx = dt > 0 ? pdx / dt : 0;
-      pointer.vy = dt > 0 ? pdy / dt : 0;
+      /* Same reasoning as trackScroll: this is a rate, not a step. */
+      pointer.vx = wall > 0 ? pdx / wall : 0;
+      pointer.vy = wall > 0 ? pdy / wall : 0;
       /* Lowpassed, and it decays toward zero on a still pointer rather than
          holding the last flick forever. */
       const rawSpeed = dt > 0 ? travel / dt : 0;
@@ -5544,15 +5573,63 @@ export default function Companion({
       bird.y = p.y;
     })();
 
+    /*
+     * RE-MEASURING IS NOT FREE AND IT IS NOT INVISIBLE.
+     *
+     * It used to be one function doing three jobs: reallocate both canvases,
+     * re-read the document height, and re-harvest every perch. Everything
+     * that could possibly want any of the three called all three. Counted on
+     * the production build, one plate change did that six times and set a
+     * canvas width 57 times -- the main canvas is up to 2880x1800, and
+     * assigning `width` reallocates and clears it.
+     *
+     * The visible half of the problem is worse than the cost. `measure`
+     * carries the bird with his furniture, which is right when a heading
+     * really has moved and wrong six times a second while forty reveals are
+     * each part way through a 14px travel. He was being carried to six
+     * different wrong places per plate, which is the "glitching around".
+     *
+     * So the three jobs are separated by what actually changed:
+     *
+     *   viewport size  -> the canvases, and everything below it
+     *   document size  -> the document height and the perches
+     *   marks arriving -> the perches, ONCE the page has stopped moving
+     */
+    function viewportChanged(): boolean {
+      const d = Math.min(window.devicePixelRatio || 1, 2);
+      return W !== window.innerWidth || H !== window.innerHeight || dpr !== d;
+    }
+
     let measureRaf = 0;
+    function runMeasure() {
+      measureRaf = 0;
+      /* `resize` reallocates two canvases. Only the viewport actually
+         changing is a reason to do that; a section growing is not. */
+      if (viewportChanged()) resize();
+      else measureDoc();
+      measure();
+      if (chat.current.open) layoutChat(false);
+    }
+    /* Scheduled once, never re-scheduled: a continuous stream of events must
+       not be able to starve it the way a cancel-and-retry debounce can. */
     const remeasure = () => {
-      cancelAnimationFrame(measureRaf);
-      measureRaf = requestAnimationFrame(() => {
-        resize();
-        measure();
-        if (chat.current.open) layoutChat(false);
-      });
+      if (measureRaf) return;
+      measureRaf = requestAnimationFrame(runMeasure);
     };
+
+    /*
+     * The trailing one, for marks that are still arriving.
+     *
+     * A reveal is forty staggered transitions and each one ends separately, so
+     * reacting to the first is reacting to a page that is still moving. This
+     * waits for the stream to stop and then measures the page as it settled.
+     */
+    let quietTimer = 0;
+    const remeasureWhenQuiet = () => {
+      window.clearTimeout(quietTimer);
+      quietTimer = window.setTimeout(remeasure, MEASURE_QUIET_MS);
+    };
+
     window.addEventListener('resize', remeasure);
     const ro = new ResizeObserver(remeasure);
     ro.observe(document.body);
@@ -5566,7 +5643,9 @@ export default function Companion({
      * catches the polaroid tilt changing under the hover snap.
      */
     const onTransitionEnd = (e: TransitionEvent) => {
-      if (e.propertyName === 'opacity' || e.propertyName === 'transform') remeasure();
+      if (e.propertyName === 'opacity' || e.propertyName === 'transform') {
+        remeasureWhenQuiet();
+      }
     };
     document.addEventListener('transitionend', onTransitionEnd, true);
     /*
@@ -5578,7 +5657,7 @@ export default function Companion({
      * therefore never re-read: harvested mid-flight or not at all, and left
      * that way. A promise with no implementation for half its cases.
      */
-    document.addEventListener('animationend', remeasure, true);
+    document.addEventListener('animationend', remeasureWhenQuiet, true);
     window.addEventListener('pointermove', onMove, { passive: true });
     window.addEventListener('pointerdown', onDown);
     window.addEventListener('pointerup', onUp);
@@ -5648,16 +5727,17 @@ export default function Companion({
      * speech bubble and chat window in the palette he had booted with. The one
      * element narrating the change was the one element not obeying it.
      *
-     * Read TWICE. The tokens are @property-registered and interpolate over
-     * 940ms, so the values present at the mutation are still the old ones; the
-     * first read is what keeps him honest when the change is instant (reduced
-     * motion, or a hidden tab), and the second is the one that is right.
+     * READ ONCE, AND IT USED TO BE TWICE. The tokens were transitioned over
+     * 940ms, so the values present at the mutation were still the old ones and
+     * a second read had to be scheduled past the end of the transition to get
+     * the real ones. They are not transitioned any anymore -- they cut, once,
+     * at the crossover of the ground's move (see THE MOVE IS ON THE GROUND in
+     * v2.css) -- so the mutation IS the change and the first read is already
+     * right. The second was a forced full-document style recalc, a second
+     * after every plate change, for a value that had not moved since.
      */
-    let themeSettle = 0;
     const onThemeChange = () => {
       readTheme();
-      window.clearTimeout(themeSettle);
-      themeSettle = window.setTimeout(readTheme, PALETTE_SETTLE_MS);
     };
     const themeObserver = new MutationObserver(onThemeChange);
     themeObserver.observe(document.documentElement, {
@@ -5678,10 +5758,13 @@ export default function Companion({
       if (!running) return;
       /* the one read the whole frame runs on */
       readScroll();
-      const dt = Math.min((now - last) / 1000, FRAME_MS_MAX / 1000);
+      const wall = Math.min((now - last) / 1000, FRAME_MS_MAX / 1000);
+      /* See UPDATE_DT_MAX: he walks through a slow frame rather than jumping
+         it, and the rate estimates still get the honest elapsed time. */
+      const dt = Math.min(wall, UPDATE_DT_MAX);
       last = now;
       if (reduced) updateReduced(dt);
-      else update(dt);
+      else update(dt, wall);
       draw();
       raf = requestAnimationFrame(frame);
     }
@@ -6014,6 +6097,7 @@ export default function Companion({
       clearInterval(cursorWatchdog);
       cancelAnimationFrame(raf);
       cancelAnimationFrame(measureRaf);
+      window.clearTimeout(quietTimer);
       /* The band is appended to document.body rather than rendered, so React
          will not take it away for us. Leaving one behind on every mount is
          how you end up with a page full of invisible canvases. */
@@ -6026,8 +6110,7 @@ export default function Companion({
       window.removeEventListener('blur', onBlur);
       window.removeEventListener('keydown', onKey);
       document.removeEventListener('transitionend', onTransitionEnd, true);
-      document.removeEventListener('animationend', remeasure, true);
-      window.clearTimeout(themeSettle);
+      document.removeEventListener('animationend', remeasureWhenQuiet, true);
       document.removeEventListener('visibilitychange', onVis);
       if (motionQuery.removeEventListener) motionQuery.removeEventListener('change', onMotion);
       themeObserver.disconnect();

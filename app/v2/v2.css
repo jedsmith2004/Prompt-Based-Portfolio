@@ -4576,32 +4576,56 @@ html[data-v2-theme='dark']  body { background: #15130E; }
 @property --rule-firm { syntax: '<color>'; inherits: true; initial-value: rgba(23, 20, 15, 0.42); }
 @property --rule-hard { syntax: '<color>'; inherits: true; initial-value: rgba(23, 20, 15, 0.86); }
 
-/* One transition on the root carries every token at once, so the whole page
-   changes key together instead of twelve properties racing each other.
+/* ==========================================================================
+   THE MOVE IS ON THE GROUND. THE TOKENS CUT.
 
-   940ms is longer than the 620ms world crossfade on purpose. The backdrop is
-   one object being replaced and wants to be quick about it; the palette is the
-   room's lighting changing, and lighting that changes as fast as an object
-   moves reads as a glitch. The offset between the two is the effect. */
-.v2-palette-driven {
-  transition:
-    --paper 940ms cubic-bezier(0.4, 0, 0.2, 1),
-    --paper-2 940ms cubic-bezier(0.4, 0, 0.2, 1),
-    --paper-3 940ms cubic-bezier(0.4, 0, 0.2, 1),
-    --paper-hi 940ms cubic-bezier(0.4, 0, 0.2, 1),
-    --ink 940ms cubic-bezier(0.4, 0, 0.2, 1),
-    --ink-2 940ms cubic-bezier(0.4, 0, 0.2, 1),
-    --ink-3 940ms cubic-bezier(0.4, 0, 0.2, 1),
-    --ink-4 940ms cubic-bezier(0.4, 0, 0.2, 1),
-    --verm 940ms cubic-bezier(0.4, 0, 0.2, 1),
-    --verm-text 940ms cubic-bezier(0.4, 0, 0.2, 1),
-    --verm-deep 940ms cubic-bezier(0.4, 0, 0.2, 1),
-    --blue 940ms cubic-bezier(0.4, 0, 0.2, 1),
-    --blue-deep 940ms cubic-bezier(0.4, 0, 0.2, 1),
-    --rule 940ms cubic-bezier(0.4, 0, 0.2, 1),
-    --rule-firm 940ms cubic-bezier(0.4, 0, 0.2, 1),
-    --rule-hard 940ms cubic-bezier(0.4, 0, 0.2, 1);
-}
+   This used to transition all sixteen tokens on :root over 940ms, and that
+   was the single most expensive thing on the site. Measured on the production
+   build, one light-to-dark change on a settled page with nothing else moving:
+
+     transition all sixteen, 940ms .... 944ms of style recalc, 35 frames/1400ms
+     transition five,        940ms .... 925ms
+     transition ONE,         940ms .... 957ms
+     transition all sixteen,  420ms .... 518ms
+     no transition ................... 110ms, 79 frames/1400ms
+
+   Read the third line. Animating one registered custom property costs the
+   same as animating sixteen, because the bill is not the interpolation. These
+   are `inherits: true`, so while one is animating the browser re-resolves
+   every element that inherits it, on every frame, for the whole duration --
+   about 19ms of style per frame against a 16.7ms budget. Cutting the token
+   count does nothing. Cutting the tree does little: with every section and
+   the footer removed, 986 elements down to 128, it still cost 759ms.
+   `content-visibility: auto` on the sections took it to 766ms. Transitioning
+   `color`/`background-color` per element instead was WORSE, at 1051ms.
+
+   So there is no cheap version of that dissolve, and the page was paying for
+   it nine times a read-through -- every plate change, not just the light ones
+   -- always at the exact moment a world was also being mounted.
+
+   WHAT REPLACES IT. The ground is one colour on one element, so it can be a
+   `inherits: false` property on <body>: changing it dirties <body> and
+   nothing under it. That carries the long move -- the room's light coming up
+   or going down -- for 252ms of style and a locked 60fps.
+
+   Everything else cuts, and it cuts at 470ms, halfway through the ground's
+   travel. That is the least visible instant there is: the ground is passing
+   through the midpoint between the two papers, so the outgoing ink and the
+   incoming ink have about the same contrast against it, and neither reading
+   is wrong on the way past. On a light/dark plate it is also the exact moment
+   the site has staged a device for -- the cord reaching the bottom of its
+   pull, the sun crossing the horizon -- and a light switch that snaps is more
+   honest than a light switch that dissolves.
+
+   The easing is a firmer ease-in-out than the tokens had. It holds near the
+   old paper, crosses quickly, and settles, which keeps the low-contrast
+   window either side of the cut short.
+
+   TO PUT THE DISSOLVE BACK: restore the sixteen-property transition on
+   `.v2-palette-driven` and set CUT_MS to 0 in usePalette.ts. It will look
+   marginally softer and it will cost the frame budget above.
+   ========================================================================== */
+@property --ground { syntax: '<color>'; inherits: false; initial-value: #E4DFD3; }
 
 /* The page ground has to follow the palette, or the inverted last plate would
    be light type on the old paper.
@@ -4612,12 +4636,19 @@ html[data-v2-theme='dark']  body { background: #15130E; }
    global sheet's near-black through every v2 page until the first section
    change. The attribute is set on the very first write, so this applies
    immediately. */
-html[data-v2-palette] body { background: var(--paper); }
+html[data-v2-palette] body { background: var(--ground); }
+
+.v2-palette-driven body {
+  transition: --ground 940ms cubic-bezier(0.62, 0, 0.38, 1);
+}
 
 @media (prefers-reduced-motion: reduce) {
   /* The palettes still change, they just do not travel. Someone who has asked
-     for less motion has not asked for a monochrome site. */
-  .v2-palette-driven { transition: none; }
+     for less motion has not asked for a monochrome site. usePalette drops the
+     470ms cut to 0 on the same query, so the ground and the ink land together
+     rather than the ink arriving half a second after a ground that never
+     moved. */
+  .v2-palette-driven body { transition: none; }
 }
 
 /* ==========================================================================

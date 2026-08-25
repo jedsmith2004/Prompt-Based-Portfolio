@@ -202,6 +202,14 @@ export default function V2Page() {
    */
   const particles = active === 'top' || active === 'contact';
 
+  /* Only the three the field draws with, and memoised on the values rather
+     than the object, so a re-render for any other reason does not look like a
+     palette change to it. */
+  const fieldPalette = useMemo(
+    () => ({ paper: palette.paper, ink: palette.ink, verm: palette.verm }),
+    [palette.paper, palette.ink, palette.verm]
+  );
+
   /* --- the light switch, and the bird who works it ----------------------- */
   const [errand, setErrand] = useState<CompanionErrand | null>(null);
   const switchRef = useRef<LightSwitchHandle | null>(null);
@@ -281,8 +289,19 @@ export default function V2Page() {
 
   return (
     <>
+      {/* The field is an OPAQUE full-viewport layer, so on the two plates
+          where it runs it is the page's ground: it has to be handed the
+          plate's colours or it paints the hero's over the top of them. That
+          is what made the closing plate light. See the palette prop in
+          InkField.tsx. */}
       <div className="v2-field" aria-hidden="true" data-dormant={!particles}>
-        <InkField shape={painter} shapeKey={shapeName} density="auto" dormant={!particles} />
+        <InkField
+          shape={painter}
+          shapeKey={shapeName}
+          density="auto"
+          palette={fieldPalette}
+          dormant={!particles}
+        />
       </div>
 
       {/* The section worlds, between the ink field and the type. One alive at

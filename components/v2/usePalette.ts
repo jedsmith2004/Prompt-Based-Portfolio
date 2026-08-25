@@ -3,11 +3,20 @@
 /* ============================================================================
    usePalette — drives the page's colour tokens from the active section.
 
-   Writes the twelve palette custom properties onto <html> and lets the CSS
-   transition registered in v2.css carry them. Nothing here animates anything
-   itself: the whole point of registering the properties with `@property` is
-   that the browser interpolates them off the main thread, so this hook runs
-   once per section change and then gets out of the way.
+   Writes the sixteen palette custom properties onto <html>, and the ground
+   colour onto <body>.
+
+   THOSE TWO WRITES ARE NOT AT THE SAME TIME, AND THAT IS THE WHOLE DESIGN.
+   The tokens used to be transitioned by the stylesheet; they are not any
+   more, because animating an inherited registered property re-resolves every
+   element that inherits it on every frame -- 944ms of style recalc per plate
+   change, measured, and the page changes plate nine times. See THE MOVE IS ON
+   THE GROUND in v2.css for the numbers.
+
+   So the ground moves, over 940ms, on one non-inherited property on one
+   element, which is free. The tokens cut, once, at the halfway point of that
+   move, where the ground is passing between the two papers and the swap is
+   least visible. One style recalc per plate change instead of fifty-six.
 
    WHY <html> AND NOT A WRAPPER. The tokens have to reach the fixed layers too
    — the nav rail, the companion, the backdrop worlds — and those are siblings
@@ -35,6 +44,16 @@ import {
 const DRIVEN_CLASS = 'v2-palette-driven';
 
 /**
+ * How far into the ground's travel the tokens cut, ms.
+ *
+ * Half of the 940ms `--ground` transition in v2.css. At that instant the
+ * ground is midway between the outgoing and incoming paper, so the old ink and
+ * the new ink read at about the same contrast against it and neither is wrong
+ * on the way past. Set to 0 to put the old simultaneous change back.
+ */
+const CUT_MS = 470;
+
+/**
  * Applies the palette belonging to `activeId`, in the form `mode` asks for.
  *
  * MODE IS A SEPARATE ARGUMENT AND NOT READ OFF THE PLATE. During a light
@@ -50,18 +69,58 @@ export function usePalette(activeId: string, mode: PaletteMode): SectionPalette 
   const palette = paletteForSection(activeId, mode);
   const plateId = plateFor(activeId).id;
 
-  /* Write the tokens. Synchronous, every time the palette changes. */
+  /*
+   * The ground leaves now; the tokens follow at the crossover.
+   *
+   * `--ground` is written first and unconditionally, because it is the thing
+   * that is actually animating and every frame it is late is a frame of the
+   * move that never happens.
+   */
   useEffect(() => {
     const root = document.documentElement;
-    for (const [key, prop] of PALETTE_VARS) {
-      root.style.setProperty(prop, String(palette[key]));
+    const body = document.body;
+
+    body.style.setProperty('--ground', String(palette.paper));
+
+    const applyTokens = () => {
+      for (const [key, prop] of PALETTE_VARS) {
+        root.style.setProperty(prop, String(palette[key]));
+      }
+      root.dataset.v2Palette = plateId;
+      root.dataset.v2Mode = palette.dark ? 'dark' : 'light';
+      /* Kept as well as data-v2-mode: several components and the whole of the
+         projects page already branch on this attribute, and renaming it would
+         be a silent visual regression in every one of them. */
+      root.dataset.v2PaletteDark = palette.dark ? 'true' : 'false';
+    };
+
+    /*
+     * THREE CASES WHERE THERE IS NO MOVE TO HIDE THE CUT IN, and delaying it
+     * would just be half a second of the wrong ink:
+     *
+     *   - the first write, before the transition has been armed at all (see
+     *     the effect below). The opening palette is not a change.
+     *   - reduced motion, where v2.css has already removed the ground's
+     *     transition. Someone who asked for less motion did not ask to read
+     *     the old palette for another 470ms.
+     *   - a hidden tab, where the transition will not run and setTimeout is
+     *     throttled to whole seconds. A tab brought back to the front must
+     *     already be in the right key.
+     */
+    const settled =
+      !root.classList.contains(DRIVEN_CLASS) ||
+      document.hidden ||
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    if (settled || CUT_MS <= 0) {
+      applyTokens();
+      return;
     }
-    root.dataset.v2Palette = plateId;
-    root.dataset.v2Mode = palette.dark ? 'dark' : 'light';
-    /* Kept as well as data-v2-mode: several components and the whole of the
-       projects page already branch on this attribute, and renaming it would
-       be a silent visual regression in every one of them. */
-    root.dataset.v2PaletteDark = palette.dark ? 'true' : 'false';
+
+    /* A reader who outruns the cut gets the next plate's, not a queue of
+       them: the cleanup cancels a pending cut before the next one is set. */
+    const t = window.setTimeout(applyTokens, CUT_MS);
+    return () => window.clearTimeout(t);
   }, [palette, plateId]);
 
   /*
@@ -92,6 +151,7 @@ export function usePalette(activeId: string, mode: PaletteMode): SectionPalette 
     return () => {
       window.clearTimeout(t);
       root.classList.remove(DRIVEN_CLASS);
+      document.body.style.removeProperty('--ground');
       for (const [, prop] of PALETTE_VARS) root.style.removeProperty(prop);
       delete root.dataset.v2Palette;
       delete root.dataset.v2Mode;
@@ -113,6 +173,7 @@ export function usePalette(activeId: string, mode: PaletteMode): SectionPalette 
       apply: (id: string, m: PaletteMode) => {
         const pal = paletteForSection(id, m);
         const root = document.documentElement;
+        document.body.style.setProperty('--ground', String(pal.paper));
         for (const [key, prop] of PALETTE_VARS) {
           root.style.setProperty(prop, String(pal[key]));
         }

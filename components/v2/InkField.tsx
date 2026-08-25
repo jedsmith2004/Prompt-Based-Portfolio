@@ -57,6 +57,21 @@ export interface InkFieldProps {
   /** Pigment laid per particle. Raise for a heavier wash. */
   deposit?: number;
   /**
+   * The plate's colours.
+   *
+   * NOT OPTIONAL IN PRACTICE, and it used to be absent entirely. The field is
+   * an opaque full-viewport layer -- the display shader writes alpha 1 -- so
+   * whatever it thinks the paper is IS the page's ground wherever it is
+   * running. It ran with the hero's light paper and the hero's near-black ink
+   * as literals, which is why the closing plate, which settles dark, was a
+   * light screen with dark particles on it.
+   *
+   * Hand it the target palette the instant the plate changes; the timing of
+   * the move is this component's business (see FIELD_GROUND_MS), and it is
+   * the same split the page makes: the paper travels, the pigment cuts.
+   */
+  palette?: { paper: string; ink: string; verm: string };
+  /**
    * Park the field.
    *
    * Jack, 2026-08-26: "I like the particles but I don't think we should have
@@ -75,6 +90,158 @@ export interface InkFieldProps {
    * thing the reader sees is the field fading, not the field freezing.
    */
   dormant?: boolean;
+}
+
+/* -------------------------------------------------------------------------- */
+/* the plate's colours, and how they arrive                                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * How long the field's paper takes to reach the new plate, ms.
+ *
+ * The same 940ms as `--ground` in v2.css, and for the same reason: on the two
+ * plates that have particles the field IS the ground, so the two have to be
+ * the same move or the reader sees the room change key twice.
+ */
+const FIELD_GROUND_MS = 940;
+/** Where the pigment cuts. Half of the above; see CUT_MS in usePalette.ts. */
+const FIELD_CUT_MS = 470;
+
+/** cubic-bezier(0.62, 0, 0.38, 1), the ground's easing in v2.css. */
+const GROUND_EASE = [0.62, 0, 0.38, 1] as const;
+
+function bezier1(a: number, b: number, u: number): number {
+  const v = 1 - u;
+  return 3 * v * v * u * a + 3 * v * u * u * b + u * u * u;
+}
+
+/**
+ * Solve the CSS easing for a progress fraction.
+ *
+ * Newton on x with a bisection fallback, which is what the engines do. Four
+ * iterations is well inside a pixel of colour over this range, and it runs
+ * once a frame during a change and never otherwise.
+ */
+function ease(u: number): number {
+  if (u <= 0) return 0;
+  if (u >= 1) return 1;
+  let t = u;
+  for (let i = 0; i < 4; i++) {
+    const x = bezier1(GROUND_EASE[0], GROUND_EASE[2], t) - u;
+    if (Math.abs(x) < 1e-4) break;
+    const v = 1 - t;
+    const d =
+      3 * v * v * GROUND_EASE[0] +
+      6 * v * t * (GROUND_EASE[2] - GROUND_EASE[0]) +
+      3 * t * t * (1 - GROUND_EASE[2]);
+    if (Math.abs(d) < 1e-6) break;
+    t -= x / d;
+    if (t < 0) t = 0;
+    else if (t > 1) t = 1;
+  }
+  return bezier1(GROUND_EASE[1], GROUND_EASE[3], t);
+}
+
+type Rgb01 = [number, number, number];
+
+/** '#rgb' or '#rrggbb' to 0..1 channels. Falls back to the hero's paper. */
+function rgb01(hex: string, into: Rgb01): Rgb01 {
+  let h = (hex || '').trim().replace('#', '');
+  if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+  const n = parseInt(h, 16);
+  if (h.length !== 6 || !Number.isFinite(n)) return into;
+  into[0] = ((n >> 16) & 255) / 255;
+  into[1] = ((n >> 8) & 255) / 255;
+  into[2] = (n & 255) / 255;
+  return into;
+}
+
+/** Rec. 709 luma, near enough to decide which way the paper's tooth goes. */
+function luma(c: Rgb01): number {
+  return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+}
+
+/**
+ * What the field is painting right now, and what it is on its way to.
+ *
+ * The paper travels over FIELD_GROUND_MS and the pigment cuts at
+ * FIELD_CUT_MS, which is the page's own split: see THE MOVE IS ON THE GROUND
+ * in v2.css. Advanced from the frame loop, so a field that is parked -- which
+ * is seven plates out of nine -- simply arrives already correct.
+ */
+interface FieldInk {
+  paper: Rgb01;
+  ink: Rgb01;
+  verm: Rgb01;
+  fromPaper: Rgb01;
+  toPaper: Rgb01;
+  toInk: Rgb01;
+  toVerm: Rgb01;
+  /** performance.now() at the start of the move, or -1 when settled. */
+  t0: number;
+  /** Bumped whenever the painted colours change, so the 2D path can repaint. */
+  rev: number;
+}
+
+const HERO_PAPER = '#E4DFD3';
+const HERO_INK = '#17140F';
+const HERO_VERM = '#B5402F';
+
+function newFieldInk(): FieldInk {
+  const mk = (hex: string): Rgb01 => rgb01(hex, [0, 0, 0]);
+  return {
+    paper: mk(HERO_PAPER),
+    ink: mk(HERO_INK),
+    verm: mk(HERO_VERM),
+    fromPaper: mk(HERO_PAPER),
+    toPaper: mk(HERO_PAPER),
+    toInk: mk(HERO_INK),
+    toVerm: mk(HERO_VERM),
+    t0: -1,
+    rev: 0
+  };
+}
+
+/** Land everything immediately. Used when nothing is drawing to animate it. */
+function settleInk(f: FieldInk): void {
+  for (let i = 0; i < 3; i++) {
+    f.paper[i] = f.fromPaper[i] = f.toPaper[i];
+    f.ink[i] = f.toInk[i];
+    f.verm[i] = f.toVerm[i];
+  }
+  f.t0 = -1;
+  f.rev++;
+}
+
+/** One frame of the move. Cheap, and a no-op once it has landed. */
+function advanceInk(f: FieldInk, now: number): void {
+  if (f.t0 < 0) return;
+  const ms = now - f.t0;
+  const u = Math.min(1, Math.max(0, ms / FIELD_GROUND_MS));
+  const e = ease(u);
+  for (let i = 0; i < 3; i++) {
+    f.paper[i] = f.fromPaper[i] + (f.toPaper[i] - f.fromPaper[i]) * e;
+  }
+  if (ms >= FIELD_CUT_MS) {
+    for (let i = 0; i < 3; i++) {
+      f.ink[i] = f.toInk[i];
+      f.verm[i] = f.toVerm[i];
+    }
+  }
+  f.rev++;
+  if (u >= 1) {
+    for (let i = 0; i < 3; i++) f.fromPaper[i] = f.toPaper[i];
+    f.t0 = -1;
+  }
+}
+
+/** Format one channel triple as a hex string, for the 2D fallback. */
+function hex01(c: Rgb01): string {
+  const b = (v: number) => {
+    const n = Math.round(Math.min(1, Math.max(0, v)) * 255);
+    return n < 16 ? '0' + n.toString(16) : n.toString(16);
+  };
+  return '#' + b(c[0]) + b(c[1]) + b(c[2]);
 }
 
 /**
@@ -220,6 +387,11 @@ uniform vec2  uRes;
 uniform vec3  uPaper;
 uniform vec3  uInk;
 uniform vec3  uVerm;
+/* +1 on light stock, -1 on dark. The tooth of a sheet is darker than the
+   sheet when the sheet is pale and LIGHTER than it when the sheet is not;
+   subtracting unconditionally clipped the grain to black on a dark plate and
+   the paper went flat exactly where it most needed to read as paper. */
+uniform float uGrain;
 
 float hash21(vec2 p){
   p = fract(p * vec2(233.34, 851.73));
@@ -249,7 +421,7 @@ void main(){
   /* Stock: one long-grain octave, one fine, plus slow sheet unevenness. */
   vec2 sp = vUv * uRes;
   float fibre = vnoise(sp * vec2(0.20, 0.85)) * 0.55 + vnoise(sp * 1.85) * 0.45;
-  vec3 paper = uPaper - fibre * 0.028 - vnoise(sp * 0.010) * 0.016;
+  vec3 paper = uPaper - uGrain * (fibre * 0.028 + vnoise(sp * 0.010) * 0.016);
 
   /* Granulation: pigment settles into the tooth of the sheet. */
   float gran = 0.88 + fibre * 0.26;
@@ -387,6 +559,7 @@ export default function InkField({
   breathe = true,
   disturb = 1,
   deposit = 0.115,
+  palette,
   dormant = false
 }: InkFieldProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -412,11 +585,62 @@ export default function InkField({
     dormantRef.current = dormant;
   });
 
+  /**
+   * The colours on screen, and the move they are part way through.
+   *
+   * A ref rather than state: it changes sixty times a second during a plate
+   * change and nothing in the DOM depends on it, so a render per frame would
+   * be sixty renders to move a uniform.
+   */
+  const inkRef = useRef<FieldInk>(newFieldInk());
+
   /** Set by the GL effect so the shapeKey effect can retarget without a rebuild. */
   const retargetRef = useRef<(() => void) | null>(null);
 
   /** Set by the GL effect so `dormant` can park and wake the loop in place. */
   const runRef = useRef<{ start: () => void; stop: () => void } | null>(null);
+
+  /** True while the frame loop is actually running. Nothing animates without it. */
+  const liveRef = useRef(false);
+  /** Set by the 2D fallback so a palette change can repaint the one flat frame. */
+  const repaintRef = useRef<(() => void) | null>(null);
+
+  /*
+   * Aim the colours at the new plate.
+   *
+   * Deliberately NOT in the GL effect's dependency list: a palette change must
+   * not rebuild a particle simulation. It writes the target into a ref and the
+   * frame loop walks towards it.
+   *
+   * If nothing is drawing -- the field is parked on seven of the nine plates,
+   * and a hidden tab fires no frames at all -- there is no move to make, so it
+   * lands immediately. That is also what makes waking correct: the field comes
+   * back already in the plate's key rather than fading up in the last one's.
+   */
+  useEffect(() => {
+    const f = inkRef.current;
+    rgb01(palette?.paper ?? HERO_PAPER, f.toPaper);
+    rgb01(palette?.ink ?? HERO_INK, f.toInk);
+    rgb01(palette?.verm ?? HERO_VERM, f.toVerm);
+
+    const same =
+      f.paper[0] === f.toPaper[0] &&
+      f.paper[1] === f.toPaper[1] &&
+      f.paper[2] === f.toPaper[2] &&
+      f.ink[0] === f.toInk[0] &&
+      f.ink[1] === f.toInk[1] &&
+      f.ink[2] === f.toInk[2];
+    if (same) return;
+
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!liveRef.current || reduced || document.hidden) {
+      settleInk(f);
+    } else {
+      for (let i = 0; i < 3; i++) f.fromPaper[i] = f.paper[i];
+      f.t0 = performance.now();
+    }
+    repaintRef.current?.();
+  }, [palette?.paper, palette?.ink, palette?.verm]);
 
   /*
    * Park and wake.
@@ -469,12 +693,16 @@ export default function InkField({
         canvas.width = Math.max(1, Math.round(r.width * dpr));
         canvas.height = Math.max(1, Math.round(r.height * dpr));
         c2.setTransform(dpr, 0, 0, dpr, 0, 0);
-        c2.fillStyle = '#E4DFD3';
+        /* Flat, but in the plate's colours: this path is the whole field on
+           a device without float render targets, so getting the ground wrong
+           here is getting the page wrong. */
+        const pal = inkRef.current;
+        c2.fillStyle = hex01(pal.paper);
         c2.fillRect(0, 0, r.width, r.height);
         c2.save();
         c2.globalAlpha = 0.86;
-        c2.fillStyle = '#17140F';
-        c2.strokeStyle = '#17140F';
+        c2.fillStyle = hex01(pal.ink);
+        c2.strokeStyle = hex01(pal.ink);
         shapeRef.current(c2, r.width, r.height);
         c2.restore();
       };
@@ -486,10 +714,12 @@ export default function InkField({
       };
       window.addEventListener('resize', onResize);
       retargetRef.current = paint;
+      repaintRef.current = onResize;
       return () => {
         window.removeEventListener('resize', onResize);
         cancelAnimationFrame(rafId);
         retargetRef.current = null;
+        repaintRef.current = null;
       };
     }
 
@@ -734,7 +964,8 @@ export default function InkField({
       res: gl.getUniformLocation(pDisplay, 'uRes'),
       paper: gl.getUniformLocation(pDisplay, 'uPaper'),
       ink: gl.getUniformLocation(pDisplay, 'uInk'),
-      verm: gl.getUniformLocation(pDisplay, 'uVerm')
+      verm: gl.getUniformLocation(pDisplay, 'uVerm'),
+      grain: gl.getUniformLocation(pDisplay, 'uGrain')
     };
 
     /* ---- loop ---- */
@@ -812,9 +1043,13 @@ export default function InkField({
       g.uniform1i(uDis.pig, 0);
       g.uniform2f(uDis.texel, 1 / pigW, 1 / pigH);
       g.uniform2f(uDis.res, canvas!.width, canvas!.height);
-      g.uniform3f(uDis.paper, 0.894, 0.874, 0.827);   // #E4DFD3
-      g.uniform3f(uDis.ink, 0.09, 0.078, 0.059);      // #17140F
-      g.uniform3f(uDis.verm, 0.71, 0.251, 0.184);     // #B5402F
+      /* The plate's colours, not the hero's. `advanceInk` has already run
+         for this frame, at the top of `frame`. */
+      const pal = inkRef.current;
+      g.uniform3f(uDis.paper, pal.paper[0], pal.paper[1], pal.paper[2]);
+      g.uniform3f(uDis.ink, pal.ink[0], pal.ink[1], pal.ink[2]);
+      g.uniform3f(uDis.verm, pal.verm[0], pal.verm[1], pal.verm[2]);
+      g.uniform1f(uDis.grain, luma(pal.paper) > 0.5 ? 1 : -1);
       g.drawArrays(g.TRIANGLES, 0, 3);
     }
 
@@ -863,6 +1098,11 @@ export default function InkField({
       acc += dt;
       if (acc < FIELD_STEP) return;
       ptr.strength += (ptr.target - ptr.strength) * Math.min(1, acc * 6);
+      /* The plate's colours move here rather than in their own loop. It is
+         absolute-time, so sampling it at the field's 30Hz rather than the
+         page's 60 does not make the move slower or shorter -- and a paper
+         colour crossing over most of a second is not something 30Hz shows. */
+      advanceInk(inkRef.current, now);
       renderOnce((now - t0) / 1000, acc);
       acc = 0;
     }
@@ -873,13 +1113,22 @@ export default function InkField({
          entirely, rather than re-rendering an identical image forever. */
       if (reduced) { requestFrame(); return; }
       running = true;
+      /* Nothing walks the palette towards a new plate unless this loop is
+         turning. Anything else -- parked, reduced, hidden -- lands the change
+         on the spot instead, which is what makes waking up correct. */
+      liveRef.current = true;
       last = performance.now();
       raf = requestAnimationFrame(frame);
     }
     function stop() {
       running = false;
+      liveRef.current = false;
       cancelAnimationFrame(raf);
     }
+
+    /* A palette change under reduced motion has settled instantly and there is
+       no loop to show it, so the one static frame is redrawn by hand. */
+    repaintRef.current = requestFrame;
 
     /* ---- context loss ---- */
     function onLost(e: Event) {
@@ -992,6 +1241,8 @@ export default function InkField({
       gl.deleteVertexArray(quadVao);
       gl.deleteVertexArray(pointVao);
       retargetRef.current = null;
+      repaintRef.current = null;
+      liveRef.current = false;
     };
   }, [density]);
 
