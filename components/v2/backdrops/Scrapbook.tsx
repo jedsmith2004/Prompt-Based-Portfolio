@@ -776,6 +776,7 @@ export default function Scrapbook({
   progress,
   velocity,
   palette,
+  sectionId,
   className,
 }: BackdropProps): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -790,6 +791,27 @@ export default function Scrapbook({
   live.current.velocity = velocity;
 
   const { surface, ink, ink2, accent, accent2 } = palette;
+
+  /*
+   * THE THREAD STANDS DOWN BEHIND THE ROAD SECTION.
+   *
+   * Jack: "I think this should be the main way we interact with the
+   * hitchhiking, draw the map lines." So on `road` the route is drawn by
+   * RouteMap, in front, where every stop is a real button you can travel with
+   * the arrow keys — and this world keeps the part it is actually better at,
+   * which is the album page it is pinned to: the polaroids, the torn scraps,
+   * the ticket stubs, the postmark and the tape.
+   *
+   * Without this the same journey is drawn twice, at two different scales and
+   * two different projections, one of them un-clickable. Two routes is not
+   * twice as much route; it is a mistake the reader can see.
+   */
+  const drawThread = sectionId !== 'road';
+  /* Behind a ref because the effect is keyed on the palette and must not be
+     torn down and rebuilt for this; the value is fixed for a mounted world
+     anyway, since a world instance belongs to exactly one section. */
+  const threadRef = useRef(true);
+  threadRef.current = drawThread;
 
   useEffect(() => {
     const el = canvasRef.current;
@@ -1155,9 +1177,11 @@ export default function Scrapbook({
       const inset = Math.min(W, H) * 0.045;
       ctx.strokeRect(inset, inset, W - inset * 2, H - inset * 2);
 
-      /* The route: one stroke per leg so each can be faded independently. */
+      /* The route: one stroke per leg so each can be faded independently.
+         Skipped behind `road` — see THE THREAD STANDS DOWN, above. */
       const travelled = clamp((prog - 0.03) / 0.8, 0, 1);
       const revealed = travelled * (FINE - 1);
+      if (threadRef.current) {
 
       ctx.strokeStyle = C.routeBase;
       ctx.lineWidth = 1;
@@ -1222,6 +1246,7 @@ export default function Scrapbook({
         ctx.beginPath();
         ctx.arc(stopX[s], stopY[s], reached ? 2.8 : 1.9, 0, Math.PI * 2);
         ctx.stroke();
+      }
       }
 
       /* Frontiers. Two hairlines square across the thread where the route

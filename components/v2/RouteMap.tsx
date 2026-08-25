@@ -1438,13 +1438,7 @@ export default function RouteMap({
               </dl>
 
               {reels.length > 0 ? (
-                <ul className="v2-route-reels">
-                  {reels.map((r, j) => (
-                    <li key={r.url + j}>
-                      <ReelTile reel={r} place={sel.name} />
-                    </li>
-                  ))}
-                </ul>
+                <ReelStack key={sel.name} reels={reels} place={sel.name} />
               ) : (
                 <p className="v2-route-panel-empty">No film from this stop.</p>
               )}
@@ -1487,39 +1481,119 @@ export default function RouteMap({
   );
 }
 
-/* ------------------------------------------------------------------- a reel */
+/* ---------------------------------------------------------------- the films */
 
 /**
- * One film. The thumbnail is a file in public/thumbnails that was checked at
- * build time; if it ever disappears, the tile becomes a typographic card and
- * the link out still works, which is the part that matters.
+ * The films from one stop, as a stack of polaroids you can deal through.
+ *
+ * > "videos appear in the empty middle-right as polaroids... multiple
+ * >  polaroids in a visible stack, cycleable with arrows"
+ *
+ * This replaced a grid of small thumbnails. The grid was more efficient and
+ * less true: what these are is a handful of pictures from one place, and a
+ * handful of pictures from one place is a stack you go through, not a contact
+ * sheet. Tagounite has five and Split has one, and a stack SHOWS that at a
+ * glance — the depth of the pile is the count — where a grid of equal cells
+ * flattens the difference into a row length nobody reads.
+ *
+ * Only the top card carries the image and the link; the cards behind it are
+ * empty stock, offset and turned by a deterministic angle so the pile is the
+ * same every time this stop is opened rather than reshuffling on each render.
+ * That also keeps the cost at one <img> per stop however deep the pile is.
  */
-function ReelTile({ reel, place }: { reel: RouteReel; place: string }) {
-  const [broken, setBroken] = useState(false);
+function ReelStack({ reels, place }: { reels: RouteReel[]; place: string }) {
+  const [at, setAt] = useState(0);
+  const [broken, setBroken] = useState<Record<string, boolean>>({});
+  const n = reels.length;
+  const reel = reels[at];
+  const isBroken = !!broken[reel.url];
   const label = reel.title ? `${reel.title}, ${place}` : place;
+
+  const go = (d: number) => setAt((i) => (i + d + n) % n);
+
+  /* At most three cards of backing. Past that the pile stops reading as deeper
+     and starts reading as untidy, and the count is printed underneath anyway. */
+  const backing = Math.min(3, n - 1);
+
   return (
-    <a
-      className={`v2-route-reel${broken ? ' is-bare' : ''}`}
-      href={reel.url}
-      target="_blank"
-      rel="noreferrer noopener"
-    >
-      {broken ? (
-        <span className="v2-route-reel-bare">{reel.title ?? 'Film'}</span>
+    <div className="v2-route-stack">
+      <div
+        className="v2-route-pile"
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowRight') {
+            e.preventDefault();
+            go(1);
+          } else if (e.key === 'ArrowLeft') {
+            e.preventDefault();
+            go(-1);
+          }
+        }}
+      >
+        {/* the pile, behind. Deterministic angles: `at` is deliberately NOT in
+            the expression, so dealing through does not make the pile twitch. */}
+        {Array.from({ length: backing }, (_, k) => (
+          <span
+            key={k}
+            className="v2-route-card is-back"
+            aria-hidden="true"
+            style={{
+              transform: `rotate(${(k % 2 ? 1 : -1) * (1.4 + k * 0.9)}deg) translate(${
+                (k + 1) * 3
+              }px, ${(k + 1) * 4}px)`,
+              zIndex: backing - k
+            }}
+          />
+        ))}
+
+        <a
+          className={`v2-route-card is-top${isBroken ? ' is-bare' : ''}`}
+          href={reel.url}
+          target="_blank"
+          rel="noreferrer noopener"
+          aria-label={`Open the film from ${label} on Instagram. ${at + 1} of ${n}.`}
+        >
+          <span className="v2-route-card-win">
+            {isBroken ? (
+              <span className="v2-route-card-bare">{reel.title ?? 'Film'}</span>
+            ) : (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                src={reel.thumbnail}
+                alt={`Still from the film shot in ${label}`}
+                loading="lazy"
+                decoding="async"
+                onError={() => setBroken((b) => ({ ...b, [reel.url]: true }))}
+              />
+            )}
+          </span>
+          {/* The wide bottom margin is the whole reason a polaroid reads as a
+              polaroid, so the caption lives in it rather than under the card. */}
+          <span className="v2-route-card-cap">
+            {reel.title ?? 'Film'}
+            <i aria-hidden="true">↗</i>
+          </span>
+        </a>
+      </div>
+
+      {n > 1 ? (
+        <div className="v2-route-deal">
+          <button
+            type="button"
+            aria-label={`Previous film from ${place}`}
+            onClick={() => go(-1)}
+          >
+            <span aria-hidden="true">&#8249;</span>
+          </button>
+          <p aria-live="polite">
+            <b>{at + 1}</b> / {n}
+          </p>
+          <button type="button" aria-label={`Next film from ${place}`} onClick={() => go(1)}>
+            <span aria-hidden="true">&#8250;</span>
+          </button>
+        </div>
       ) : (
-        /* eslint-disable-next-line @next/next/no-img-element */
-        <img
-          src={reel.thumbnail}
-          alt={`Still from the film shot in ${label}`}
-          loading="lazy"
-          decoding="async"
-          onError={() => setBroken(true)}
-        />
+        <p className="v2-route-deal is-single">One film</p>
       )}
-      <span className="v2-route-reel-cap">
-        {reel.title ?? 'Film'}
-        <i aria-hidden="true">↗</i>
-      </span>
-    </a>
+    </div>
   );
 }

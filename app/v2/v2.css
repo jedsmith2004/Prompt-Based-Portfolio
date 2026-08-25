@@ -2631,43 +2631,93 @@ html[data-v2-theme='dark']  body { background: #15130E; }
    Contact-sheet frames, 9:16 like the source. The caption sits on the paper
    below the image rather than over it, so nothing is read against a photo.
    -------------------------------------------------------------------------- */
-.v2-route-reels {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
-  gap: 10px;
-  list-style: none;
-  margin: 0;
-  padding: 0;
+/* --- the films, as a stack of polaroids ---------------------------------- */
+/* Jack: "videos appear in the empty middle-right as polaroids... multiple
+   polaroids in a visible stack, cycleable with arrows." What was here was a
+   grid of small thumbnails: more efficient, and less true. A handful of
+   pictures from one place is a pile you go through. */
+
+.v2-route-stack { margin: 0; }
+
+.v2-route-pile {
+  position: relative;
+  width: min(206px, 100%);
+  /* the polaroid proportion: a 9:16 window plus the wide foot */
+  aspect-ratio: 206 / 302;
+  margin: 2px 0 0 6px;
 }
 
-.v2-route-reel {
+.v2-route-card {
+  position: absolute;
+  inset: 0;
   display: block;
+  background: var(--paper-hi);
+  border: 1px solid var(--rule);
+  box-shadow: 0 1px 0 var(--rule-firm);
+}
+
+/* The pile behind. Empty stock, no image, no link: it exists to say how many
+   there are, and it says it with depth rather than with a number. */
+.v2-route-card.is-back {
+  background: var(--paper-2);
+  border-color: var(--rule);
+  box-shadow: none;
+}
+
+.v2-route-card.is-top {
+  z-index: 10;
   text-decoration: none;
   color: var(--ink-2);
-  border: 1px solid var(--rule);
-  background: var(--paper-2);
-  transition: border-color 0.2s var(--ease), transform 0.2s var(--ease);
+  /* a hand-laid card is never quite square to the page */
+  transform: rotate(-0.8deg);
+  transition: transform 0.22s var(--ease), box-shadow 0.22s var(--ease),
+    border-color 0.22s var(--ease);
+  /* the strip of tape holding it down */
+  --tape: color-mix(in oklab, var(--ink) 9%, transparent);
 }
-.v2-route-reel:hover,
-.v2-route-reel:focus-visible {
+.v2-route-card.is-top::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -9px;
+  width: 54px;
+  height: 17px;
+  transform: translateX(-50%) rotate(-2.4deg);
+  background: var(--tape);
+  border-left: 1px solid color-mix(in oklab, var(--ink) 6%, transparent);
+  border-right: 1px solid color-mix(in oklab, var(--ink) 6%, transparent);
+  pointer-events: none;
+}
+.v2-route-card.is-top:hover,
+.v2-route-card.is-top:focus-visible {
+  transform: rotate(0deg) translateY(-3px);
   border-color: var(--verm);
-  transform: translateY(-2px);
+  box-shadow: 0 3px 0 var(--rule-firm);
 }
 
-.v2-route-reel img {
+.v2-route-card-win {
+  position: absolute;
+  left: 9px;
+  right: 9px;
+  top: 9px;
+  /* the foot is the tell: everything below this line is card, not picture */
+  bottom: 46px;
   display: block;
-  width: 100%;
-  aspect-ratio: 9 / 16;
-  object-fit: cover;
+  overflow: hidden;
   background: var(--paper-3);
 }
+.v2-route-card-win img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
 
-.v2-route-reel-bare {
+.v2-route-card-bare {
   display: grid;
   place-items: center;
   width: 100%;
-  aspect-ratio: 9 / 16;
-  background: var(--paper-3);
+  height: 100%;
   font-family: var(--f-mono);
   font-size: 11.5px;
   letter-spacing: 0.1em;
@@ -2678,30 +2728,65 @@ html[data-v2-theme='dark']  body { background: #15130E; }
   padding: 6px;
 }
 
-.v2-route-reel-cap {
+.v2-route-card-cap {
+  position: absolute;
+  left: 11px;
+  right: 11px;
+  bottom: 12px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 4px;
-  padding: 5px 6px;
-  border-top: 1px solid var(--rule);
+  gap: 6px;
   font-family: var(--f-mono);
   font-size: 11.5px;
-  font-weight: 500;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  /* on --paper-2, not --paper: --ink-3 would be 4.50:1, --ink-2 is 7.24:1 */
   color: var(--ink-2);
 }
-.v2-route-reel:hover .v2-route-reel-cap,
-.v2-route-reel:focus-visible .v2-route-reel-cap { color: var(--verm-text); }
-.v2-route-reel-cap i { font-style: normal; }
+.v2-route-card.is-top:hover .v2-route-card-cap { color: var(--verm-text); }
 
-/* --------------------------------------------------------------------------
-   the country strip
-   The canvas draws the crossings; this is the same information as text, which
-   is the version a screen reader can actually use.
-   -------------------------------------------------------------------------- */
+/* --- dealing through the pile -------------------------------------------- */
+.v2-route-deal {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0 0 6px;
+  font-family: var(--f-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.12em;
+  color: var(--ink-3);
+}
+.v2-route-deal.is-single {
+  text-transform: uppercase;
+  margin-top: 14px;
+}
+.v2-route-deal p { margin: 0; font-variant-numeric: tabular-nums; }
+.v2-route-deal b { color: var(--ink); font-weight: 500; }
+.v2-route-deal button {
+  appearance: none;
+  cursor: pointer;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  background: var(--paper-hi);
+  border: 1px solid var(--rule-firm);
+  color: var(--ink);
+  font-size: 17px;
+  line-height: 1;
+  transition: background 0.16s var(--ease), color 0.16s var(--ease),
+    border-color 0.16s var(--ease);
+}
+.v2-route-deal button:hover {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper-hi);
+}
+.v2-route-deal button:focus-visible {
+  outline: 2px solid var(--verm-text);
+  outline-offset: 2px;
+}
+
 .v2-route-strip {
   display: flex;
   flex-wrap: wrap;
@@ -2769,9 +2854,9 @@ html[data-v2-theme='dark']  body { background: #15130E; }
 /* The laydown is scroll-driven, so with reduced motion the stroke is simply
    already finished: the whole road, every mark, every figure, no animation. */
 @media (prefers-reduced-motion: reduce) {
-  .v2-route-reel { transition: none; }
-  .v2-route-reel:hover,
-  .v2-route-reel:focus-visible { transform: none; }
+  .v2-route-card.is-top { transition: none; }
+  .v2-route-card.is-top:hover,
+  .v2-route-card.is-top:focus-visible { transform: rotate(-0.8deg); }
 }
 
 /* ==========================================================================

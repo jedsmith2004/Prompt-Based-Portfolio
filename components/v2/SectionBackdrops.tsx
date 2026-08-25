@@ -285,6 +285,7 @@ export default function SectionBackdrops({
               progress={progress}
               velocity={velocity}
               palette={palette}
+              sectionId={s.id}
             />
           </div>
         );

@@ -37,6 +37,16 @@ export interface BackdropProps {
   /** Smoothed scroll velocity in px per frame. Negative is upward. */
   velocity: number;
   palette: BackdropPalette;
+  /**
+   * Which section this instance is standing behind.
+   *
+   * Backdrops are interchangeable and almost none of them should care. The one
+   * that does is Scrapbook behind `road`, where an interactive route is drawn
+   * on top of it by RouteMap and its own stitched thread would be the same
+   * journey drawn twice at two scales. A world may use this to stand down from
+   * something, never to become a different world.
+   */
+  sectionId?: string;
   className?: string;
 }
 
