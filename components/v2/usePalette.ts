@@ -25,6 +25,7 @@ import { useEffect } from 'react';
 import {
   BASE_PALETTE,
   PALETTE_VARS,
+  PLATES,
   paletteForSection,
   plateFor,
   type PaletteMode,
@@ -95,6 +96,34 @@ export function usePalette(activeId: string, mode: PaletteMode): SectionPalette 
       delete root.dataset.v2Palette;
       delete root.dataset.v2Mode;
       delete root.dataset.v2PaletteDark;
+    };
+  }, []);
+
+  /*
+   * Dev handle. There is no other way to look at a plate's palette here:
+   * `activeId` comes from an IntersectionObserver that never fires in a pane
+   * with no viewport, so eight of the nine plates are unreachable. Writes the
+   * tokens by the same path the hook does, so what it produces is what the
+   * reader would get.
+   */
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'production') return;
+    (window as any).__v2Palette = {
+      ids: () => PLATES.map((p) => ({ id: p.id, name: p.name, mode: p.mode })),
+      apply: (id: string, m: PaletteMode) => {
+        const pal = paletteForSection(id, m);
+        const root = document.documentElement;
+        for (const [key, prop] of PALETTE_VARS) {
+          root.style.setProperty(prop, String(pal[key]));
+        }
+        root.dataset.v2Palette = id;
+        root.dataset.v2Mode = pal.dark ? 'dark' : 'light';
+        root.dataset.v2PaletteDark = pal.dark ? 'true' : 'false';
+        return pal;
+      },
+    };
+    return () => {
+      delete (window as any).__v2Palette;
     };
   }, []);
 

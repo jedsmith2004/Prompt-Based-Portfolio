@@ -4502,8 +4502,15 @@ html[data-v2-theme='dark']  body { background: #15130E; }
 @property --ink-4     { syntax: '<color>'; inherits: true; initial-value: #7C7364; }
 @property --verm      { syntax: '<color>'; inherits: true; initial-value: #B5402F; }
 @property --verm-text { syntax: '<color>'; inherits: true; initial-value: #9E3524; }
+@property --verm-deep { syntax: '<color>'; inherits: true; initial-value: #832A1B; }
 @property --blue      { syntax: '<color>'; inherits: true; initial-value: #2A4C7D; }
+@property --blue-deep { syntax: '<color>'; inherits: true; initial-value: #203C64; }
 @property --rule      { syntax: '<color>'; inherits: true; initial-value: rgba(23, 20, 15, 0.16); }
+/* The two rules that used to be fixed on :root. See ruleHard in palettes.ts:
+   at 86% of near-black on near-black paper this is not a faint line, it is no
+   line, and it is under every eyebrow on the site. */
+@property --rule-firm { syntax: '<color>'; inherits: true; initial-value: rgba(23, 20, 15, 0.42); }
+@property --rule-hard { syntax: '<color>'; inherits: true; initial-value: rgba(23, 20, 15, 0.86); }
 
 /* One transition on the root carries every token at once, so the whole page
    changes key together instead of twelve properties racing each other.
@@ -4524,8 +4531,12 @@ html[data-v2-theme='dark']  body { background: #15130E; }
     --ink-4 940ms cubic-bezier(0.4, 0, 0.2, 1),
     --verm 940ms cubic-bezier(0.4, 0, 0.2, 1),
     --verm-text 940ms cubic-bezier(0.4, 0, 0.2, 1),
+    --verm-deep 940ms cubic-bezier(0.4, 0, 0.2, 1),
     --blue 940ms cubic-bezier(0.4, 0, 0.2, 1),
-    --rule 940ms cubic-bezier(0.4, 0, 0.2, 1);
+    --blue-deep 940ms cubic-bezier(0.4, 0, 0.2, 1),
+    --rule 940ms cubic-bezier(0.4, 0, 0.2, 1),
+    --rule-firm 940ms cubic-bezier(0.4, 0, 0.2, 1),
+    --rule-hard 940ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* The page ground has to follow the palette, or the inverted last plate would

@@ -188,6 +188,34 @@
    *
    * Returns [r, g, b, a] with r/g/b in 0..255, or null.
    */
+  /**
+   * Stop every transition and animation on the page, permanently.
+   *
+   * CALL THIS BEFORE ANY AUDIT THAT READS A COLOUR. The pane is zero-area, so
+   * nothing ever composites, so an in-flight CSS transition NEVER ADVANCES and
+   * `getComputedStyle` keeps handing back the colour it started from. Removing
+   * the class that armed the transition does not cancel one already running.
+   *
+   * This cost a full investigation on 2026-08-26: a palette audit reported 135
+   * contrast failures at 2.83:1 across the dark forms, every one of them
+   * traced to `--ink-3` being frozen at the base sheet's value while the
+   * inline style on <html> said something else entirely. There were no
+   * failures. There was one stuck transition.
+   *
+   * It is the same shape as the two probe bugs before it: the measurement was
+   * wrong and the measurement was believed.
+   */
+  P.freeze = function () {
+    if (document.getElementById('p-freeze')) return true;
+    const st = document.createElement('style');
+    st.id = 'p-freeze';
+    st.textContent =
+      'html, html *, html *::before, html *::after {' +
+      ' transition: none !important; animation: none !important; }';
+    document.head.appendChild(st);
+    return true;
+  };
+
   P.parseColour = function (css) {
     const str = String(css);
     const m = str.match(/[\d.]+(?:e[-+]?\d+)?/gi);

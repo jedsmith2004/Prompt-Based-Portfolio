@@ -66,9 +66,24 @@ export interface SectionPalette {
   verm: string;
   /** The small-text vermilion. */
   vermText: string;
+  /** Emphasis vermilion, one step further from the paper. Hover, mostly. */
+  vermDeep: string;
   blue: string;
+  blueDeep: string;
   /** Hairline rule, already expressed against this paper. */
   rule: string;
+  /** The mid rule. 37 uses. */
+  ruleFirm: string;
+  /**
+   * The 2px structural rule under every plate eyebrow. 10 uses.
+   *
+   * THIS TOKEN IS WHY THE DARK MODE WAS BROKEN. All three rules used to be
+   * fixed rgba() values on :root, built once from the light palette's ink, and
+   * at 86% of near-black on near-black paper this is not a faint line, it is
+   * no line at all. Five of the nine plates would have lost the rule that
+   * holds the whole editorial grid together. Generated per form now.
+   */
+  ruleHard: string;
   /** True when this form is light-on-dark, so components can branch. */
   dark?: boolean;
 }
@@ -115,8 +130,12 @@ export const PLATES: readonly Plate[] = [
       ink4: '#7C7364',
       verm: '#B5402F',
       vermText: '#9E3524',
+      vermDeep: '#832A1B',
       blue: '#2A4C7D',
+      blueDeep: '#203C64',
       rule: 'rgba(23, 20, 15, 0.16)',
+      ruleFirm: 'rgba(23, 20, 15, 0.42)',
+      ruleHard: 'rgba(23, 20, 15, 0.86)',
     },
     dark: {
       paper: '#15130E',
@@ -129,8 +148,12 @@ export const PLATES: readonly Plate[] = [
       ink4: '#847C6D',
       verm: '#DC6A4C',
       vermText: '#E4805F',
+      vermDeep: '#EB977B',
       blue: '#8CB0E4',
+      blueDeep: '#A8C4EC',
       rule: 'rgba(230, 225, 213, 0.2)',
+      ruleFirm: 'rgba(230, 225, 213, 0.46)',
+      ruleHard: 'rgba(230, 225, 213, 0.9)',
       dark: true,
     },
   },
@@ -150,8 +173,12 @@ export const PLATES: readonly Plate[] = [
       ink4: '#7C7364',
       verm: '#B5402F',
       vermText: '#9E3524',
+      vermDeep: '#832A1B',
       blue: '#2A4C7D',
+      blueDeep: '#203C64',
       rule: 'rgba(23, 20, 15, 0.16)',
+      ruleFirm: 'rgba(23, 20, 15, 0.42)',
+      ruleHard: 'rgba(23, 20, 15, 0.86)',
     },
     dark: {
       paper: '#100F0C',
@@ -164,8 +191,12 @@ export const PLATES: readonly Plate[] = [
       ink4: '#8A8271',
       verm: '#E06B4C',
       vermText: '#EA8360',
+      vermDeep: '#F09B7D',
       blue: '#8FB6EE',
+      blueDeep: '#ADCAF4',
       rule: 'rgba(237, 232, 218, 0.2)',
+      ruleFirm: 'rgba(237, 232, 218, 0.46)',
+      ruleHard: 'rgba(237, 232, 218, 0.9)',
       dark: true,
     },
   },
@@ -185,8 +216,12 @@ export const PLATES: readonly Plate[] = [
       ink4: '#6E7C88',
       verm: '#A8452F',
       vermText: '#8E3823',
+      vermDeep: '#732C1A',
       blue: '#1F4E8C',
+      blueDeep: '#173D70',
       rule: 'rgba(17, 24, 32, 0.16)',
+      ruleFirm: 'rgba(17, 24, 32, 0.42)',
+      ruleHard: 'rgba(17, 24, 32, 0.86)',
     },
     dark: {
       paper: '#0B1016',
@@ -199,8 +234,12 @@ export const PLATES: readonly Plate[] = [
       ink4: '#788895',
       verm: '#E06E4E',
       vermText: '#EE8663',
+      vermDeep: '#F49E81',
       blue: '#79ABF2',
+      blueDeep: '#98BFF7',
       rule: 'rgba(223, 230, 236, 0.2)',
+      ruleFirm: 'rgba(223, 230, 236, 0.46)',
+      ruleHard: 'rgba(223, 230, 236, 0.9)',
       dark: true,
     },
   },
@@ -220,8 +259,12 @@ export const PLATES: readonly Plate[] = [
       ink4: '#727C66',
       verm: '#A6402C',
       vermText: '#8C3421',
+      vermDeep: '#712818',
       blue: '#2A5560',
+      blueDeep: '#1E3F48',
       rule: 'rgba(20, 23, 15, 0.16)',
+      ruleFirm: 'rgba(20, 23, 15, 0.42)',
+      ruleHard: 'rgba(20, 23, 15, 0.86)',
     },
     dark: {
       paper: '#0D100B',
@@ -234,8 +277,12 @@ export const PLATES: readonly Plate[] = [
       ink4: '#828C75',
       verm: '#DA6D46',
       vermText: '#E6845F',
+      vermDeep: '#ED9B7C',
       blue: '#77BACB',
+      blueDeep: '#8FC8D6',
       rule: 'rgba(228, 232, 220, 0.2)',
+      ruleFirm: 'rgba(228, 232, 220, 0.46)',
+      ruleHard: 'rgba(228, 232, 220, 0.9)',
       dark: true,
     },
   },
@@ -255,8 +302,12 @@ export const PLATES: readonly Plate[] = [
       ink4: '#87765A',
       verm: '#B04226',
       vermText: '#96351C',
+      vermDeep: '#7A2914',
       blue: '#2F4C6B',
+      blueDeep: '#233A53',
       rule: 'rgba(26, 20, 11, 0.16)',
+      ruleFirm: 'rgba(26, 20, 11, 0.42)',
+      ruleHard: 'rgba(26, 20, 11, 0.86)',
     },
     dark: {
       paper: '#13100A',
@@ -269,8 +320,12 @@ export const PLATES: readonly Plate[] = [
       ink4: '#8D8067',
       verm: '#E17A4E',
       vermText: '#EE8A5C',
+      vermDeep: '#F4A07A',
       blue: '#8FB3DE',
+      blueDeep: '#A9C6E7',
       rule: 'rgba(239, 230, 210, 0.2)',
+      ruleFirm: 'rgba(239, 230, 210, 0.46)',
+      ruleHard: 'rgba(239, 230, 210, 0.9)',
       dark: true,
     },
   },
@@ -290,8 +345,12 @@ export const PLATES: readonly Plate[] = [
       ink4: '#96714C',
       verm: '#BE4A26',
       vermText: '#9E3A19',
+      vermDeep: '#812E12',
       blue: '#39607A',
+      blueDeep: '#2D4D63',
       rule: 'rgba(31, 21, 9, 0.16)',
+      ruleFirm: 'rgba(31, 21, 9, 0.42)',
+      ruleHard: 'rgba(31, 21, 9, 0.86)',
     },
     dark: {
       paper: '#16100A',
@@ -304,8 +363,12 @@ export const PLATES: readonly Plate[] = [
       ink4: '#907B5D',
       verm: '#E46A38',
       vermText: '#F08350',
+      vermDeep: '#F5996E',
       blue: '#79ADC9',
+      blueDeep: '#91BDD5',
       rule: 'rgba(242, 230, 212, 0.2)',
+      ruleFirm: 'rgba(242, 230, 212, 0.46)',
+      ruleHard: 'rgba(242, 230, 212, 0.9)',
       dark: true,
     },
   },
@@ -326,8 +389,12 @@ export const PLATES: readonly Plate[] = [
       ink4: '#75766C',
       verm: '#A94733',
       vermText: '#8E3A27',
+      vermDeep: '#742E1E',
       blue: '#38505F',
+      blueDeep: '#2A3D49',
       rule: 'rgba(21, 21, 15, 0.16)',
+      ruleFirm: 'rgba(21, 21, 15, 0.42)',
+      ruleHard: 'rgba(21, 21, 15, 0.86)',
     },
     dark: {
       paper: '#0E0F0D',
@@ -340,8 +407,12 @@ export const PLATES: readonly Plate[] = [
       ink4: '#838276',
       verm: '#D9694A',
       vermText: '#E7825F',
+      vermDeep: '#EE997C',
       blue: '#7FAEC4',
+      blueDeep: '#96BED0',
       rule: 'rgba(230, 229, 220, 0.2)',
+      ruleFirm: 'rgba(230, 229, 220, 0.46)',
+      ruleHard: 'rgba(230, 229, 220, 0.9)',
       dark: true,
     },
   },
@@ -361,8 +432,12 @@ export const PLATES: readonly Plate[] = [
       ink4: '#7B7A6F',
       verm: '#AC4531',
       vermText: '#933726',
+      vermDeep: '#782B1D',
       blue: '#33506E',
+      blueDeep: '#273E57',
       rule: 'rgba(22, 21, 15, 0.16)',
+      ruleFirm: 'rgba(22, 21, 15, 0.42)',
+      ruleHard: 'rgba(22, 21, 15, 0.86)',
     },
     dark: {
       paper: '#101010',
@@ -375,8 +450,12 @@ export const PLATES: readonly Plate[] = [
       ink4: '#87857A',
       verm: '#DC6A4A',
       vermText: '#E9835F',
+      vermDeep: '#F09A7C',
       blue: '#87AEDC',
+      blueDeep: '#A1C1E5',
       rule: 'rgba(233, 231, 222, 0.2)',
+      ruleFirm: 'rgba(233, 231, 222, 0.46)',
+      ruleHard: 'rgba(233, 231, 222, 0.9)',
       dark: true,
     },
   },
@@ -396,8 +475,12 @@ export const PLATES: readonly Plate[] = [
       ink4: '#7C776B',
       verm: '#B04430',
       vermText: '#963725',
+      vermDeep: '#7B2B1C',
       blue: '#2E4F76',
+      blueDeep: '#233E5D',
       rule: 'rgba(22, 21, 15, 0.16)',
+      ruleFirm: 'rgba(22, 21, 15, 0.42)',
+      ruleHard: 'rgba(22, 21, 15, 0.86)',
     },
     dark: {
       paper: '#16150F',
@@ -410,8 +493,12 @@ export const PLATES: readonly Plate[] = [
       ink4: '#8C8474',
       verm: '#E0714F',
       vermText: '#E8825F',
+      vermDeep: '#EF997C',
       blue: '#8FB4E6',
+      blueDeep: '#ABC7EE',
       rule: 'rgba(237, 232, 219, 0.2)',
+      ruleFirm: 'rgba(237, 232, 219, 0.46)',
+      ruleHard: 'rgba(237, 232, 219, 0.9)',
       dark: true,
     },
   },
@@ -457,6 +544,10 @@ export const PALETTE_VARS: ReadonlyArray<readonly [keyof SectionPalette, string]
   ['ink4', '--ink-4'],
   ['verm', '--verm'],
   ['vermText', '--verm-text'],
+  ['vermDeep', '--verm-deep'],
   ['blue', '--blue'],
+  ['blueDeep', '--blue-deep'],
   ['rule', '--rule'],
+  ['ruleFirm', '--rule-firm'],
+  ['ruleHard', '--rule-hard'],
 ];
