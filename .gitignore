@@ -56,3 +56,6 @@ temp/
 
 # Claude Code local config
 .claude/
+
+# local design prototypes (not shipped)
+public/_proto/
