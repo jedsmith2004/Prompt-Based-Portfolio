@@ -67,10 +67,15 @@ export interface ModeHandle {
   /**
    * Called by the device at the instant the light actually changes: the cord
    * reaching the bottom of its pull, the sun crossing the horizon.
+   *
+   * PASS THE KEY OF THE EVENT THAT MOUNTED YOU. A device's callbacks must
+   * only ever be able to affect the event it was mounted for; without the
+   * key a stray timer from a torn-down device commits, and then finishes,
+   * whatever event happens to be live at the time.
    */
-  commit: () => void;
+  commit: (key?: number) => void;
   /** Called by the device once its follow-through is over. Unmounts it. */
-  finish: () => void;
+  finish: (key?: number) => void;
 }
 
 /**
@@ -94,15 +99,17 @@ export function useMode(activeId: string): ModeHandle {
   const eventRef = useRef(event);
   eventRef.current = event;
 
-  const commit = useCallback(() => {
+  const commit = useCallback((key?: number) => {
     const e = eventRef.current;
     if (!e) return;
+    if (key !== undefined && key !== e.key) return;
     setMode(e.to);
   }, []);
 
-  const finish = useCallback(() => {
+  const finish = useCallback((key?: number) => {
     const e = eventRef.current;
     if (!e) return;
+    if (key !== undefined && key !== e.key) return;
     /* Committing on the way out is a safety net, not the normal path: a device
        that animates its follow-through and forgets to call commit() would
        otherwise unmount having changed nothing. */

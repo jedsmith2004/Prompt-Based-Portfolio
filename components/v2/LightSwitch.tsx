@@ -30,11 +30,18 @@
 
    THE ORDER OF EVENTS, and the two places it can go wrong:
 
-     0ms                mount. The rose and cord run in from the top edge.
+     0ms                mount. The rose and cord run in from the top edge,
+                        under a CSS ANIMATION that starts on this frame. It
+                        used to be a transition armed by the phase flip below,
+                        which meant the object hung motionless off-screen for
+                        the whole of ENTER_MS and only THEN began to move.
      ENTER_MS           the object has stopped moving, so it can be measured.
                         The errand is handed to the bird HERE and not before:
                         a perch harvested mid-transform records where the grip
-                        was passing through, not where it came to rest.
+                        was passing through, not where it came to rest. Under
+                        the old ordering this fired at the START of the
+                        entrance, and the grip measured -16px — sixteen pixels
+                        ABOVE the top of the screen, and 162 above its rest.
      arrival + SET_MS   he is on it. The pull starts.
      ...+ PULL_MS       bottom of the stroke. THE LIGHT CHANGES. He is
                         released on the same frame, so he falls as it recoils.
@@ -49,6 +56,15 @@
 
    Wrong 2: he arrives after we gave up. `pulled` is a ref rather than state
    so the callback cannot fire the sequence twice.
+
+   Wrong 3, and it is the one that bites the SECOND light change rather than
+   the first: every timer this component starts has to die with it. The three
+   timeouts inside `pull` and the one inside `arrive` used to be untracked, so
+   a switch torn down mid-sequence — by the watchdog, or by a reader who
+   outran it — went on to call `onCommit` and `onDone` from the grave. Those
+   land on the hook's CURRENT event, which by then is a different one, and
+   `onDone` unmounts it. The next change committed by itself with the rose
+   half-way out of the ceiling and the bird never asked to come.
    ========================================================================== */
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
@@ -65,8 +81,16 @@ const PULL_MS = 170;
 /** Recoil, and how long the object stays down after the light has changed. */
 const HOLD_MS = 620;
 const EXIT_MS = 340;
-/** How long he is given before it pulls itself. */
-const PATIENCE_MS = 2400;
+/**
+ * How long he is given before it pulls itself.
+ *
+ * Deliberately LONGER than ERRAND_DEADLINE in Companion.tsx, so that in the
+ * ordinary case the bird's own engine is the thing that decides he is not
+ * coming — it knows whether he is mid-flight and this does not. This is the
+ * backstop for the case the engine cannot report at all: not mounted, torn
+ * down, or never started.
+ */
+const PATIENCE_MS = 3000;
 
 type Phase = 'in' | 'wait' | 'pull' | 'out';
 
@@ -97,6 +121,17 @@ const LightSwitch = forwardRef<LightSwitchHandle, LightSwitchProps>(function Lig
 ) {
   const [phase, setPhase] = useState<Phase>('in');
   const pulled = useRef(false);
+  /** Every timer this instance owns, so unmount can take all of them. */
+  const timers = useRef<number[]>([]);
+  /** Set on unmount. Belt and braces: a timer that somehow survives no-ops. */
+  const dead = useRef(false);
+  const later = useCallback((fn: () => void, ms: number) => {
+    timers.current.push(
+      window.setTimeout(() => {
+        if (!dead.current) fn();
+      }, ms)
+    );
+  }, []);
 
   /* Callbacks live behind refs so the one-shot timeline effect below can have
      an empty dependency list and genuinely run once. A parent that re-renders
@@ -110,38 +145,43 @@ const LightSwitch = forwardRef<LightSwitchHandle, LightSwitchProps>(function Lig
 
   /** The whole back half of the sequence. Idempotent. */
   const pull = useCallback(() => {
-    if (pulled.current) return;
+    if (pulled.current || dead.current) return;
     pulled.current = true;
     setPhase('pull');
     /* Let go of him now rather than at the bottom of the stroke: the errand
        ends, the engine stops holding him on the grip, and he is already
        falling by the time the cord recoils past him. */
     errandCb.current(null);
-    window.setTimeout(() => commitCb.current(), PULL_MS);
-    window.setTimeout(() => setPhase('out'), PULL_MS + HOLD_MS);
-    window.setTimeout(() => doneCb.current(), PULL_MS + HOLD_MS + EXIT_MS);
-  }, []);
+    later(() => commitCb.current(), PULL_MS);
+    later(() => setPhase('out'), PULL_MS + HOLD_MS);
+    later(() => doneCb.current(), PULL_MS + HOLD_MS + EXIT_MS);
+  }, [later]);
 
   /* one-shot timeline */
   useEffect(() => {
     const key = nextErrandKey++;
-    const timers: number[] = [];
+    dead.current = false;
 
-    timers.push(
-      window.setTimeout(() => {
-        setPhase('wait');
-        errandCb.current({ key, selector: SWITCH_GRIP_SELECTOR });
-      }, ENTER_MS)
-    );
-    timers.push(window.setTimeout(pull, ENTER_MS + PATIENCE_MS));
+    /* The entrance is already running: `[data-phase='in']` carries a CSS
+       animation that started when the element was painted. This timer only
+       marks where it FINISHES, which is the first moment the grip is where it
+       is going to stay and so the first moment it can be measured. */
+    later(() => {
+      setPhase('wait');
+      errandCb.current({ key, selector: SWITCH_GRIP_SELECTOR });
+    }, ENTER_MS);
+    later(pull, ENTER_MS + PATIENCE_MS);
 
+    const owned = timers.current;
     return () => {
-      for (const t of timers) window.clearTimeout(t);
+      dead.current = true;
+      for (const t of owned) window.clearTimeout(t);
+      owned.length = 0;
       /* Unmounted mid-errand — the watchdog in useMode, or a reader who
          outran the whole thing. Release him either way. */
       errandCb.current(null);
     };
-  }, [pull]);
+  }, [pull, later]);
 
   /*
    * An imperative handle rather than a callback prop, because the two events
@@ -153,10 +193,10 @@ const LightSwitch = forwardRef<LightSwitchHandle, LightSwitchProps>(function Lig
   useImperativeHandle(
     ref,
     () => ({
-      arrive: () => window.setTimeout(pull, SET_MS),
+      arrive: () => later(pull, SET_MS),
       fail: pull,
     }),
-    [pull]
+    [pull, later]
   );
 
   return (

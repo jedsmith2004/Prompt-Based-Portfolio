@@ -822,10 +822,33 @@ be gated while one runs, because the cord hangs from the top edge and the top
 edge is the worst place he can stand by every measure the comfort band uses.
 Ungated, he touched the cord and left inside a tenth of a second.
 
-`[?]` **Not verifiable here, and it is the whole point of the feature:** whether
-the switch reads as *the bird pulling it* rather than as a bird near a rope, and
-whether the dial is snappy or fussy. Both are judgements about timing on a
-composited page. This pane never composites and scroll is a no-op.
+`[x]` **He was never once asked, and it was two pixels** (2026-08-26, later).
+`PERCH_MIN_W` is 56 and the grip was 54px wide, so `measureEdge` refused it, the
+errand failed on the first frame of every event, and the cord pulled itself — on
+time, with the right recoil, looking exactly like the working animation, because
+the fallback was built to be indistinguishable from success. Six further faults
+underneath it: the entrance had not started when the errand was handed over, the
+release did not let go of the perch, letting go re-landed him on the same perch,
+a superseded switch's timers tore down the NEXT event, `animationend` was not
+listened for, the climb was gated on `Math.random() < 0.7`, and he was painted on
+the document band while standing on a viewport-fixed cord. All fixed, all in the
+devlog.
+
+`[x]` **The perch system is drivable now** — `__bird.perchOf`, `.whyNot`,
+`.errand()`, `.seat()`. It was not, and that is why this survived: `measure()`
+only ever runs behind a rAF, and this pane does not fire one. The first thing
+`whyNot` printed was `54px wide, and PERCH_MIN_W is 56`.
+
+`[x]` **Verified by driving it:** he launches, takes the wall, lands on the grip
+at y=146, is released into a fall at the pull, and lands below — twice in a row,
+second event identical to the first.
+
+`[?]` **Still not verifiable here: whether it READS.** Whether a sparrow landing
+on a bar and dropping off it looks like a bird pulling a light cord, whether the
+beat between landing and pull is the right length, and whether the fall
+afterwards is a flourish or a distraction. Same for the dial being snappy rather
+than fussy. Judgements about timing on a composited page; this pane never
+composites and scroll is a no-op.
 
 ### P1-COLOUR — one parser, and only one
 `[x]` **`lib/v2/colour.ts` exists and is the only colour parser in the

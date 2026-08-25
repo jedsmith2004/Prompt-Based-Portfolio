@@ -785,6 +785,24 @@ const CORRECT_SPEED = 460;
 const FALL_TERMINAL = 1250;
 /** No single fall substep may travel further than this. */
 const FALL_STEP_PX = 16;
+/**
+ * How far BELOW a perch a deliberate drop off it starts, px.
+ *
+ * A landing is a crossing test: the perch's y has to lie between where he was
+ * last substep and where he is now. Someone standing on a perch is at exactly
+ * its y, so the first substep of a fall brackets it and lands him straight
+ * back on the thing he was just let go of. That is not a theory — the light
+ * cord released him and he did not move a pixel.
+ */
+const FALL_CLEARANCE = 2;
+/**
+ * How long after a palette change to re-read the theme, ms.
+ *
+ * Longer than the 940ms token transition in v2.css, because a value sampled
+ * while a registered custom property is interpolating is a colour that belongs
+ * to neither plate.
+ */
+const PALETTE_SETTLE_MS = 1080;
 /* TRANSIT_VEL and TRANSIT_SUSTAIN lived here. They defined "a fast scroll",
    which is no longer what licenses an ability: being off the screen is. See
    the trigger in update(). */
@@ -1679,8 +1697,22 @@ export default function Companion({
       document.querySelectorAll(PERCH_ATTR).forEach((el) => take(el, true));
       document.querySelectorAll(PERCH_SELECTOR).forEach((el) => take(el, false));
 
-      byEl.forEach((_v, k) => {
-        if (!kept.has(k)) byEl.delete(k);
+      byEl.forEach((v, k) => {
+        if (kept.has(k)) return;
+        byEl.delete(k);
+        /*
+         * The furniture has left the page: a light switch retracting, a
+         * section unmounting, a figure swapped out under him. Pruning the map
+         * is not enough — `bird.perch` and the plan hold direct references, so
+         * without this he goes on standing at its last y with nothing under
+         * him. Found on the switch, where he was left hanging at the top of
+         * the screen after the cord had gone home.
+         *
+         * Note this only fires when something re-measures, which is a resize
+         * or a transition ending rather than every frame. It is the backstop.
+         * The path that actually catches the switch is `letGoOfErrand`.
+         */
+        abandonPerch(v);
       });
       found.sort((a, b) => a.y - b.y);
       perches = found;
@@ -2686,12 +2718,21 @@ export default function Companion({
         if (mid) pushWp('perch', underneath ? targetXUnder(mid) : targetXOn(mid), mid.y, mid, 0);
       }
 
+      /*
+       * `urgency >= 1` is an ERRAND, and an errand does not get to be a coin
+       * flip. Without the wall kick one leg reaches about 404px of climb; with
+       * it the 28/72 split reaches about 560. The light cord hangs 146px from
+       * the top of the screen, so from most of the plate the difference is
+       * whether he arrives at all — and leaving that to `Math.random() < 0.7`
+       * means the one beat that explains why the room changed colour works on
+       * two readings in three and inexplicably does not on the third.
+       */
       if (
         !underneath &&
         planLen === 0 &&
         urgency > 0.32 &&
         (Math.abs(dy) > 260 || Math.abs(dx) > W * 0.46) &&
-        Math.random() < 0.7
+        (urgency >= 1 || Math.random() < 0.7)
       ) {
         /* Wall jump. He goes to the wall BEHIND the direction of travel and
            kicks off it, which is what parkour actually looks like; going to
@@ -2725,8 +2766,17 @@ export default function Companion({
           to get on without him.
        ==================================================================== */
 
-    /** Longest he is given to reach a target before the caller gives up. */
-    const ERRAND_DEADLINE = 3400;
+    /**
+     * Longest he is given to reach a target before the caller gives up.
+     *
+     * Measured rather than guessed: a flight to the light switch from the
+     * far side of the page, including a wall transit on the way, takes about
+     * 1250ms of engine time. This is twice that, and it is deliberately
+     * SHORTER than PATIENCE_MS in LightSwitch so that the engine — which
+     * knows whether he is still in the air — is the thing that decides he is
+     * not coming, rather than a caller that cannot see him.
+     */
+    const ERRAND_DEADLINE = 2600;
 
     let errandKey = 0;
     let errandPerch: Perch | null = null;
@@ -2738,15 +2788,83 @@ export default function Companion({
       return errandPerch !== null;
     }
 
+    /**
+     * Why a `data-perch` element did not become a perch. Dev only.
+     *
+     * Written after the light switch spent its entire life not working. Its
+     * grip was 54px wide against a PERCH_MIN_W of 56, so `measureEdge`
+     * rejected it, `byEl.get` returned undefined, and the errand failed on the
+     * first frame of every event — after which the cord pulled itself, on
+     * time, looking exactly like a working animation. Nothing threw and
+     * nothing logged.
+     *
+     * A caller that asks for a target it cannot have should be TOLD, because
+     * the fallback here is deliberately indistinguishable from success.
+     */
+    function whyNotAPerch(el: Element): string {
+      const cs = window.getComputedStyle(el);
+      if (cs.display === 'none') return 'display:none';
+      if (cs.visibility === 'hidden') return 'visibility:hidden';
+      const a = parseFloat(cs.opacity);
+      if (Number.isFinite(a) && a < PERCH_MIN_OPACITY)
+        return `opacity ${a}, below the ${PERCH_MIN_OPACITY} floor: still arriving`;
+      const r = el.getBoundingClientRect();
+      if (r.width < PERCH_MIN_W)
+        return `${Math.round(r.width)}px wide, and PERCH_MIN_W is ${PERCH_MIN_W}`;
+      if (r.height < PERCH_MIN_H)
+        return `${Math.round(r.height)}px tall, and PERCH_MIN_H is ${PERCH_MIN_H}`;
+      return 'measureEdge rejected it; check data-perch-inset / -side and the transform';
+    }
+
+    /**
+     * Furniture he is ON, or on his way TO, has stopped being available.
+     *
+     * Two cases and they are not the same. STANDING on it, he falls off it —
+     * which is the whole staging of the light switch: the caller asked for his
+     * weight, so the moment it stops wanting him there he drops and the cord
+     * recoils past him. HEADING for it, he gives up mid-air and drops, because
+     * the alternative is what actually happened in testing: the switch gave up
+     * on him while he was still crossing the page, retracted, and he flew the
+     * rest of the way and stood on a perch that no longer existed, in the air,
+     * at the top of the screen.
+     *
+     * The plan is cleared as well as the flight. A waypoint list still holding
+     * a dead perch would resume on the next landing.
+     *
+     * Returns true when he was actually let go of.
+     */
+    function abandonPerch(p: Perch): boolean {
+      const standing = bird.perch === p;
+      let heading = bird.flyPerch === p;
+      for (let i = planIdx; !heading && i < planLen; i++) heading = PLAN[i].perch === p;
+      if (!standing && !heading) return false;
+      beginPlan();
+      bird.flyPerch = null;
+      /* Clear the thing he is standing on before gravity can re-catch it.
+         See FALL_CLEARANCE. */
+      if (standing) bird.y = p.y + FALL_CLEARANCE;
+      /* A hop is a live ballistic arc and should carry its velocity into the
+         fall. Standing still, and steered flight, both start it from rest. */
+      enterFall(!standing && bird.mode === 'hop');
+      return true;
+    }
+
+    /** The errand is over. Let go of the target if he had any hold on it. */
+    function letGoOfErrand(p: Perch | null) {
+      if (p) abandonPerch(p);
+      /* Released with nothing holding him there, so give him a reason to move
+         rather than waiting on the idle scheduler. */
+      bird.hopGate = 0;
+      bird.sinceMove = 99;
+    }
+
     function endErrand(fail: boolean) {
       const wasRunning = errandPerch !== null && !errandArrived;
+      const was = errandPerch;
       errandPerch = null;
       errandArrived = false;
       errandDeadline = 0;
-      /* Released at the top of the screen with nothing holding him there, so
-         give him a reason to move rather than waiting on the idle scheduler. */
-      bird.hopGate = 0;
-      bird.sinceMove = 99;
+      letGoOfErrand(was);
       if (fail && wasRunning) onErrandFailRef.current?.();
     }
 
@@ -2758,12 +2876,12 @@ export default function Companion({
         errandKey = key;
         /* A new errand, or a release. Either way the old one is over, and it
            is not a failure: the caller is the one who ended it. */
+        const was = errandPerch;
         errandPerch = null;
         errandArrived = false;
         errandDeadline = 0;
         if (!e) {
-          bird.hopGate = 0;
-          bird.sinceMove = 99;
+          letGoOfErrand(was);
           return;
         }
         /* Not while he is mid-conversation. Flying off in the middle of
@@ -2779,6 +2897,12 @@ export default function Companion({
         const el = document.querySelector(e.selector);
         const p = el ? byEl.get(el) : null;
         if (!p) {
+          if (process.env.NODE_ENV !== 'production') {
+            console.warn(
+              `[companion] errand "${e.selector}" refused: ` +
+                (el ? `in the DOM but not landable — ${whyNotAPerch(el)}` : 'not in the DOM')
+            );
+          }
           onErrandFailRef.current?.();
           return;
         }
@@ -5027,6 +5151,32 @@ export default function Companion({
        * and body in globals.css — so the band's x needs no offset, and the
        * bubble's viewport clamp below stays correct without one.
        */
+      /*
+       * THE ONE EXCEPTION TO THE BAND, and it is the mirror image of the bug
+       * the band was built to fix.
+       *
+       * The band lives in DOCUMENT flow, so the compositor scrolls it and he
+       * can never lag behind the page. That is exactly right for furniture
+       * that is part of the page, and exactly WRONG for furniture pinned to
+       * the viewport. The light cord does not move when the page scrolls, so
+       * a bird carried along with the document detaches from it by a frame of
+       * scroll every frame: about 25px at a modest 1500px/s, and a quarter of
+       * his own height, opening to well over 100px on a fling.
+       *
+       * And the switch event is TRIGGERED BY SCROLLING into the plate, so the
+       * reader is nearly always still moving when he arrives. The single
+       * frame the whole sequence exists to sell — his weight landing on the
+       * cord — is the frame most likely to show him hovering beside it.
+       *
+       * On a viewport-anchored perch he goes on the fixed canvas instead,
+       * where the same compositor pins him and the cord together. Included
+       * while he is still on his way, so the surface is already right before
+       * he lands and there is no correction on the frame he arrives.
+       */
+      let anchoredNow = bird.perch?.fixed === true || bird.flyPerch?.fixed === true;
+      for (let i = planIdx; !anchoredNow && i < planLen; i++)
+        anchoredNow = PLAN[i].perch?.fixed === true;
+
       let docOffX: number;
       let docOffY: number;
       if (useBand) {
@@ -5036,9 +5186,13 @@ export default function Companion({
           bandTop = top;
           band.style.transform = `translate3d(0,${top}px,0)`;
         }
+        /* Cleared whichever surface we then draw on, or the band keeps the
+           last frame it was given while he is painted somewhere else. */
+        bandCtx.clearRect(0, 0, W, BAND_H);
+      }
+      if (useBand && !anchoredNow) {
         docOffX = 0;
         docOffY = bandTop;
-        bandCtx.clearRect(0, 0, W, BAND_H);
         ctx = bandCtx;
       } else {
         docOffX = window.scrollX;
@@ -5364,6 +5518,16 @@ export default function Companion({
       if (e.propertyName === 'opacity' || e.propertyName === 'transform') remeasure();
     };
     document.addEventListener('transitionend', onTransitionEnd, true);
+    /*
+     * And `animationend`, which is not the same event and was not being
+     * heard at all. The perch contract promises that furniture still on its
+     * way in is refused and then re-measured "once it has arrived" — and the
+     * only thing that delivered the second half was `transitionend`. Anything
+     * that arrives under a keyframe animation, the light switch included, was
+     * therefore never re-read: harvested mid-flight or not at all, and left
+     * that way. A promise with no implementation for half its cases.
+     */
+    document.addEventListener('animationend', remeasure, true);
     window.addEventListener('pointermove', onMove, { passive: true });
     window.addEventListener('pointerdown', onDown);
     window.addEventListener('pointerup', onUp);
@@ -5422,10 +5586,32 @@ export default function Companion({
     const onBlur = () => restoreCursor();
     window.addEventListener('blur', onBlur);
 
-    const themeObserver = new MutationObserver(readTheme);
+    /*
+     * ALSO `style`, and that omission is why he did not follow the light he
+     * had just changed.
+     *
+     * `usePalette` writes a plate's tokens as inline custom properties on
+     * <html>. A light/dark change is therefore a `style` mutation and nothing
+     * else: no class, no data attribute. Watching only the other two, the bird
+     * pulled the cord, the room went dark, and he went on drawing his own
+     * speech bubble and chat window in the palette he had booted with. The one
+     * element narrating the change was the one element not obeying it.
+     *
+     * Read TWICE. The tokens are @property-registered and interpolate over
+     * 940ms, so the values present at the mutation are still the old ones; the
+     * first read is what keeps him honest when the change is instant (reduced
+     * motion, or a hidden tab), and the second is the one that is right.
+     */
+    let themeSettle = 0;
+    const onThemeChange = () => {
+      readTheme();
+      window.clearTimeout(themeSettle);
+      themeSettle = window.setTimeout(readTheme, PALETTE_SETTLE_MS);
+    };
+    const themeObserver = new MutationObserver(onThemeChange);
     themeObserver.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ['data-v2-theme', 'class']
+      attributeFilter: ['data-v2-theme', 'class', 'style']
     });
 
     const onKey = (e: KeyboardEvent) => {
@@ -5471,6 +5657,40 @@ export default function Companion({
         /* true while some marked furniture is still fading in, so a perch
            audit can tell "not landable yet" from "not landable" */
         perchesPending: () => perchesPending,
+        /*
+         * THE PERCH SYSTEM, drivable by hand.
+         *
+         * Everything that harvests furniture runs off rAF — `remeasure` is a
+         * rAF, and the frame loop is a rAF — so in a pane that never fires one
+         * the entire perch system was unreachable, and a `data-perch` element
+         * that could not be stood on was indistinguishable from one that
+         * could. That is exactly how the light switch shipped with a grip two
+         * pixels under PERCH_MIN_W: the bird was never once asked to go to it,
+         * the cord pulled itself on time, and nothing anywhere said otherwise.
+         *
+         * `measure()` re-harvests. `perchOf(el)` answers the only question
+         * that matters about a marked element: did it become a perch?
+         * `whyNot(el)` answers the follow-up when it did not.
+         *
+         * `measure` itself is already exposed further down this object.
+         */
+        perchOf: (el: Element) => byEl.get(el) ?? null,
+        whyNot: (el: Element) => (byEl.get(el) ? null : whyNotAPerch(el)),
+        /* The errand machine's whole state in one read. `prop` is what the
+           page is currently asking for; the rest is what the engine has made
+           of it. When a device says the bird never came, this says why. */
+        errand: () => ({
+          prop: errandRef.current,
+          key: errandKey,
+          perch: errandPerch,
+          arrived: errandArrived,
+          holdsTarget: errandPerch !== null && bird.perch === errandPerch
+        }),
+        /** Put him on a perch without flying him there. */
+        seat: (p: Perch) => {
+          bird.x = (p.x0 + p.x1) / 2;
+          land(p, p.y, 0);
+        },
         plan: () => ({ planLen, planIdx, PLAN }),
         transit,
         pvz,
@@ -5753,6 +5973,8 @@ export default function Companion({
       window.removeEventListener('blur', onBlur);
       window.removeEventListener('keydown', onKey);
       document.removeEventListener('transitionend', onTransitionEnd, true);
+      document.removeEventListener('animationend', remeasure, true);
+      window.clearTimeout(themeSettle);
       document.removeEventListener('visibilitychange', onVis);
       if (motionQuery.removeEventListener) motionQuery.removeEventListener('change', onMotion);
       themeObserver.disconnect();

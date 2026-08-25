@@ -4966,6 +4966,22 @@ html[data-v2-palette] body { background: var(--paper); }
    separate, because the pull happens while the container is standing still
    and a single transform cannot be two animations at once.
    ------------------------------------------------------------------------ */
+/*
+   THE ENTRANCE IS AN ANIMATION, AND THE EXIT IS A TRANSITION. That is not an
+   inconsistency, it is the difference between the two moments.
+
+   The entrance has to start on the frame the element is created. A TRANSITION
+   cannot do that: the transform written in an element's first paint is its
+   initial value, not a change to it, so there is nothing to transition from
+   and you need a second frame — which means rAF, which does not run in a
+   hidden tab. This object used to sit off-screen at -102% for the whole of
+   ENTER_MS and only then begin moving, so the errand was handed to the bird
+   at the START of the entrance and the grip was measured 162px above where it
+   was going to stop.
+
+   The exit is a transition because by then the element has been on screen for
+   a second and there is a real from-value to leave.
+*/
 .v2-switch {
   position: fixed;
   top: 0;
@@ -4976,17 +4992,19 @@ html[data-v2-palette] body { background: var(--paper); }
   flex-direction: column;
   align-items: center;
   will-change: transform;
-  transform: translate3d(0, -102%, 0);
-  transition: transform var(--enter, 460ms) cubic-bezier(0.18, 0.92, 0.32, 1.14);
-}
-.v2-switch[data-phase='wait'],
-.v2-switch[data-phase='pull'] {
+  /* the settled position; 'in' animates INTO this, 'out' transitions out of it */
   transform: translate3d(0, 0, 0);
+}
+.v2-switch[data-phase='in'] {
+  animation: v2-switch-drop var(--enter, 460ms) cubic-bezier(0.18, 0.92, 0.32, 1.14) both;
 }
 .v2-switch[data-phase='out'] {
   transform: translate3d(0, -102%, 0);
-  transition-duration: var(--exit, 340ms);
-  transition-timing-function: cubic-bezier(0.5, 0, 0.78, 0.1);
+  transition: transform var(--exit, 340ms) cubic-bezier(0.5, 0, 0.78, 0.1);
+}
+@keyframes v2-switch-drop {
+  from { transform: translate3d(0, -102%, 0); }
+  to   { transform: translate3d(0, 0, 0); }
 }
 
 /* The ceiling rose. Flush to the top edge, so it reads as coming through the
@@ -5004,13 +5022,28 @@ html[data-v2-palette] body { background: var(--paper); }
   background: var(--ink-2);
   transform-origin: top center;
 }
+/*
+   THE GRIP, and why it is a bar rather than a bead.
+
+   It was a 54px bead, and that is the whole reason the bird never pulled the
+   switch once: PERCH_MIN_W in Companion.tsx is 56, so `measureEdge` rejected
+   it, `byEl.get(el)` came back undefined, and `serviceErrand` reported failure
+   on the FIRST FRAME of every single event. The cord then pulled itself, on
+   time, looking exactly like a working animation. Two pixels.
+
+   88px clears that floor with room to spare, and it is also the honest width:
+   the sparrow is SPRITE_WIDTH 20 at PIXEL_SCALE 4, so he is 80 CSS px across.
+   A 54px bead was narrower than the bird standing on it. A bar he fits on
+   reads as a perch, which is what it now is.
+
+   The visible top edge and the box top are the same line, which is what lets
+   the grip carry data-perch with no inset.
+*/
 .v2-switch-grip {
-  width: 54px;
+  width: 88px;
   height: 13px;
   border-radius: 7px;
   background: var(--ink);
-  /* The visible top edge and the box top are the same line, which is what
-     lets the grip carry data-perch with no inset. */
 }
 
 /*

@@ -121,6 +121,20 @@ worst place he can stand by every measure the comfort band uses — ungated, he
 touched the cord and left inside a tenth of a second. Every errand has a
 deadline and every caller has to survive him not coming.
 
+**A thing he is sent to stand on must be a legal perch, and `PERCH_MIN_W` is
+56px.** The light switch shipped with a 54px grip and the bird was never once
+asked to go to it, on any load, for the life of the feature — `measureEdge`
+refused it, the errand failed on the first frame, and the cord pulled itself on
+time. **A fallback designed to be indistinguishable from success needs a way to
+say it was used**, so `serviceErrand` now warns with the reason, and
+`__bird.whyNot(el)` answers the question directly.
+
+**Letting go is a fall, and a fall has to clear what it is leaving.** A landing
+is a crossing test, so a bird released while standing exactly on a perch re-lands
+on it in the first substep; `FALL_CLEARANCE` starts the drop 2px below. Ending an
+errand releases the *perch*, not just the errand, and also abandons a flight
+still heading for it.
+
 **He is drawn on TWO canvases, and the split is the whole point.**
 
 1. A **band in document flow**, roughly 560px tall, translated in DOCUMENT
@@ -297,7 +311,12 @@ a GL context returns `null` from `getContext('2d')`, and reading a GL canvas
 back after compositing returns garbage anyway.
 
 **A dev handle on every canvas.** `__bird`, `__reel`, `__case`, `__inkfield`,
-and `__world.frames(n)` on all eight backdrops. Without one there is no way to
+and `__world.frames(n)` on all eight backdrops. On `__bird`, the perch system
+specifically: `perchOf(el)`, `whyNot(el)`, `errand()`, `seat(p)`, `measure()`.
+Everything that harvests furniture runs behind a rAF, so without these the whole
+perch system was unreachable from here and a `data-perch` element that could not
+be stood on was indistinguishable from one that could — which is exactly how the
+light switch shipped with a grip two pixels under the floor. Without one there is no way to
 drive a single frame in a pane that never fires rAF — which is exactly how the
 Fluid world came to be shipped completely invisible, for days, with nobody able
 to tell that apart from it working.

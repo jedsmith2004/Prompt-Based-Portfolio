@@ -401,12 +401,20 @@ export default function V2Page() {
           ref={switchRef}
           to={event.to}
           onErrand={setErrand}
-          onCommit={commit}
-          onDone={finish}
+          /* Bound to THIS event's key. A device that is torn down mid-sequence
+             must not be able to commit or finish the next one: see the
+             ModeHandle contract in useMode.ts. */
+          onCommit={() => commit(event.key)}
+          onDone={() => finish(event.key)}
         />
       ) : null}
       {event?.device === 'dial' ? (
-        <DayDial key={event.key} to={event.to} onCommit={commit} onDone={finish} />
+        <DayDial
+          key={event.key}
+          to={event.to}
+          onCommit={() => commit(event.key)}
+          onDone={() => finish(event.key)}
+        />
       ) : null}
 
       <Companion

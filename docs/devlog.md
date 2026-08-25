@@ -8,7 +8,182 @@ See also: [spec.md](spec.md) · [plan.md](plan.md) · [ab-log.md](ab-log.md) · 
 
 ---
 
-## 2026-08-26 (latest) — the plate-by-plate pass
+## 2026-08-26 (latest) — two pixels
+
+Jack: *"The bird is not pulling the light switch."*
+
+He never was. Not once, on any load, since the feature shipped.
+
+### The root cause is two pixels
+
+`PERCH_MIN_W` is 56. The grip was `width: 54px`.
+
+`measureEdge` returns false, the grip never enters `byEl`, `serviceErrand`
+looks it up, gets `undefined`, and calls `onErrandFail` **on the first frame of
+every single event**. The switch then pulls itself, on time, with the cord and
+the recoil and the light changing at the right moment. It looks exactly like a
+working animation, because the fallback was deliberately built to look exactly
+like a working animation. That is the whole trap:
+
+> *"A light switch that only works when a bird is available is a light switch
+> that leaves the page the wrong colour."*
+
+The fallback was right. What was missing is that **nothing anywhere said it had
+been used.** Nothing threw, nothing logged, and the failure path and the success
+path are visually identical by design.
+
+Measured live rather than reasoned about. The switch's own timeline in the pane:
+phase `wait` at t+500, phase `pull` at t+620. A hundred and twenty milliseconds,
+not the 2400 of the patience timer. It had already given up.
+
+### Why it stayed invisible: the whole perch system was undrivable
+
+`measure()` runs on init, on resize, on a `ResizeObserver`, on `transitionend` —
+and `remeasure` wraps all of those in a `requestAnimationFrame`. The frame loop
+is a rAF. **This pane never fires one.** So there was no way, from here, to ask
+the one question that mattered: *did this `data-perch` element become a perch?*
+
+There is now. `__bird.perchOf(el)`, `__bird.whyNot(el)`, `__bird.errand()` and
+`__bird.seat(p)`. The first thing `whyNot` ever printed was:
+
+    54px wide, and PERCH_MIN_W is 56
+
+A sweep of all 85 marked elements on the page then came back with 45 harvested
+and 40 refused, every one of the 40 for `opacity 0, still arriving` — which is
+the reveal animation doing its job in a pane where scroll is a no-op. **No other
+perch on the site fails for a geometric reason.** The grip was the only one, and
+it was the one the whole feature depended on.
+
+`serviceErrand` also warns now when it refuses a target, with the reason. A
+caller whose fallback is indistinguishable from success has to be told.
+
+### The grip is a bar now, and that is the honest width
+
+88px, not 56. The sparrow is `SPRITE_WIDTH` 20 at `PIXEL_SCALE` 4, so he is
+**80 CSS px across** — a 54px bead was narrower than the bird standing on it. A
+bar he actually fits on reads as a perch, which is what it is.
+
+### Three more things wrong underneath it, each of which would have surfaced next
+
+**The entrance had not started when the errand was handed over.** The object
+mounted at `translate3d(0,-102%,0)` and the transition was armed by the phase
+flip at ENTER_MS — so it sat motionless off-screen for 460ms and only *then*
+began to move, at the exact moment the bird was told to go and stand on it.
+Measured at that instant, the grip's top is **-16px**: sixteen pixels above the
+top of the window, 162 above where it comes to rest. The file's own header
+promised the opposite.
+
+The fix is not a longer timer. **The entrance is a CSS animation now and the
+exit is still a transition,** and that is not an inconsistency: a transition
+needs a second frame to have a from-value, and a second frame needs rAF, which
+a hidden tab does not have. An animation starts on the frame the element is
+painted. The exit has been on screen for a second and has a real from-value.
+
+**Ending an errand did not let go of the perch.** `pull()` releases him at the
+top of the stroke on purpose — *"he is already falling by the time the cord
+recoils past him"* — but releasing the errand only cleared the errand. He went
+on standing at y=146 after the switch had retracted, in the air, at the top of
+the screen, until some other drive happened to move him.
+
+**And letting go was not enough either.** A landing is a crossing test: the
+perch's y has to lie between where he was last substep and where he is now. He
+is standing at *exactly* that y, so the first substep of the fall brackets it
+and lands him **straight back on the thing he was just let go of.** Observed:
+the cord released him and he did not move a pixel. Hence `FALL_CLEARANCE`.
+
+### Then a five-agent trace of the chain, and seven more
+
+Run link by link — timing, harvest, flight, wiring, visibility — each finding
+handed to a skeptic told to refute it. Thirteen claims, six refuted (four of
+them because the file had been fixed underneath the reader mid-run, which is
+its own small lesson about auditing a moving target). Seven survived:
+
+**`animationend` was not being listened for.** The perch contract promises that
+furniture still arriving is refused and re-measured *"once it has arrived"*, and
+the only thing delivering the second half was `transitionend`. Anything arriving
+under a keyframe animation was never re-read — and I had just made the switch's
+entrance a keyframe animation. A promise with no implementation for half its
+cases, and I had quietly widened the half.
+
+**A superseded switch's timers outlived it and tore down the NEXT event.** The
+three timeouts in `pull()` and the one in `arrive()` were untracked, so a switch
+killed mid-sequence went on to call `onCommit` and `onDone` from the grave —
+onto whatever event was live by then, and `onDone` unmounts it. The first light
+change would work and the second would commit by itself with the rose half out
+of the ceiling and the bird never asked. Every timer is owned now, and
+`commit`/`finish` take the key of the event that mounted the device and refuse
+anything else.
+
+**The bird was painted on the wrong surface for a pinned perch.** The band lives
+in document flow so the compositor scrolls it, which is exactly right for page
+furniture and exactly wrong for the light cord, which is `position: fixed`. A
+bird carried with the document detaches from it by a frame of scroll every
+frame — 25px at a modest 1500px/s, a quarter of his own height, more on a fling.
+**And the switch event is triggered BY scrolling into the plate**, so the reader
+is nearly always still moving when he arrives: the one frame the sequence exists
+to sell is the frame most likely to show him hovering beside the cord. He is
+drawn on the fixed canvas now whenever he is on, or heading to, an anchored
+perch. The nav gets the same fix for free.
+
+**The climb was a coin flip.** `planTo` only reaches about 404px in one leg;
+with a wall kick the 28/72 split reaches about 560. The cord hangs 146px from
+the top of the screen, so from most of the plate the kick is the difference
+between arriving and not — and it was gated on `Math.random() < 0.7`. The one
+beat that explains why the room changed colour worked two readings in three.
+An errand is `urgency >= 1` and no longer rolls for it.
+
+**He did not follow the light he had just changed.** The theme observer watched
+`data-v2-theme` and `class`. `usePalette` writes the plate's tokens as inline
+custom properties on `<html>` — so a light/dark change is a `style` mutation and
+nothing else. He pulled the cord, the room went dark, and he went on drawing his
+own speech bubble and chat window in the palette he booted with. Read twice now,
+because the tokens are `@property`-registered and interpolate over 940ms, so the
+values present at the mutation are still the old ones.
+
+### Verified, here, by driving it
+
+`next build` passes: 13 routes, all static, `/v2` at 80.6 kB / 228 kB first
+load. `tsc` clean, ESLint clean.
+
+The full choreography, twice in a row, with engine time slaved to wall-clock so
+the pane's timer throttling could not starve it:
+
+    1819  switch mounts, phase 'in'
+    2832  errand handed over; he launches
+    2836  wall kick
+    3822  LANDS ON v2-switch-grip at y=146
+    5821  phase 'pull', errand released, mode 'fall' at y=149
+    5825  lands back on the rule below
+    6821  phase 'out', mode = dark
+
+and then the same again, key 4, ending in `light`. Two consecutive events, no
+console errors, the second identical to the first — which is the timer-leak fix
+doing its job.
+
+The release paths were checked in isolation too, since the end-to-end run cannot
+be trusted to reach them: standing on furniture that leaves the page gives
+`mode=fall, perch=null`; flying to furniture that leaves gives `mode=fall,
+planLen=0` and he does not land on the ghost; a 54px `data-perch` is refused
+with the reason, an 88px one is taken.
+
+**Still not verifiable here, and it is the same half as before:** whether it
+*reads*. Whether a sparrow landing on a bar and dropping off it looks like a bird
+pulling a light cord, whether the beat between landing and pull is the right
+length, and whether the fall afterwards is a flourish or a distraction. The pane
+does not composite and scroll is a no-op. What I can now say, which I could not
+before, is that he goes, he lands on it, and he lets go.
+
+### The lesson, and it is not a new one
+
+Three instruments in three days became four. The others reported failures that
+did not exist. This one reported nothing at all, which is worse: a fallback
+designed to be indistinguishable from success, in a subsystem with no way to ask
+whether it had been used. **The bug was two pixels. The reason it survived was
+that nothing could see it.**
+
+---
+
+## 2026-08-26 — the plate-by-plate pass
 
 Jack read the whole site and came back with a global note and eight numbered
 ones. The global note is the important one:
