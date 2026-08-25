@@ -30,6 +30,7 @@
    ========================================================================== */
 
 import { useEffect, useRef } from 'react';
+import { withAlpha } from '@/lib/v2/colour';
 
 export interface ClimbingWallProps {
   /** Plate height. A number is taken as px. */
@@ -45,8 +46,24 @@ export interface ClimbingWallProps {
 /* constants                                                                   */
 /* -------------------------------------------------------------------------- */
 
-const CELL_W = 8;
-const CELL_H = 16;
+/*
+ * Jack, 2026-08-26: "The climbing animation is very hard to see, make it
+ * bigger/bolder/easier to see."
+ *
+ * The cell was 8x16. On a 420px plate that is twenty-six rows, and the figure
+ * is four rows of them: a climber about sixty pixels tall, built from glyphs
+ * ten pixels wide, on a wall of texture at eleven percent alpha. Every part of
+ * that was working against being seen.
+ *
+ * 11x21 is twenty rows on a taller plate, so the figure is a fifth of the
+ * height rather than a seventh, and each glyph is half as big again. The tone
+ * table below does the other half of the job: the wall went quieter and
+ * everything that is not the wall went louder, because "hard to see" is a
+ * statement about the gap between the subject and its background, not about
+ * the subject alone.
+ */
+const CELL_W = 11;
+const CELL_H = 21;
 
 const DEFAULT_RAMP = ' .:-=+*x#%@';
 
@@ -67,19 +84,29 @@ const T_CLIMBER = 9;
 const T_DUST_NEAR = 10;
 const T_DUST_FAR = 11;
 
+/*
+ * The wall recedes, everything on it comes forward. See the note on CELL_W.
+ *
+ * These are also the values that were being thrown away entirely: every
+ * `--verm` and `--blue` row below was resolving to near-black, because the
+ * local colour parser could only read `#RRGGBB` and the palette tokens are
+ * registered with `@property`, so the browser hands back `rgb(181, 64, 47)`.
+ * The route, the live hold and the chalk were all drawn in ink. Fixed in
+ * lib/v2/colour.ts, which is now the only parser on the site.
+ */
 const TONES: ReadonlyArray<{ token: string; fallback: string; alpha: number }> = [
-  { token: '--ink', fallback: '#17140F', alpha: 0.11 },
-  { token: '--ink', fallback: '#17140F', alpha: 0.19 },
-  { token: '--ink', fallback: '#17140F', alpha: 0.3 },
-  { token: '--ink', fallback: '#17140F', alpha: 0.38 },
-  { token: '--ink', fallback: '#17140F', alpha: 0.58 },
-  { token: '--verm', fallback: '#B5402F', alpha: 0.18 },
-  { token: '--verm', fallback: '#B5402F', alpha: 0.42 },
+  { token: '--ink', fallback: '#17140F', alpha: 0.1 },
+  { token: '--ink', fallback: '#17140F', alpha: 0.17 },
+  { token: '--ink', fallback: '#17140F', alpha: 0.26 },
+  { token: '--ink', fallback: '#17140F', alpha: 0.52 },
+  { token: '--ink', fallback: '#17140F', alpha: 0.78 },
+  { token: '--verm', fallback: '#B5402F', alpha: 0.26 },
+  { token: '--verm', fallback: '#B5402F', alpha: 0.6 },
   { token: '--verm', fallback: '#B5402F', alpha: 1 },
-  { token: '--blue', fallback: '#2A4C7D', alpha: 0.55 },
-  { token: '--ink', fallback: '#17140F', alpha: 0.94 },
-  { token: '--ink', fallback: '#17140F', alpha: 0.34 },
-  { token: '--ink', fallback: '#17140F', alpha: 0.15 }
+  { token: '--blue', fallback: '#2A4C7D', alpha: 0.72 },
+  { token: '--ink', fallback: '#17140F', alpha: 1 },
+  { token: '--ink', fallback: '#17140F', alpha: 0.42 },
+  { token: '--ink', fallback: '#17140F', alpha: 0.2 }
 ];
 
 /** Rows per second squared. Deliberately under real gravity: a fall that takes
@@ -140,14 +167,14 @@ function easeInOut(u: number): number {
   return u < 0.5 ? 2 * u * u : 1 - 2 * (1 - u) * (1 - u);
 }
 
-/** `#RRGGBB` plus alpha, tolerant of the whitespace getPropertyValue leaves. */
-function rgba(hex: string, alpha: number): string {
-  const h = hex.trim().replace('#', '');
-  const full =
-    h.length === 3 ? h[0] + h[0] + h[1] + h[1] + h[2] + h[2] : h.slice(0, 6);
-  const n = parseInt(full, 16);
-  if (!Number.isFinite(n)) return `rgba(23,20,15,${alpha})`;
-  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
+/*
+ * Delegates. It used to parse `#RRGGBB` by hand and fall back to near-black,
+ * which is how this plate lost its accent: the palette tokens are registered
+ * with `@property`, so getComputedStyle hands back `rgb(181, 64, 47)` and the
+ * hex path silently produced ink. See lib/v2/colour.ts.
+ */
+function rgba(css: string, alpha: number): string {
+  return withAlpha(css, alpha);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -325,7 +352,10 @@ export default function ClimbingWall({
       /* A mono advance is about 0.6em, so this sizes the glyph to the cell
          width and only then clamps to the cell height. */
       const fontPx = Math.max(6, Math.min(ch * 0.84, cw / 0.6));
-      x.font = `${fontPx}px ${monoStack}`;
+      /* 600 rather than the default 400. A mono at this size in a regular
+         weight has strokes about a pixel and a bit wide, which is the
+         difference between a climber and a suggestion of one. */
+      x.font = `600 ${fontPx}px ${monoStack}`;
       x.textAlign = 'center';
       x.textBaseline = 'middle';
       for (let t = 0; t < TONES.length; t++) {

@@ -121,7 +121,10 @@ function sectionExtra(id: string) {
         </>
       );
     case 'practice':
-      return <ClimbingWall height={420} seed={7} />;
+      /* Taller as well as bigger-celled: "make it bigger/bolder/easier to
+         see", and a wall is the one figure on the page that gains from height
+         rather than width. See CELL_W in ClimbingWall.tsx. */
+      return <ClimbingWall height={520} seed={7} />;
     case 'cv':
       /*
        * THE AWARDS MOVED HERE, and this is my call rather than Jack's.

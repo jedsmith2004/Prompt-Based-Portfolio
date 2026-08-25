@@ -46,6 +46,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import context from '@/public/context.json';
+import { withAlpha } from '@/lib/v2/colour';
+import COUNTRIES from '@/lib/v2/route-countries.json';
 
 /* -------------------------------------------------------------------- types */
 
@@ -137,14 +139,14 @@ function noise1(x: number): number {
   return hash1(i) * (1 - u) + hash1(i + 1) * u;
 }
 
-/** `#RRGGBB` plus alpha, tolerant of the whitespace getPropertyValue leaves. */
-function rgba(hex: string, alpha: number): string {
-  const h = hex.trim().replace('#', '');
-  const full =
-    h.length === 3 ? h[0] + h[0] + h[1] + h[1] + h[2] + h[2] : h.slice(0, 6);
-  const n = parseInt(full, 16);
-  if (!Number.isFinite(n)) return `rgba(23,20,15,${alpha})`;
-  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
+/*
+ * Delegates. It used to parse `#RRGGBB` by hand and fall back to near-black,
+ * which is how this plate lost its accent: the palette tokens are registered
+ * with `@property`, so getComputedStyle hands back `rgb(181, 64, 47)` and the
+ * hex path silently produced ink. See lib/v2/colour.ts.
+ */
+function rgba(css: string, alpha: number): string {
+  return withAlpha(css, alpha);
 }
 
 function token(style: CSSStyleDeclaration, name: string, fallback: string) {
@@ -695,6 +697,10 @@ export default function RouteMap({
     const C_HOT_SOFT = rgba(vermHex, 0.34);
     const C_HOT_TEXT = rgba(vermTextHex, 1);
     const C_PAPER = rgba(paperHex, 0.92);
+    /* The coastline. Quiet on purpose: it is the ground, not the subject, and
+       the whole reason the old component deleted its map was that a map drawn
+       at full strength buries the one line that matters. */
+    const C_LAND = rgba(ink3Hex, 0.44);
 
     /* ---- geometry -------------------------------------------------------- */
     const pad = padFor(box.w);
@@ -985,6 +991,50 @@ export default function RouteMap({
       const head = headIndex(headArc);
       const hot = hoverRef.current !== null ? hoverRef.current : activeRef.current;
 
+      /*
+       * ---- the land, under everything -----------------------------------
+       *
+       * Jack: "The map needs the country lines." He is right that a route
+       * floating on an empty sheet is not a map, and the plate had been
+       * arguing the opposite: "no country polygons, no atlas, no d3."
+       *
+       * The compromise is that the geography is REAL but it does not ship a
+       * map library. scripts/build-route-countries.js pulls the same Natural
+       * Earth data the old component used, simplifies it at build time, and
+       * leaves 34 rings of plain [lon, lat] that this projects with the
+       * Mercator already on the page.
+       *
+       * Drawn as a coastline and nothing else: one hairline weight, no fill,
+       * no labels, no borders picked out. It is the ground the road is on and
+       * it must never compete with the road, which is the reason the old
+       * component threw the map away rather than quieting it down.
+       *
+       * Clipped to the plate rather than to the data window, so a ring that
+       * runs off the sheet leaves at the edge instead of being cut square by
+       * the extraction and reading as a border that is not there.
+       */
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(pad.l - 10, pad.t - 8, box.w - pad.r + 10 - (pad.l - 10), box.h - pad.b + 8 - (pad.t - 8));
+      ctx.clip();
+      ctx.strokeStyle = C_LAND;
+      ctx.lineWidth = 1;
+      for (let r = 0; r < COUNTRIES.rings.length; r++) {
+        const ring = COUNTRIES.rings[r] as number[][];
+        ctx.beginPath();
+        for (let i = 0; i < ring.length; i++) {
+          /* DEGREES. `fit.x` applies DEG itself — passing radians in squashed
+             every longitude toward zero and drew the whole of Europe as one
+             vertical line down the middle of the plate. */
+          const px = fit.x(ring[i][0]);
+          const py = fit.y(ring[i][1]);
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+      }
+      ctx.restore();
+
       /* ---- graticule: the frame, drawn first and quietly ----------------- */
       ctx.strokeStyle = ruleCol;
       ctx.lineWidth = 1;
@@ -1249,6 +1299,29 @@ export default function RouteMap({
     window.addEventListener('scroll', onScroll, { passive: true });
     window.addEventListener('resize', onScroll, { passive: true });
     document.addEventListener('visibilitychange', sync);
+
+    /*
+     * Dev handle, for the same reason every world has one. The pane has no
+     * viewport, so this plate sits at 2px wide and neither the reveal nor the
+     * ResizeObserver ever fires: there is no way to find out whether the
+     * coastline lands on the route without one. `at` re-measures first, which
+     * is the whole point.
+     */
+    if (process.env.NODE_ENV !== 'production') {
+      (canvas as unknown as Record<string, unknown>).__route = {
+        /* Force a plate size. The ResizeObserver that normally does this
+           never fires in a pane with no viewport, so the effect re-runs and
+           installs a fresh handle: call size() first, then at(). */
+        size: (w: number, h: number) => setBox({ w, h }),
+        at: (r = 1) => {
+          reveal = r;
+          dirtyRef.current = true;
+          draw();
+        },
+        stops: () => stops.length,
+        rings: () => COUNTRIES.rings.length
+      };
+    }
 
     return () => {
       disposed = true;

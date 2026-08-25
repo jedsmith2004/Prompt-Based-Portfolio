@@ -30,6 +30,7 @@
    ========================================================================== */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { withAlpha } from '@/lib/v2/colour';
 
 /* -------------------------------------------------------------------------- */
 /* model                                                                       */
@@ -196,13 +197,14 @@ function clamp01(v: number): number {
   return v < 0 ? 0 : v > 1 ? 1 : v;
 }
 
-/** `#RRGGBB` plus alpha, tolerant of the whitespace getPropertyValue leaves. */
-function rgba(hex: string, alpha: number): string {
-  const h = hex.trim().replace('#', '');
-  const full = h.length === 3 ? h[0] + h[0] + h[1] + h[1] + h[2] + h[2] : h.slice(0, 6);
-  const n = parseInt(full, 16);
-  if (!Number.isFinite(n)) return `rgba(23,20,15,${alpha})`;
-  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
+/*
+ * Delegates. It used to parse `#RRGGBB` by hand and fall back to near-black,
+ * which is how this plate lost its accent: the palette tokens are registered
+ * with `@property`, so getComputedStyle hands back `rgb(181, 64, 47)` and the
+ * hex path silently produced ink. See lib/v2/colour.ts.
+ */
+function rgba(css: string, alpha: number): string {
+  return withAlpha(css, alpha);
 }
 
 function token(style: CSSStyleDeclaration, name: string, fallback: string): string {
