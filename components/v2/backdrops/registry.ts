@@ -2,7 +2,7 @@ import type { Backdrop, BackdropName, BackdropPalette } from './types';
 
 import InkWash from './InkWash';
 import Geometry from './Geometry';
-import Fluid from './Fluid';
+import Braid from './Braid';
 import Watercolour from './Watercolour';
 import Techno from './Techno';
 import Scrapbook from './Scrapbook';
@@ -41,10 +41,10 @@ export const BACKDROPS: readonly BackdropEntry[] = [
     Component: Geometry
   },
   {
-    name: 'fluid',
-    label: 'Fluid',
-    note: 'Metaballs on a real implicit surface, so blobs stretch and snap together.',
-    Component: Fluid
+    name: 'braid',
+    label: 'Braid',
+    note: 'Strands that cross over and under, woven by a painter’s sort one column wide.',
+    Component: Braid
   },
   {
     name: 'watercolour',

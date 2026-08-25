@@ -42,8 +42,15 @@ import { getBackdrop } from './backdrops/registry';
 import type { BackdropName } from './backdrops/types';
 import type { SectionPalette } from '@/lib/v2/palettes';
 
-/** How long the outgoing world stays mounted. Matches the CSS transition. */
-const FADE_MS = 620;
+/**
+ * How long the outgoing world stays mounted. Matches `.v2-world.is-leaving`.
+ *
+ * The handover is sequential now rather than a cross-dissolve: out in 280ms,
+ * a beat of clear paper, then the new one in. See the note in v2.css. Keep
+ * this a little above the CSS duration so the canvas is never pulled while it
+ * is still visible.
+ */
+const FADE_MS = 340;
 
 /** Progress steps per section. See the note above on why this is quantised. */
 const PROGRESS_STEPS = 25;
@@ -227,15 +234,46 @@ export default function SectionBackdrops({
     let raf = 0;
     let running = true;
     let last = -1;
+    /*
+     * THE SECTION'S GEOMETRY IS MEASURED ON CHANGE, NOT PER FRAME.
+     *
+     * This loop used to call getElementById and getBoundingClientRect on every
+     * single frame. `getBoundingClientRect` is layout-dependent: reading it
+     * forces the browser to flush pending style and layout before it can
+     * answer. Together with the same mistake in useSpine that was two forced
+     * layouts of the whole document per frame, permanently — and the page
+     * where it hurt most is this one, because the palette transition dirties
+     * style across the entire tree for 940ms after every plate change. The
+     * cost landed precisely while the reader was scrolling between sections.
+     *
+     * A section's document-space top and height only change when something
+     * resizes or reveals. Both are observable, so they are observed, and the
+     * per-frame work is now two reads of `scrollY` and some arithmetic.
+     */
+    let docTop = 0;
+    let docH = 1;
+    const el = document.getElementById(liveId);
+    const remeasure = () => {
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      docTop = r.top + window.scrollY;
+      docH = r.height;
+    };
+    remeasure();
+
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(remeasure) : null;
+    if (el) ro?.observe(el);
+    window.addEventListener('resize', remeasure);
+
     const tick = () => {
       if (!running) return;
-      const el = document.getElementById(liveId);
       if (el) {
-        const r = el.getBoundingClientRect();
         /* 0 as the section's top reaches the bottom of the viewport, 1 as its
            bottom leaves the top: the whole time any of it is on screen. */
-        const span = r.height + window.innerHeight;
-        const p = span > 0 ? (window.innerHeight - r.top) / span : 0;
+        const vh = window.innerHeight;
+        const span = docH + vh;
+        const top = docTop - window.scrollY;
+        const p = span > 0 ? (vh - top) / span : 0;
         const q =
           Math.round(Math.min(1, Math.max(0, p)) * PROGRESS_STEPS) / PROGRESS_STEPS;
         if (q !== last) {
@@ -261,6 +299,8 @@ export default function SectionBackdrops({
       running = false;
       cancelAnimationFrame(raf);
       document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('resize', remeasure);
+      ro?.disconnect();
     };
   }, [liveId]);
 

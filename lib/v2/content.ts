@@ -200,7 +200,13 @@ export const SECTIONS: Section[] = [
     shape: 'climbingWall',
     stats: [
       { value: 'Grade 8', label: 'guitar', tone: 'blue' },
-      { value: '18 months', label: 'of Arabic, still going' }
+      /* Jack, 2026-08-26: "it's 677 days of arabic and counting." Hardcoded
+         and dated, for the same reason the career axis is: a figure derived
+         from a clock read during render differs between the server and the
+         client across a midnight boundary, and this one is a streak rather
+         than an interval, so it is not a date subtraction anyway. Correct as
+         of 2026-08-26. */
+      { value: '677 days', label: 'of Arabic, and counting' }
     ]
   },
   {
@@ -373,12 +379,32 @@ export const SECTION_WORLDS: readonly {
   backdrop: BackdropName;
   intensity: number;
 }[] = [
-  { id: 'from-scratch', backdrop: 'geometry', intensity: 0.72 },
-  { id: 'models', backdrop: 'techno', intensity: 0.6 },
-  { id: 'recensorium', backdrop: 'watercolour', intensity: 0.66 },
-  { id: 'delivery', backdrop: 'fluid', intensity: 0.58 },
-  { id: 'road', backdrop: 'scrapbook', intensity: 0.8 },
-  { id: 'practice', backdrop: 'topography', intensity: 0.85 },
-  { id: 'cv', backdrop: 'topography', intensity: 0.55 },
-  { id: 'contact', backdrop: 'celestial', intensity: 0.78 }
+  /*
+   * EIGHT PLATES, EIGHT WORLDS, NO REPEATS.
+   *
+   * Jack, 2026-08-26: "when I said each page should have a different style I
+   * didn't mean it's the same with a different backdrop, I meant a fully
+   * different style. The backdrops should be prominent and the centrepiece,
+   * with everything working around them."
+   *
+   * Two things were wrong. `cv` and `practice` were both running Topography,
+   * so two of the eight plates were literally the same page with the same
+   * world — the exact thing he was describing. `cv` takes the ink wash, which
+   * was the only world with no home.
+   *
+   * And they were quiet. Every intensity here has gone up, most of them a
+   * lot, because the field that used to be competing with them underneath is
+   * gone from these seven plates: there is room now for the world to be the
+   * subject rather than a texture behind the subject.
+   *
+   * There is no ninth entry. `top` deliberately has no world at all.
+   */
+  { id: 'from-scratch', backdrop: 'geometry', intensity: 0.95 },
+  { id: 'models', backdrop: 'techno', intensity: 0.86 },
+  { id: 'recensorium', backdrop: 'watercolour', intensity: 0.9 },
+  { id: 'delivery', backdrop: 'braid', intensity: 0.88 },
+  { id: 'road', backdrop: 'scrapbook', intensity: 0.92 },
+  { id: 'practice', backdrop: 'topography', intensity: 0.95 },
+  { id: 'cv', backdrop: 'inkwash', intensity: 0.82 },
+  { id: 'contact', backdrop: 'celestial', intensity: 0.92 }
 ];

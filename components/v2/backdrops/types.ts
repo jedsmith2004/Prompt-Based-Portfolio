@@ -57,7 +57,7 @@ export type Backdrop = (props: BackdropProps) => JSX.Element | null;
 export type BackdropName =
   | 'inkwash'
   | 'geometry'
-  | 'fluid'
+  | 'braid'
   | 'watercolour'
   | 'techno'
   | 'scrapbook'

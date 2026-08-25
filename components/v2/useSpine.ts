@@ -89,6 +89,41 @@ export function useSpine(ids: string[]): SpineHandle {
     let publishAcc = 0;
     lastYRef.current = window.scrollY;
 
+    /*
+     * THE SCROLL RANGE IS CACHED, and this is a real performance fix rather
+     * than tidiness.
+     *
+     * `scrollHeight` is a layout-dependent property: reading it forces the
+     * browser to flush pending style and layout work before it can answer.
+     * This loop runs every frame, so it forced a synchronous layout of the
+     * whole document sixty times a second, for the entire life of the page.
+     *
+     * Normally that is cheap, because nothing has invalidated layout since the
+     * last flush. On THIS page it is not, because the palette transition
+     * invalidates style across the whole tree for 940ms after every plate
+     * change — so exactly while the reader is scrolling between sections, and
+     * exactly when they would notice, every frame paid for a full recalc.
+     * That is the "a bit laggy" Jack reported.
+     *
+     * The document only changes height when something resizes or a section
+     * reveals, and both of those are observable. So observe them.
+     */
+    let maxScroll = 1;
+    const remeasure = () => {
+      maxScroll = Math.max(
+        1,
+        document.documentElement.scrollHeight - window.innerHeight
+      );
+    };
+    remeasure();
+
+    /* Catches sections growing as they reveal, images landing, fonts swapping
+       — everything a resize listener alone would miss. */
+    const ro =
+      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(remeasure) : null;
+    ro?.observe(document.documentElement);
+    window.addEventListener('resize', remeasure);
+
     const tick = () => {
       if (!running) return;
       const y = window.scrollY;
@@ -99,11 +134,7 @@ export function useSpine(ids: string[]): SpineHandle {
       velocityRef.current += (raw - velocityRef.current) * 0.24;
       if (Math.abs(velocityRef.current) < 0.02) velocityRef.current = 0;
 
-      const max = Math.max(
-        1,
-        document.documentElement.scrollHeight - window.innerHeight
-      );
-      progressRef.current = Math.min(1, Math.max(0, y / max));
+      progressRef.current = Math.min(1, Math.max(0, y / maxScroll));
 
       /* publish to React sparingly: 6 times a second is plenty for UI */
       publishAcc++;
@@ -137,6 +168,8 @@ export function useSpine(ids: string[]): SpineHandle {
       running = false;
       cancelAnimationFrame(raf);
       document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('resize', remeasure);
+      ro?.disconnect();
     };
   }, []);
 

@@ -4411,15 +4411,38 @@ html[data-v2-theme='dark']  body { background: #15130E; }
   pointer-events: none;
   contain: strict;
 }
+/*
+   THE HANDOVER IS SEQUENTIAL, NOT A CROSS-DISSOLVE.
+
+   Jack: "The backdrops need clean transitions between them." It was a 620ms
+   simultaneous crossfade, which means that for a third of a second the reader
+   was looking at two dense generative worlds averaged together. Neither one
+   was legible and the mixture was never a thing anyone designed.
+
+   So the outgoing world leaves first and quickly, there is a beat of clear
+   paper, and then the new one arrives. You see one world, then the page, then
+   the next world. That beat is what makes the change read as a change.
+
+   It is also half the cost: the old world is unmounted at FADE_MS, which is
+   now 340 rather than 620, so the window where two full-viewport canvases are
+   both running their loops is cut in half.
+*/
 .v2-world {
   position: absolute;
   inset: 0;
-  opacity: 1;
-  transition: opacity 620ms cubic-bezier(0.4, 0, 0.2, 1);
   will-change: opacity;
+  animation: v2-world-in 460ms 210ms cubic-bezier(0.33, 0, 0.2, 1) both;
+}
+@keyframes v2-world-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 .v2-world.is-leaving {
+  /* Cancels the entrance so a world retired mid-arrival goes out from
+     wherever it had got to, rather than snapping to full and then fading. */
+  animation: none;
   opacity: 0;
+  transition: opacity 280ms cubic-bezier(0.4, 0, 1, 1);
 }
 .v2-world canvas {
   display: block;
@@ -4431,7 +4454,7 @@ html[data-v2-theme='dark']  body { background: #15130E; }
   /* No crossfade: the swap is instant, and SectionBackdrops drops the outgoing
      world on the same frame rather than waiting out a transition that is not
      going to run. */
-  .v2-world { transition: none; }
+  .v2-world { transition: none; animation: none; opacity: 1; }
 }
 
 /* ==========================================================================

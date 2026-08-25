@@ -190,14 +190,22 @@ const ROLES: readonly Role[] = [
       'The flight ground control system for the team’s aircraft, written in Node and Python. Telemetry came off the airframe live, and the dashboard recorded it and drew it as it arrived.',
   },
   {
+    /*
+     * CORRECTED 2026-08-26, on Jack's word: "UCD only lasted for 2025."
+     *
+     * It was drawn open, running to the right-hand edge of the axis, because
+     * context.json still records the period as running to present. It does
+     * not. A studio that closed drawn as a studio that is still taking clients
+     * is not a rounding error, it is a false claim about what he is doing now,
+     * and it was the "career line is slightly off" he flagged and I could not
+     * place. One closed year, no open terminus, no caveat.
+     */
     id: 'ucd',
     index: '02',
     short: 'UCD, his own studio',
     from: 2025,
-    to: LAST_YEAR,
-    open: true,
-    period: '2025 — present',
-    caveat: 'No end recorded',
+    to: 2025,
+    period: '2025',
     role: 'Full Stack Developer',
     org: 'UCD, his own web studio',
     note:
@@ -211,11 +219,38 @@ const ROLES: readonly Role[] = [
     to: 2026,
     partial: true,
     period: '2026',
-    caveat: 'Short term, months not recorded',
+    /* "The AI startup was only in the first part of 2026." The record still
+       has no months, so the bar stays hatched: what is known is that it did
+       not fill the year, and where inside the year is his word, not a date. */
+    caveat: 'Early 2026, months not recorded',
     role: 'Software Engineer, short term',
     org: 'Early-stage AI startup, London',
     note:
       'An internal API laid over systems that did not talk to each other. He rewrote several Cloudflare Workers including the GitHub syncing, then delivered a dashboard, a CLI and an MCP server on top of it.',
+  },
+  {
+    /*
+     * "We also have to put Recensorium on in 2026." It is the flagship and it
+     * was the one thing missing from the plate that argues what he is doing.
+     * Open, because it is running: he founded the company and it launched.
+     *
+     * Nothing here counts users, traffic or revenue, and nothing here may.
+     * The company is launched and pre-launch commercially, so this describes
+     * what is built and how the mechanism works, which is the honest and by
+     * some distance the more interesting half anyway.
+     */
+    id: 'recensorium',
+    index: '04',
+    short: 'Recensorium',
+    from: 2026,
+    to: LAST_YEAR,
+    open: true,
+    period: '2026 — present',
+    caveat: 'No end recorded',
+    role: 'Founder and Engineer',
+    org: 'Recensorium Ltd',
+    note:
+      'Peer review for AI-generated research. Agents publish papers over a REST API or an MCP server and are assigned other agents’ work to review, by a weighted bandit that makes it impossible for an agent to pick what it reviews. Five apps in one TypeScript monorepo on Postgres, Fly.io and Cloudflare Workers, built solo.',
   },
 ];
 
@@ -232,6 +267,16 @@ const DEGREE: Band & { label: string; grad: number } = {
   /** The year the degree concluded. A year, and marked as a year. */
   grad: 2026,
 };
+
+/*
+   The lede counts the roles in words, and counts them from the list rather
+   than stating a number. It said "Three roles" while the array held three,
+   and adding Recensorium would have made the first sentence on the plate
+   false. A figure written next to the data it describes should be read from
+   it.
+*/
+const NUMBER_WORDS = ['No', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven'];
+const ROLE_COUNT_WORD = NUMBER_WORDS[ROLES.length] ?? String(ROLES.length);
 
 /** Geometry for a band, in percentages across the field. */
 function geometry(b: Band): { x: number; w: number } {
@@ -354,11 +399,11 @@ export default function CareerLine({ className }: CareerLineProps) {
           The roles ran inside the degree
         </h2>
         <p className="v2-lede">
-          Three roles and a degree on one time axis, a column to the year. They
-          do not queue up behind each other: the studio was taking real clients
-          while the dissertation was still open, and by {peakYear} there were{' '}
-          {peak} things running at once. The plate is drawn at the resolution
-          the record actually has, which is the year.
+          {ROLE_COUNT_WORD} roles and a degree on one time axis, a column to the
+          year. They do not queue up behind each other: the studio was taking
+          real clients while the dissertation was still open, and by {peakYear}{' '}
+          there were {peak} things running at once. The plate is drawn at the
+          resolution the record actually has, which is the year.
         </p>
       </header>
 

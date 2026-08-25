@@ -98,17 +98,33 @@ export interface PolaroidsProps {
    about to be cropped so the subject stays in shot. No other code changes.
    --------------------------------------------------------------------------- */
 export const DEFAULT_PHOTOS: Photo[] = [
+  /*
+   * CHOSEN BY JACK, 2026-08-26: "3, 7, 18, 21, 24, 25 should be the photos in
+   * the gallery, they mostly have faces in."
+   *
+   * That last clause is the whole reason the selection matters here rather
+   * than being a matter of taste. The snap isolates its SUBJECT: the subject
+   * stays in colour and everything around it greys and dithers. On a frame
+   * with nobody in it there is nothing to isolate, so the effect has no
+   * subject, does not read as a photograph being taken, and looks broken.
+   * Days 1, 9 and 17 were a terminal, an empty ridgeline and an empty street.
+   *
+   * Every `subject` below was measured on the source image, normalised 0..1
+   * from the top-left, on the face or faces. Every alt line describes the
+   * frame as it actually is. All six carry a burnt-in day caption from the
+   * original clips, which is left alone: it is what the record looks like.
+   */
   {
-    src: '/thumbnails/split-day1.jpg',
-    alt: 'Walking through an airport terminal under the departure boards, a loaded trekking pack on his back.',
-    place: 'Split',
+    src: '/thumbnails/sibenik-day3.jpg',
+    alt: 'Sitting on the kerb beside a loaded pack, building a sandwich: tomato sliced onto bread, a bottle of juice and a hunk of cheese on the ground.',
+    place: 'Sibenik',
     country: 'Croatia',
-    stamp: 'DAY 01',
+    stamp: 'DAY 03',
     width: 640,
-    height: 1136,
-    /* the pack and the walking figure, hard against the left edge */
-    subject: { x: 0.0, y: 0.14, w: 0.58, h: 0.71 },
-    focus: { y: 0.55 }
+    height: 1138,
+    /* the bowed head and the hands doing the work */
+    subject: { x: 0.38, y: 0.32, w: 0.60, h: 0.52 },
+    focus: { y: 0.52 }
   },
   {
     src: '/thumbnails/salzburg-day7.jpg',
@@ -123,28 +139,15 @@ export const DEFAULT_PHOTOS: Photo[] = [
     focus: { y: 0.5 }
   },
   {
-    src: '/thumbnails/swiss-border-day9.jpg',
-    alt: 'A dark alpine ridgeline above a wide river at first light, near the Swiss border.',
-    place: 'Swiss border',
-    country: 'Switzerland',
-    stamp: 'DAY 09',
-    width: 720,
-    height: 1280,
-    /* Nobody in this one. No subject, so no isolate: it greys and dithers
-       whole. It used to nominate the ridgeline, which is what made the effect
-       look broken on the frames without people in them. */
-    focus: { y: 0.4 }
-  },
-  {
-    src: '/thumbnails/valencia-day17.jpg',
-    alt: 'A narrow shuttered street after rain, one figure walking away down the far end.',
-    place: 'Valencia',
+    src: '/thumbnails/murcia-day18.jpg',
+    alt: 'Lacing a boot on the edge of a bed in a bare hotel room, bandana on, red curtains pulled back from a blown-out window.',
+    place: 'Murcia',
     country: 'Spain',
-    stamp: 'DAY 17',
+    stamp: 'DAY 18',
     width: 720,
     height: 1280,
-    /* the lone walker, small on purpose: the whole street goes soft around him */
-    subject: { x: 0.59, y: 0.66, w: 0.12, h: 0.16 },
+    /* head and shoulders, hard right, well above the boot */
+    subject: { x: 0.72, y: 0.49, w: 0.26, h: 0.19 },
     focus: { y: 0.62 }
   },
   {
@@ -157,6 +160,18 @@ export const DEFAULT_PHOTOS: Photo[] = [
     height: 1280,
     subject: { x: 0.33, y: 0.17, w: 0.52, h: 0.45 },
     focus: { y: 0.42 }
+  },
+  {
+    src: '/thumbnails/tagounite-day24.jpg',
+    alt: 'Grinning into the camera in a narrow stone stairwell, a patterned bottle held up, three others coming down the steps behind.',
+    place: 'Tagounite',
+    country: 'Morocco',
+    stamp: 'DAY 24',
+    width: 640,
+    height: 1136,
+    /* her face, not the group: the isolate wants one thing to hold on to */
+    subject: { x: 0.27, y: 0.40, w: 0.29, h: 0.18 },
+    focus: { y: 0.46 }
   },
   {
     src: '/thumbnails/tagounite-day25.jpg',
