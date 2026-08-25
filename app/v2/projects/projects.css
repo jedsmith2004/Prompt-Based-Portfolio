@@ -151,7 +151,10 @@
   border: 1px solid var(--rule);
   padding: 3px 7px;
 }
-.v2-proj-tech li.is-more { color: var(--ink-4); border-style: dashed; }
+/* --ink-4 is decorative only and measures 3.52:1 at this size on the base
+   sheet: the same failure that was already pulled out of seven other rules,
+   missed here. The dashed border still does the "and more" job. */
+.v2-proj-tech li.is-more { color: var(--ink-3); border-style: dashed; }
 
 .v2-proj-toggle {
   appearance: none;
