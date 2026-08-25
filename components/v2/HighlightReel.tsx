@@ -95,6 +95,14 @@ function rotX(s: Solid, a: number): Solid {
   const n = Math.sin(a);
   return { ...s, verts: s.verts.map((v) => [v[0], v[1] * c - v[2] * n, v[1] * n + v[2] * c] as V3) };
 }
+/* In-plane tilt. At 87 by 31 cells the readable thing is the SILHOUETTE, and a
+   diagonal edge in an otherwise orthogonal outline is worth more than any
+   amount of surface detail — so anything meant to be noticed gets one. */
+function rotZ(s: Solid, a: number): Solid {
+  const c = Math.cos(a);
+  const n = Math.sin(a);
+  return { ...s, verts: s.verts.map((v) => [v[0] * c - v[1] * n, v[0] * n + v[1] * c, v[2]] as V3) };
+}
 
 /* -------------------------------------------------------------------------- */
 /* 2. the object library                                                       */
@@ -106,6 +114,51 @@ const OBJECTS: Record<string, Builder> = {
   cube: () => [box(1, 1, 1, 0.72)],
 
   wireCube: () => [{ ...box(1.1, 1.1, 1.1, 0.9), wire: true }],
+
+  /**
+   * A sealed ballot box with a sheet going into the slot.
+   *
+   * Built for Recensorium, and built rather than borrowed because the object
+   * has to carry the argument: an agent never picks what it reviews and never
+   * picks who reviews it, so the thing on the plate is a closed box you post
+   * into, not a pile of papers you choose from.
+   *
+   * It also fixes a rendering problem that `paperStack` has by construction.
+   * Seven near-parallel panels all face the key light at almost the same
+   * angle, so the lambert term lands in a narrow band and the glyph ramp gets
+   * two or three characters out of eleven to work with. Everything here is at
+   * a different angle to everything else — a horizontal lid over vertical
+   * walls, a dark slot, a band, and a sheet tipped back out of plane — which
+   * is what gives the ramp its whole range to spend.
+   */
+  ballotBox: () => [
+    /* the body */
+    translate(box(1.1, 0.66, 0.76, 0.6), 0, -0.24, 0),
+    /* The lid. Overhanging by a wide margin, because the step it puts in the
+       outline is the only part of a lid a reader can see at this size — an
+       earlier version overhung by 0.07 and simply was not there. */
+    translate(box(1.44, 0.17, 0.94, 0.88), 0, 0.19, 0),
+    /* The slot, standing proud of the lid and deliberately WIDER than the
+       sheet: behind it, it is invisible, and the dark showing either side is
+       the only thing that says the sheet is going INTO something. */
+    translate(box(0.82, 0.06, 0.15, 0.09), 0, 0.29, 0),
+    /* The base. This was a seal band around the middle, which measured as
+       nothing at all: a tonal stripe on a face is below the resolution of the
+       plate. Moved to the foot, where it is a second step in the outline. */
+    translate(box(1.3, 0.12, 0.88, 0.44), 0, -0.63, 0),
+    /*
+     * The sheet going in. Tilted in plane as well as out of it, so it is the
+     * one diagonal in the silhouette.
+     *
+     * Its tone is 0.44, not the 0.97 you would expect a piece of paper to
+     * have, and that is not a mistake. The glyph ramp on this plate is
+     * INVERTED for print: a lit face leaves the paper showing and a shadowed
+     * one prints dense. At 0.97 the sheet measured as almost nothing — a few
+     * scattered dots above the lid. Mid-tone is what "a piece of paper" looks
+     * like when the page itself is the white.
+     */
+    translate(rotX(rotZ(panel(0.56, 0.5, 0.44), -0.3), -0.12), -0.04, 0.54, 0.04)
+  ],
 
   /** A stack of sheets, slightly fanned, for papers and pencilled pages. */
   paperStack: () => {
@@ -285,6 +338,8 @@ const KEYWORDS: Array<[RegExp, string]> = [
   [/triangle|scanline/i, 'triangle'],
   [/depth buffer|fog/i, 'fogSlabs'],
   [/wireframe|\.obj|model/i, 'wireCube'],
+  /* before the paper rule: a ballot box with a paper in it is a ballot box */
+  [/ballot/i, 'ballotBox'],
   [/paper|page|pencil|margin/i, 'paperStack'],
   [/trophy/i, 'trophy'],
   [/monitor|screen|dashboard/i, 'monitor'],

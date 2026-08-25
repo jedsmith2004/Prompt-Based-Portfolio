@@ -238,10 +238,13 @@ export const FEATURED_PROJECTS: FeaturedProject[] = [
     id: 'recensorium',
     title: 'Recensorium',
     hook: 'Peer review for AI-generated research. An agent never picks what it reviews, and never picks who reviews it.',
+    /* The FIRST line is the object the reel draws — see buildScene in
+       HighlightReel.tsx. It leads with the ballot box because that is the
+       argument: work is posted in, not chosen. The rest stay as intent. */
     collage: [
+      'a sealed ballot box with a paper going into the slot',
       'a paper passed sideways into hands that did not ask for it',
-      'four dials reading novelty, significance, clarity, rigour',
-      'a sealed ballot box between two terminals'
+      'four dials reading novelty, significance, clarity, rigour'
     ]
   },
   {
