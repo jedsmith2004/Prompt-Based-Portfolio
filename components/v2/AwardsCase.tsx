@@ -53,9 +53,9 @@ import context from '@/public/context.json';
 /* 1. geometry primitives                                                      */
 /* -------------------------------------------------------------------------- */
 
-type V3 = [number, number, number];
+export type V3 = [number, number, number];
 
-interface Solid {
+export interface Solid {
   verts: V3[];
   /** Vertex index loops, wound so the Newell normal points outward. */
   faces: number[][];
@@ -68,7 +68,7 @@ interface Solid {
 const TAU = Math.PI * 2;
 
 /** Axis-aligned box. Every face verified outward-wound by right-hand rule. */
-function box(w: number, h: number, d: number, tone = 0.7): Solid {
+export function box(w: number, h: number, d: number, tone = 0.7): Solid {
   const x = w / 2;
   const y = h / 2;
   const z = d / 2;
@@ -90,7 +90,7 @@ function box(w: number, h: number, d: number, tone = 0.7): Solid {
 }
 
 /** A flat quad in the XY plane facing +z. Screens, pages, cards, markers. */
-function panel(w: number, h: number, tone = 0.8): Solid {
+export function panel(w: number, h: number, tone = 0.8): Solid {
   const x = w / 2;
   const y = h / 2;
   return { tone, verts: [[-x, -y, 0], [x, -y, 0], [x, y, 0], [-x, y, 0]], faces: [[0, 1, 2, 3]] };
@@ -101,7 +101,7 @@ function panel(w: number, h: number, tone = 0.8): Solid {
  * A radius of 0 collapses that ring to the axis, which is how domes and
  * balloons close. Newell normals cope with the degenerate quads that leaves.
  */
-function lathe(
+export function lathe(
   profile: Array<[number, number]>,
   sides: number,
   tone: number,
@@ -135,12 +135,12 @@ function lathe(
   return { verts, faces, tone };
 }
 
-function cyl(r: number, h: number, sides: number, tone: number, caps = true): Solid {
+export function cyl(r: number, h: number, sides: number, tone: number, caps = true): Solid {
   return lathe([[r, -h / 2], [r, h / 2]], sides, tone, caps);
 }
 
 /** Flat ring in the XZ plane at y = 0, facing +y. The rim of a pipe. */
-function annulus(rOut: number, rIn: number, sides: number, tone: number): Solid {
+export function annulus(rOut: number, rIn: number, sides: number, tone: number): Solid {
   const verts: V3[] = [];
   for (let i = 0; i < sides; i++) {
     const a = (i / sides) * TAU;
@@ -160,26 +160,26 @@ function annulus(rOut: number, rIn: number, sides: number, tone: number): Solid 
 
 /* --- transforms. All return new solids; none of this runs per frame. ------ */
 
-function translate(s: Solid, dx: number, dy: number, dz: number): Solid {
+export function translate(s: Solid, dx: number, dy: number, dz: number): Solid {
   return { ...s, verts: s.verts.map((v) => [v[0] + dx, v[1] + dy, v[2] + dz] as V3) };
 }
-function rotY(s: Solid, a: number): Solid {
+export function rotY(s: Solid, a: number): Solid {
   const c = Math.cos(a);
   const n = Math.sin(a);
   return { ...s, verts: s.verts.map((v) => [v[0] * c + v[2] * n, v[1], -v[0] * n + v[2] * c] as V3) };
 }
-function rotX(s: Solid, a: number): Solid {
+export function rotX(s: Solid, a: number): Solid {
   const c = Math.cos(a);
   const n = Math.sin(a);
   return { ...s, verts: s.verts.map((v) => [v[0], v[1] * c - v[2] * n, v[1] * n + v[2] * c] as V3) };
 }
-function rotZ(s: Solid, a: number): Solid {
+export function rotZ(s: Solid, a: number): Solid {
   const c = Math.cos(a);
   const n = Math.sin(a);
   return { ...s, verts: s.verts.map((v) => [v[0] * c - v[1] * n, v[0] * n + v[1] * c, v[2]] as V3) };
 }
 /** Reverses every winding. Used where a builder's default face points inward. */
-function flip(s: Solid): Solid {
+export function flip(s: Solid): Solid {
   return { ...s, faces: s.faces.map((f) => f.slice().reverse()) };
 }
 
@@ -367,6 +367,22 @@ function buildPipeCrawler(): Solid[] {
  * is, and costs nothing: the depth ordering, the perspective and the turn all
  * work exactly the same on an ellipse.
  */
+/**
+ * DEPTH OF FIELD, in ring slots either side of the front.
+ *
+ * The awards case holds five, and five on one shallow ellipse is a case you can
+ * read. The projects case holds fifteen, and fifteen is a hedge: measured, the
+ * plate came out as one continuous band of dots with the selected object lost
+ * inside it. So anything more than this many positions from the front fades
+ * out to bare paper over DOF_SOFT more slots, and the shelf becomes a case with
+ * depth rather than a carousel with everything in it at once.
+ *
+ * It is a no-op at five, where nothing is ever more than 2.0 slots away, so the
+ * awards plate is byte-identical to what Jack approved.
+ */
+const DOF_SLOTS = 2.4;
+const DOF_SOFT = 1.3;
+
 const RING_X = 2.12;
 /**
  * How wide the ellipse gets on a narrow plate. A phone-width plate is nearly
@@ -538,16 +554,43 @@ interface Award {
 
 const AWARDS: Award[] = context.awards;
 
-/* Built once, at module load. Pure arithmetic, a fraction of a millisecond,
-   and it is the same on the server as in the browser. */
-const GEOMETRY: Geometry = flatten([
-  ...AWARDS.map((a) => [...specimenFor(a.title).build(), ...plinth()]),
-  buildShelf()
-]);
+/**
+ * One thing on the shelf.
+ *
+ * The case used to read `context.awards` directly. Jack: "I love the trophy
+ * case, this is sort of the idea I had with my projects" — so the renderer is
+ * now told what to display rather than knowing, and the awards are one caller
+ * of it. Nothing about the pipeline changed; see ProjectCase.tsx for the other.
+ */
+export interface CaseEntry {
+  /** React key, and the identity the caller sorts by. */
+  key: string;
+  /** Small line before the title: a placing, a year, a role. */
+  meta: string;
+  title: string;
+  /** Small line after the title. */
+  date: string;
+  body: string;
+  badges?: readonly string[];
+  /** Caption for the object, because a procedural solid needs one. */
+  specimen: string;
+  /** The object in model space, without its plinth. */
+  build: () => Solid[];
+}
 
-const SHELF_OBJ = AWARDS.length;
-const TOTAL_VERTS = GEOMETRY.nVerts;
-const TOTAL_FACES = GEOMETRY.nFaces;
+const AWARD_ENTRIES: readonly CaseEntry[] = AWARDS.map((a) => {
+  const spec = specimenFor(a.title);
+  return {
+    key: a.title,
+    meta: a.place,
+    title: a.title,
+    date: a.date,
+    body: a.description,
+    badges: a.badges,
+    specimen: spec.label,
+    build: spec.build
+  };
+});
 
 /* -------------------------------------------------------------------------- */
 /* 6. the renderer                                                             */
@@ -595,9 +638,41 @@ export interface AwardsCaseProps {
   className?: string;
 }
 
-export default function AwardsCase({ className }: AwardsCaseProps) {
+export interface SpecimenCaseProps {
+  entries: readonly CaseEntry[];
+  eyebrow: React.ReactNode;
+  heading: React.ReactNode;
+  note: React.ReactNode;
+  /** Screen-reader label for the list of plaques. */
+  listLabel: string;
+  /** Unique per instance, so two cases on one page do not share element ids. */
+  idPrefix: string;
+  className?: string;
+}
+
+export function SpecimenCase({
+  entries,
+  eyebrow,
+  heading,
+  note,
+  listLabel,
+  idPrefix,
+  className
+}: SpecimenCaseProps) {
   const [index, setIndex] = useState(0);
-  const count = AWARDS.length;
+  const count = entries.length;
+
+  /*
+   * Was built once at module load, when the case knew its own contents. It is
+   * still pure arithmetic and still a fraction of a millisecond; it just runs
+   * when the caller's list changes instead of when the module does.
+   */
+  const GEOMETRY = useMemo(
+    () =>
+      flatten([...entries.map((e) => [...e.build(), ...plinth()]), buildShelf()]),
+    [entries]
+  );
+  const SHELF_OBJ = entries.length;
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   /* What the frame loop reads. `select` writes it too, so it is never stale. */
@@ -607,8 +682,7 @@ export default function AwardsCase({ className }: AwardsCaseProps) {
   /** Set by the effect. Draws a single frame; the only way in under reduced motion. */
   const drawOnceRef = useRef<(() => void) | null>(null);
 
-  const award = AWARDS[index];
-  const spec = useMemo(() => specimenFor(award.title), [award.title]);
+  const award = entries[index];
   const stat = GEOMETRY.stats[index];
 
   /**
@@ -684,6 +758,8 @@ export default function AwardsCase({ className }: AwardsCaseProps) {
        ellipse narrows for a small plate. Safe because the shelf never yaws, so
        there is no shear to worry about. */
     const oKx = new Float32Array(nObj).fill(1);
+    /** 1 when an object is far enough round the ring to be off the plate. */
+    const oHidden = new Uint8Array(nObj);
 
     /* eased state, carried between frames */
     const scaleNow = new Float32Array(nObj).fill(REST_SCALE);
@@ -751,7 +827,15 @@ export default function AwardsCase({ className }: AwardsCaseProps) {
     let midY = 0;
 
     /** How wide the ellipse currently is. Set by `layout` from the plate. */
-    let ringX = RING_X;
+    /*
+     * Widen the ring when the case is long. With fifteen entries the visible
+     * window is only +/- 58 degrees of the ellipse, so `sin(th) * ringX` uses
+     * a fraction of the width that five entries use across +/- 144. Dividing
+     * by the sine of the window angle keeps the SPREAD ON THE PLATE the same
+     * whatever the case is holding. Clamped at 1 so a short case is untouched.
+     */
+    const RING_SPREAD = 1 / Math.max(0.5, Math.sin(Math.min(Math.PI / 2, DOF_SLOTS * (TAU / count))));
+    let ringX = RING_X * RING_SPREAD;
     let SPAN_X = 1;
     let SPAN_Y = 1;
     let MID_X = 0;
@@ -846,7 +930,7 @@ export default function AwardsCase({ className }: AwardsCaseProps) {
       const nw = Math.max(4, Math.round((fine ? 5 : CELL_W) * dpr));
       const nh = Math.max(6, Math.round((fine ? 9 : CELL_H) * dpr));
 
-      const wantRing = fine ? RING_X_NARROW : RING_X;
+      const wantRing = (fine ? RING_X_NARROW : RING_X) * RING_SPREAD;
       if (wantRing !== ringX) {
         ringX = wantRing;
         refit();
@@ -933,7 +1017,19 @@ export default function AwardsCase({ className }: AwardsCaseProps) {
         oTy[o] = liftNow[o] * 0.07;
         oTz[o] = Math.cos(th) * RING_Z + liftNow[o] * FORWARD;
         /* everything that is not the selection prints pale */
-        oFade[o] = REST_FADE * (1 - liftNow[o]);
+        const pale = REST_FADE * (1 - liftNow[o]);
+        /* ...and everything past the window fades the rest of the way out.
+           `away` is the distance from the front, in slots, by the short way. */
+        const wrapped = ((th + Math.PI) % TAU + TAU) % TAU - Math.PI;
+        const away = Math.abs(wrapped) / STEP;
+        let dof = (away - DOF_SLOTS) / DOF_SOFT;
+        dof = dof < 0 ? 0 : dof > 1 ? 1 : dof;
+        oFade[o] = pale + (1 - pale) * dof;
+        /* Fully faded is not "drawn at one tenth" — the quantiser floors every
+           covered cell at the first ramp step so a highlight cannot punch a
+           hole in an object, and that floor would leave a haze of dots where
+           the back of the ring is. Skip them outright, which is also cheaper. */
+        oHidden[o] = dof >= 0.999 ? 1 : 0;
         oSelFlag[o] = liftNow[o] > 0.55 ? 1 : 0;
       }
       return tilt;
@@ -1052,6 +1148,7 @@ export default function AwardsCase({ className }: AwardsCaseProps) {
       lumBuf.fill(-1, 0, cols * rows);
       for (let i = 0; i < g.nFaces; i++) {
         const f = order[i];
+        if (oHidden[g.fObj[f]]) continue;
         if (g.fWire[f]) strokeFace(f, fShade[f], fSel[f]);
         else fillFace(f, fShade[f], fSel[f]);
       }
@@ -1269,6 +1366,33 @@ export default function AwardsCase({ className }: AwardsCaseProps) {
       window.addEventListener('resize', onResize);
     }
 
+    /* ------------------------------------------------------------------------
+       DARK MODE. Jack: "Dark mode doesn't work too well though."
+
+       It did not work at all, and the cause is one line above: `paintAtlas` is
+       called when the CELL SIZE changes and at no other time. The glyph atlas
+       therefore has `--ink` baked into it from whenever the plate was last
+       laid out, so flipping the theme leaves the whole case drawn in the
+       previous scheme's ink — dark glyphs on a dark ground, which is a plate
+       that has gone blank rather than a plate with poor contrast.
+
+       Nothing else needed changing: the geometry, the shading and the ramp are
+       all tone values, and tone is theme-independent by construction. Only the
+       two colours the ramp is finally printed in were stale.
+       ---------------------------------------------------------------------- */
+    function repaintAtlases() {
+      if (atlasCell < 0) return; // never laid out; the first layout will do it
+      paintAtlas(inkAtlas, token(canvas!, '--ink', '#17140F'));
+      paintAtlas(vermAtlas, token(canvas!, '--verm-text', '#9E3524'));
+      if (reduce) render();
+      else kick();
+    }
+    const themeObserver = new MutationObserver(repaintAtlases);
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-v2-theme', 'class', 'style']
+    });
+
     /* The atlas is measured in JetBrains Mono. If the face lands late, the
        glyphs were drawn in the fallback and every cell is subtly wrong. */
     let fontsAlive = true;
@@ -1321,48 +1445,46 @@ export default function AwardsCase({ className }: AwardsCaseProps) {
       raf = 0;
       io.disconnect();
       if (ro) ro.disconnect();
+      themeObserver.disconnect();
       document.removeEventListener('visibilitychange', onVis);
       window.removeEventListener('resize', onResize);
     };
-  }, [count]);
+  }, [GEOMETRY, count, SHELF_OBJ]);
 
   /* ------------------------------------------------------------------------ */
 
   return (
     <section
       className={className ? `v2-case ${className}` : 'v2-case'}
-      aria-labelledby="v2-case-title"
+      aria-labelledby={`${idPrefix}-title`}
     >
       <header className="v2-case-head">
         <p className="v2-eyebrow" data-perch data-perch-text data-perch-inset="0.38em">
-          Awards / <b>2022 to 2025</b>
+          {eyebrow}
         </p>
-        <h2 className="v2-h2" id="v2-case-title" data-perch data-perch-text data-perch-inset="0.10em">
-          Five wins, five objects.
+        <h2
+          className="v2-h2"
+          id={`${idPrefix}-title`}
+          data-perch
+          data-perch-text
+          data-perch-inset="0.10em"
+        >
+          {heading}
         </h2>
-        <p className="v2-case-note">
-          Not five identical cups. A lens a million strangers used, a milkshake stand, a lectern, a
-          repository, a swarm of robots in a pipe. Each object below is modelled from vertices and
-          drawn by the same hand-rolled pipeline that draws the rest of this page, then quantised to
-          a grid of characters. Choose one and it turns to face you.
-        </p>
+        <p className="v2-case-note">{note}</p>
       </header>
 
       <div className="v2-case-stage" data-perch>
         <canvas ref={canvasRef} aria-hidden="true" />
         <p className="v2-case-mark">
-          {TOTAL_VERTS} vertices / {TOTAL_FACES} faces / drawn here
+          {GEOMETRY.nVerts} vertices / {GEOMETRY.nFaces} faces / drawn here
         </p>
       </div>
 
       <div className="v2-case-body">
-        <ol
-          className="v2-case-list"
-          onKeyDown={onKeyDown}
-          aria-label="Awards. Use the arrow keys to turn the case."
-        >
-          {AWARDS.map((a, i) => (
-            <li key={a.title}>
+        <ol className="v2-case-list" onKeyDown={onKeyDown} aria-label={listLabel}>
+          {entries.map((a, i) => (
+            <li key={a.key}>
               <button
                 type="button"
                 ref={(el) => {
@@ -1371,11 +1493,11 @@ export default function AwardsCase({ className }: AwardsCaseProps) {
                 className={`v2-case-plaque${i === index ? ' is-on' : ''}`}
                 tabIndex={i === index ? 0 : -1}
                 aria-pressed={i === index}
-                aria-controls="v2-case-citation"
+                aria-controls={`${idPrefix}-citation`}
                 onClick={() => select(i, false)}
                 onFocus={() => select(i, false)}
               >
-                <span className="v2-case-plaque-place">{a.place}</span>
+                <span className="v2-case-plaque-place">{a.meta}</span>
                 <span className="v2-case-plaque-title">{a.title}</span>
                 <span className="v2-case-plaque-date">{a.date}</span>
               </button>
@@ -1383,14 +1505,14 @@ export default function AwardsCase({ className }: AwardsCaseProps) {
           ))}
         </ol>
 
-        <div className="v2-case-citation" id="v2-case-citation" aria-live="polite">
+        <div className="v2-case-citation" id={`${idPrefix}-citation`} aria-live="polite">
           <p className="v2-case-cite-meta">
-            <b>{award.place}</b>
+            <b>{award.meta}</b>
             <span aria-hidden="true"> / </span>
             {award.date}
           </p>
           <h3 className="v2-case-cite-title">{award.title}</h3>
-          <p className="v2-case-cite-body">{award.description}</p>
+          <p className="v2-case-cite-body">{award.body}</p>
           {award.badges && award.badges.length ? (
             <ul className="v2-case-badges">
               {award.badges.map((b) => (
@@ -1400,10 +1522,37 @@ export default function AwardsCase({ className }: AwardsCaseProps) {
           ) : null}
           <p className="v2-case-specimen">
             <span className="v2-case-specimen-key">On the shelf</span>
-            {spec.label} {stat.verts} vertices, {stat.faces} faces.
+            {award.specimen} {stat.verts} vertices, {stat.faces} faces.
           </p>
         </div>
       </div>
     </section>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/* 7. the awards, as one caller of the case                                    */
+/* -------------------------------------------------------------------------- */
+
+export default function AwardsCase({ className }: AwardsCaseProps) {
+  return (
+    <SpecimenCase
+      className={className}
+      idPrefix="v2-case-awards"
+      entries={AWARD_ENTRIES}
+      listLabel="Awards. Use the arrow keys to turn the case."
+      eyebrow={
+        <>
+          Awards / <b>2022 to 2025</b>
+        </>
+      }
+      heading="Five wins, five objects."
+      note={
+        'Not five identical cups. A lens a million strangers used, a milkshake stand, a lectern, ' +
+        'a repository, a swarm of robots in a pipe. Each object below is modelled from vertices ' +
+        'and drawn by the same hand-rolled pipeline that draws the rest of this page, then ' +
+        'quantised to a grid of characters. Choose one and it turns to face you.'
+      }
+    />
   );
 }

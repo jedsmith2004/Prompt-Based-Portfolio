@@ -11,6 +11,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { projects, type Project } from '@/lib/projects-data';
+import ProjectCase from '@/components/v2/ProjectCase';
 import './projects.css';
 
 /* Newest first. The dates are human strings like 'May 2026', so parse rather
@@ -66,9 +67,18 @@ export default function V2Projects() {
         <h1 className="v2-display v2-proj-title">Everything, plainly</h1>
         <p className="v2-lede v2-proj-lede">
           {projects.length} projects, newest first. The dissertation, the things
-          written from nothing, the client work, and one that is staying quiet.
+          written from nothing, the client work, and the company.
         </p>
+      </div>
 
+      {/* The case, before the catalogue. Jack: "I love the trophy case, this
+          is sort of the idea I had with my projects." It is the right treatment
+          for THIS page rather than for the spine, because the case answers the
+          question the index asks — what is all of it — while the reel on the
+          front answers the opposite one, which is what is this one. */}
+      <ProjectCase className="v2-proj-case" />
+
+      <div className="v2-wrap">
         <div className="v2-proj-filters" role="group" aria-label="Filter by technology">
           <button
             type="button"

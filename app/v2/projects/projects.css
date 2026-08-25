@@ -201,3 +201,12 @@
 /* The redaction bars that used to live here are gone with the branch that
    drew them. See the note in page.tsx: Recensorium launched, and the row it
    was hiding is now the first thing on the page. */
+
+/* --- the case, at the head of the index ---------------------------------- */
+/* The .v2-case rules themselves live in v2.css, which the layout loads; this
+   only places it on this page. Full-bleed inside its own wrap, because the
+   shelf wants the width and the catalogue below it wants the measure. */
+.v2-proj-case {
+  margin: clamp(28px, 5vw, 56px) auto clamp(34px, 6vw, 70px);
+  max-width: min(1180px, calc(100vw - clamp(24px, 6vw, 96px)));
+}
