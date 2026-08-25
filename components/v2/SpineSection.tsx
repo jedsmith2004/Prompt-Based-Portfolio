@@ -9,13 +9,61 @@
    one IntersectionObserver, not a per-element animation library.
    ========================================================================== */
 
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 
 export interface Stat {
   value: string;
   label: string;
   /** 'verm' | 'blue' tints the figure; omit for ink. */
   tone?: 'verm' | 'blue';
+}
+
+/**
+ * A plate title, set word by word, each one lifted out from behind a mask.
+ *
+ * From the research pass: kinetic typography on a timeline is one of the
+ * recurring things award-winning sites do and one of the things this site did
+ * not do. The hero has a masked-and-lifted treatment and everything after it
+ * was a single block fade, so the page opens with a gesture and then stops
+ * making them.
+ *
+ * Restrained on purpose, because this is an engineering journal and not a
+ * showreel: the words arrive in reading order, 55ms apart, from behind the
+ * line they belong on. Nothing rotates, nothing scales, no character is set
+ * individually. A per-character stagger on a display face at this size reads
+ * as a ransom note, and it also multiplies the element count on a page that
+ * already runs six canvases.
+ *
+ * TWO THINGS THAT WOULD BE BUGS WITHOUT CARE.
+ *
+ * The mask clips descenders. `overflow: hidden` on a line box cuts the tails
+ * off g, y, p and j, and half of these titles have one. The mask is padded a
+ * fifth of an em below the baseline and pulled back by the same amount, so it
+ * hides what is below the line without hiding what hangs off it.
+ *
+ * The spaces have to be real AND OUTSIDE THE MASK. The first version put the
+ * space inside the overflow:hidden wrapper, where it was clipped to nothing:
+ * the line still broke correctly, because the line-breaker sees the character
+ * in the DOM, but it had no width — so every title rendered as one run of
+ * jammed-together words, and `innerText` returned "Writethepipeline". Copying
+ * a heading gave you that too. The space is a sibling of the mask now.
+ */
+function KineticTitle({ text }: { text: string }) {
+  const words = text.split(/\s+/).filter(Boolean);
+  return (
+    <>
+      {words.map((w, i) => (
+        <Fragment key={`${w}-${i}`}>
+          <span className="v2-kin">
+            <span className="v2-kin-i" style={{ '--k': `${i * 55}ms` } as React.CSSProperties}>
+              {w}
+            </span>
+          </span>
+          {i < words.length - 1 ? ' ' : null}
+        </Fragment>
+      ))}
+    </>
+  );
 }
 
 export interface SpineSectionProps {
@@ -111,7 +159,7 @@ export default function SpineSection({
             data-perch-text
             data-perch-inset="0.10em"
           >
-            {title}
+            <KineticTitle text={title} />
           </h2>
 
           {lede ? (

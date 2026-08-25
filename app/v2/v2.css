@@ -4791,3 +4791,33 @@ html[data-v2-palette] body { background: var(--paper); }
      neighbours, so below this they simply do not appear. */
   .v2-reel-side { display: none; }
 }
+
+/* --- kinetic plate titles -------------------------------------------------- */
+/* One word at a time, lifted out from behind the line it belongs on. See
+   KineticTitle in components/v2/SpineSection.tsx for why it is words rather
+   than characters, and why the mask is padded. */
+
+.v2-kin {
+  display: inline-block;
+  overflow: hidden;
+  /* room for descenders, then taken straight back off the layout: without this
+     the mask cuts the tails off g, y, p and j */
+  padding-bottom: 0.2em;
+  margin-bottom: -0.2em;
+  vertical-align: bottom;
+}
+.v2-kin-i {
+  display: inline-block;
+  transform: translateY(106%);
+  transition: transform 0.78s var(--ease) calc(var(--d, 0ms) + var(--k, 0ms));
+  will-change: transform;
+}
+.v2-section.is-in .v2-kin-i { transform: none; }
+
+/* The h2 itself keeps its fade but stops sliding: the words do the moving now,
+   and two transforms on the same type reads as a wobble rather than a lift. */
+.v2-h2.v2-reveal { transform: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .v2-kin-i { transform: none; transition: none; }
+}

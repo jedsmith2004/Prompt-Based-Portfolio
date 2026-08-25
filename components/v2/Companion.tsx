@@ -1511,24 +1511,50 @@ export default function Companion({
       }
 
       if (declared && he.dataset.perchText !== undefined) {
-        /* the ink of the first line, not the column it happens to be set in */
-        lineRange.selectNodeContents(el);
-        const rects = lineRange.getClientRects();
+        /*
+         * The ink of the first line, not the column it happens to be set in.
+         *
+         * TEXT NODES ONLY. `selectNodeContents` on the element returns a rect
+         * for every inline-level BOX as well as for the text, and an
+         * inline-block's rect is its margin box rather than its glyphs — so
+         * anything that wraps its words in a padded mask, as the kinetic plate
+         * titles do, could hand this the padding instead of the ink.
+         *
+         * MEASURED, AND IT CHANGES NOTHING TODAY. Across all eight plate
+         * titles the two methods agree to the pixel, because the mask's
+         * padding sits below the baseline and the topmost rect is the text's
+         * em box either way. It is kept because it is the correct reading of
+         * what `data-perch-text` asks for — stand on the ink — and because the
+         * next thing anyone wraps a word in will not be so considerate about
+         * where it puts its padding.
+         */
         let lx0 = 0;
         let lx1 = 0;
         let ltop = Infinity;
-        for (let i = 0; i < rects.length; i++) {
-          const q = rects[i];
-          if (q.width < 1 || q.height < 1) continue;
-          if (q.top < ltop - 0.5) {
-            ltop = q.top;
-            lx0 = q.left;
-            lx1 = q.right;
-          } else if (q.top < ltop + 0.5) {
-            lx0 = Math.min(lx0, q.left);
-            lx1 = Math.max(lx1, q.right);
+        const take = (n: Node): void => {
+          if (n.nodeType === 3) {
+            const v = n.nodeValue;
+            if (!v || !v.trim()) return;
+            lineRange.selectNodeContents(n);
+            const rr = lineRange.getClientRects();
+            for (let i = 0; i < rr.length; i++) {
+              const q = rr[i];
+              if (q.width < 1 || q.height < 1) continue;
+              if (q.top < ltop - 0.5) {
+                ltop = q.top;
+                lx0 = q.left;
+                lx1 = q.right;
+              } else if (q.top < ltop + 0.5) {
+                lx0 = Math.min(lx0, q.left);
+                lx1 = Math.max(lx1, q.right);
+              }
+            }
+            return;
           }
-        }
+          if (n.nodeType !== 1) return;
+          for (let c = n.firstChild; c; c = c.nextSibling) take(c);
+        };
+        take(el);
         /* No ink, or less of it than a bird is wide: not landable. Falling
            back to the box here would hand him the whole column beside a short
            eyebrow, which is the exact failure this attribute exists to fix. */
