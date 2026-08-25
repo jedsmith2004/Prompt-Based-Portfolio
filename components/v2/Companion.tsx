@@ -1,0 +1,4987 @@
+'use client';
+
+/* ============================================================================
+   Companion — a pixel sparrow that lives on the page furniture.
+
+   Four systems, kept apart on purpose:
+
+   1. COMPOSITOR   turns the puppet in sparrowSprite.ts into pixels. Each part
+                   variant and each prop is rasterised once into an offscreen
+                   canvas, then blitted at an integer scale with smoothing off.
+                   Positions snap to the sprite grid, because a pixel sparrow
+                   drawn at a fractional offset stops being pixel art.
+   2. PLAYER       samples a keyframe timeline into a PREALLOCATED pose.
+                   Positions interpolate, variants snap. Never crossfade a
+                   variant swap.
+   3. PHYSICS      owns where the bird actually is. Its position is stored in
+                   DOCUMENT space, not screen space, so scrolling genuinely
+                   carries it and it has to re-perch to keep up. That is the
+                   whole reason it reads as an animal rather than a cursor toy.
+
+                   THE ONE RULE HERE IS CONTINUITY. Nothing in this file may
+                   assign bird.x or bird.y a value more than one frame of
+                   travel away from where it already was, with exactly two
+                   sanctioned exceptions, both of which are screen-space and
+                   both of which are commented at the site:
+                     - a transit rides the VIEWPORT, so its document y tracks
+                       window.scrollY (on screen it does not move at all);
+                     - reduced-motion reseats without animating, because
+                       animating is the thing being avoided.
+                   Everything else — recovery from a fall, arriving at a perch,
+                   walking, re-measuring the furniture underfoot — moves over
+                   time. Every landing is resolved to a sub-frame crossing so
+                   the last frame of a hop cannot overshoot by 16px and snap.
+   4. SURFACE      the pixel-art speech bubble and chat window. Both are drawn
+                   on the same canvas as the bird, from the same 5x7 font, so
+                   they are made of the same material he is. Neither is a DOM
+                   box. The only DOM in the chat is a transparent <input>
+                   parked over the pixel input row, because reimplementing IME,
+                   mobile keyboards and clipboard would be a worse idea than
+                   hiding a real one.
+   ========================================================================== */
+
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  PARTS,
+  PALETTE,
+  PROPS,
+  DRAW_ORDER,
+  ANIMATIONS,
+  IDLE_TABLE,
+  IDLE_REST_MS,
+  IDLE_REST_JITTER_MS,
+  IDLE_LOOP_MS,
+  SPRITE_WIDTH,
+  SPRITE_HEIGHT,
+  BASELINE_Y,
+  PIXEL_SCALE,
+  FRAME_MS_MAX,
+  TRANSIT_UP,
+  TRANSIT_DOWN,
+  TRANSIT_PROPS,
+  JUMP_VARIANTS,
+  WALKS,
+  CHAT_PERCHES,
+  CHAT_RESPONDING,
+  CHAT_PERCH_PROPS,
+  CHAT_PERCH_CYCLES,
+  INTERACTIONS,
+  DREAM_ITEMS,
+  DREAM_BUBBLE_PARTS,
+  PVZ_SEQUENCE,
+  PVZ_LOOP,
+  PVZ_MUZZLE,
+  ZOMBIE_FRAME_MS,
+  ZOMBIE_WALK,
+  type AnimationName,
+  type Animation,
+  type PartName,
+  type PropName,
+  type Pose,
+  type Easing,
+  type TransitEntry
+} from './sparrowSprite';
+
+/* -------------------------------------------------------------------------- */
+/* 0. a 5x7 pixel font                                                         */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * One entry per glyph: seven rows, each a five-bit mask with 0x10 leftmost.
+ * The bubble and the chat window are drawn from this and nothing else, so the
+ * lettering is made of the same pixels the bird is.
+ *
+ * Drawn at FONT_PX = 2 device px per cell, a cap is 14px tall — comfortably
+ * over the 11.5px floor the readability rule sets, and pure ink on pure paper
+ * so contrast is not in question.
+ */
+const GLYPHS: Record<string, readonly number[]> = {
+  ' ': [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
+  '!': [0x04, 0x04, 0x04, 0x04, 0x04, 0x00, 0x04],
+  '"': [0x0a, 0x0a, 0x00, 0x00, 0x00, 0x00, 0x00],
+  '#': [0x0a, 0x1f, 0x0a, 0x0a, 0x0a, 0x1f, 0x0a],
+  '&': [0x0c, 0x12, 0x14, 0x08, 0x15, 0x12, 0x0d],
+  "'": [0x04, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00],
+  '(': [0x02, 0x04, 0x08, 0x08, 0x08, 0x04, 0x02],
+  ')': [0x08, 0x04, 0x02, 0x02, 0x02, 0x04, 0x08],
+  '*': [0x00, 0x0a, 0x04, 0x1f, 0x04, 0x0a, 0x00],
+  '+': [0x00, 0x04, 0x04, 0x1f, 0x04, 0x04, 0x00],
+  ',': [0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x08],
+  '-': [0x00, 0x00, 0x00, 0x1f, 0x00, 0x00, 0x00],
+  '.': [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04],
+  '/': [0x01, 0x02, 0x02, 0x04, 0x08, 0x08, 0x10],
+  '0': [0x0e, 0x11, 0x13, 0x15, 0x19, 0x11, 0x0e],
+  '1': [0x04, 0x0c, 0x04, 0x04, 0x04, 0x04, 0x0e],
+  '2': [0x0e, 0x11, 0x01, 0x02, 0x04, 0x08, 0x1f],
+  '3': [0x1f, 0x02, 0x04, 0x02, 0x01, 0x11, 0x0e],
+  '4': [0x02, 0x06, 0x0a, 0x12, 0x1f, 0x02, 0x02],
+  '5': [0x1f, 0x10, 0x1e, 0x01, 0x01, 0x11, 0x0e],
+  '6': [0x06, 0x08, 0x10, 0x1e, 0x11, 0x11, 0x0e],
+  '7': [0x1f, 0x01, 0x02, 0x04, 0x08, 0x08, 0x08],
+  '8': [0x0e, 0x11, 0x11, 0x0e, 0x11, 0x11, 0x0e],
+  '9': [0x0e, 0x11, 0x11, 0x0f, 0x01, 0x02, 0x0c],
+  ':': [0x00, 0x04, 0x00, 0x00, 0x00, 0x04, 0x00],
+  ';': [0x00, 0x04, 0x00, 0x00, 0x04, 0x04, 0x08],
+  '<': [0x02, 0x04, 0x08, 0x10, 0x08, 0x04, 0x02],
+  '=': [0x00, 0x00, 0x1f, 0x00, 0x1f, 0x00, 0x00],
+  '>': [0x08, 0x04, 0x02, 0x01, 0x02, 0x04, 0x08],
+  '?': [0x0e, 0x11, 0x01, 0x02, 0x04, 0x00, 0x04],
+  '@': [0x0e, 0x11, 0x17, 0x15, 0x17, 0x10, 0x0e],
+  A: [0x0e, 0x11, 0x11, 0x1f, 0x11, 0x11, 0x11],
+  B: [0x1e, 0x11, 0x11, 0x1e, 0x11, 0x11, 0x1e],
+  C: [0x0e, 0x11, 0x10, 0x10, 0x10, 0x11, 0x0e],
+  D: [0x1c, 0x12, 0x11, 0x11, 0x11, 0x12, 0x1c],
+  E: [0x1f, 0x10, 0x10, 0x1e, 0x10, 0x10, 0x1f],
+  F: [0x1f, 0x10, 0x10, 0x1e, 0x10, 0x10, 0x10],
+  G: [0x0e, 0x11, 0x10, 0x17, 0x11, 0x11, 0x0f],
+  H: [0x11, 0x11, 0x11, 0x1f, 0x11, 0x11, 0x11],
+  I: [0x0e, 0x04, 0x04, 0x04, 0x04, 0x04, 0x0e],
+  J: [0x07, 0x02, 0x02, 0x02, 0x02, 0x12, 0x0c],
+  K: [0x11, 0x12, 0x14, 0x18, 0x14, 0x12, 0x11],
+  L: [0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0x1f],
+  M: [0x11, 0x1b, 0x15, 0x15, 0x11, 0x11, 0x11],
+  N: [0x11, 0x11, 0x19, 0x15, 0x13, 0x11, 0x11],
+  O: [0x0e, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0e],
+  P: [0x1e, 0x11, 0x11, 0x1e, 0x10, 0x10, 0x10],
+  Q: [0x0e, 0x11, 0x11, 0x11, 0x15, 0x12, 0x0d],
+  R: [0x1e, 0x11, 0x11, 0x1e, 0x14, 0x12, 0x11],
+  S: [0x0f, 0x10, 0x10, 0x0e, 0x01, 0x01, 0x1e],
+  T: [0x1f, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04],
+  U: [0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0e],
+  V: [0x11, 0x11, 0x11, 0x11, 0x11, 0x0a, 0x04],
+  W: [0x11, 0x11, 0x11, 0x15, 0x15, 0x1b, 0x11],
+  X: [0x11, 0x11, 0x0a, 0x04, 0x0a, 0x11, 0x11],
+  Y: [0x11, 0x11, 0x0a, 0x04, 0x04, 0x04, 0x04],
+  Z: [0x1f, 0x01, 0x02, 0x04, 0x08, 0x10, 0x1f],
+  a: [0x00, 0x00, 0x0e, 0x01, 0x0f, 0x11, 0x0f],
+  b: [0x10, 0x10, 0x1e, 0x11, 0x11, 0x11, 0x1e],
+  c: [0x00, 0x00, 0x0e, 0x10, 0x10, 0x11, 0x0e],
+  d: [0x01, 0x01, 0x0f, 0x11, 0x11, 0x11, 0x0f],
+  e: [0x00, 0x00, 0x0e, 0x11, 0x1f, 0x10, 0x0e],
+  f: [0x06, 0x09, 0x08, 0x1c, 0x08, 0x08, 0x08],
+  g: [0x00, 0x00, 0x0f, 0x11, 0x0f, 0x01, 0x0e],
+  h: [0x10, 0x10, 0x1e, 0x11, 0x11, 0x11, 0x11],
+  i: [0x04, 0x00, 0x0c, 0x04, 0x04, 0x04, 0x0e],
+  j: [0x02, 0x00, 0x06, 0x02, 0x02, 0x12, 0x0c],
+  k: [0x10, 0x10, 0x12, 0x14, 0x18, 0x14, 0x12],
+  l: [0x0c, 0x04, 0x04, 0x04, 0x04, 0x04, 0x0e],
+  m: [0x00, 0x00, 0x1a, 0x15, 0x15, 0x15, 0x15],
+  n: [0x00, 0x00, 0x1e, 0x11, 0x11, 0x11, 0x11],
+  o: [0x00, 0x00, 0x0e, 0x11, 0x11, 0x11, 0x0e],
+  p: [0x00, 0x00, 0x1e, 0x11, 0x1e, 0x10, 0x10],
+  q: [0x00, 0x00, 0x0f, 0x11, 0x0f, 0x01, 0x01],
+  r: [0x00, 0x00, 0x16, 0x19, 0x10, 0x10, 0x10],
+  s: [0x00, 0x00, 0x0f, 0x10, 0x0e, 0x01, 0x1e],
+  t: [0x08, 0x08, 0x1c, 0x08, 0x08, 0x09, 0x06],
+  u: [0x00, 0x00, 0x11, 0x11, 0x11, 0x13, 0x0d],
+  v: [0x00, 0x00, 0x11, 0x11, 0x11, 0x0a, 0x04],
+  w: [0x00, 0x00, 0x11, 0x15, 0x15, 0x15, 0x0a],
+  x: [0x00, 0x00, 0x11, 0x0a, 0x04, 0x0a, 0x11],
+  y: [0x00, 0x00, 0x11, 0x11, 0x0f, 0x01, 0x0e],
+  z: [0x00, 0x00, 0x1f, 0x02, 0x04, 0x08, 0x1f]
+};
+
+const GLYPH_W = 5;
+const GLYPH_H = 7;
+/** One blank column between glyphs. */
+const ADVANCE = GLYPH_W + 1;
+/** Baseline-to-baseline, in font cells. */
+const LINE_CELLS = GLYPH_H + 3;
+/** Device px per font cell. 2 puts a cap at 14px. */
+const FONT_PX = 2;
+
+/** Fold anything the font does not carry onto something it does. */
+function foldChar(ch: string): string {
+  if (GLYPHS[ch]) return ch;
+  switch (ch) {
+    case '’':
+    case '‘':
+      return "'";
+    case '“':
+    case '”':
+      return '"';
+    case '—':
+    case '–':
+      return '-';
+    case '…':
+      return '.';
+    default:
+      break;
+  }
+  const up = ch.toUpperCase();
+  if (GLYPHS[up]) return up;
+  return ' ';
+}
+
+function textCells(s: string): number {
+  return s.length ? s.length * ADVANCE - 1 : 0;
+}
+
+/** Blit a string, top-left at (cx, cy) in cells. Offscreen builds only. */
+function blitText(
+  g: CanvasRenderingContext2D,
+  s: string,
+  cx: number,
+  cy: number,
+  px: number,
+  colour: string
+) {
+  g.fillStyle = colour;
+  for (let i = 0; i < s.length; i++) {
+    const rows = GLYPHS[foldChar(s[i])];
+    if (!rows) continue;
+    const ox = cx + i * ADVANCE;
+    for (let r = 0; r < GLYPH_H; r++) {
+      const bits = rows[r];
+      if (!bits) continue;
+      /* Merge horizontal runs so a glyph is a handful of rects, not 35. */
+      let c = 0;
+      while (c < GLYPH_W) {
+        if (bits & (0x10 >> c)) {
+          let run = 1;
+          while (c + run < GLYPH_W && bits & (0x10 >> (c + run))) run++;
+          g.fillRect((ox + c) * px, (cy + r) * px, run * px, px);
+          c += run;
+        } else {
+          c++;
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Greedy word wrap into `out`, reusing the array. Returns the line count and
+ * writes the widest line's cell width into WRAP_WIDEST.
+ */
+let WRAP_WIDEST = 0;
+function wrapText(text: string, maxChars: number, out: string[]): number {
+  let n = 0;
+  WRAP_WIDEST = 0;
+  const words = text.split(' ');
+  let line = '';
+  const flush = () => {
+    if (!line) return;
+    out[n] = line;
+    n++;
+    const w = textCells(line);
+    if (w > WRAP_WIDEST) WRAP_WIDEST = w;
+    line = '';
+  };
+  for (let i = 0; i < words.length; i++) {
+    let w = words[i];
+    if (!w) continue;
+    while (w.length > maxChars) {
+      flush();
+      out[n] = w.slice(0, maxChars);
+      n++;
+      const ww = textCells(out[n - 1]);
+      if (ww > WRAP_WIDEST) WRAP_WIDEST = ww;
+      w = w.slice(maxChars);
+    }
+    if (!line) line = w;
+    else if (line.length + 1 + w.length <= maxChars) line = line + ' ' + w;
+    else {
+      flush();
+      line = w;
+    }
+  }
+  flush();
+  out.length = n;
+  return n;
+}
+
+/* -------------------------------------------------------------------------- */
+/* 1. compositor                                                               */
+/* -------------------------------------------------------------------------- */
+
+type VariantKey = string; // `${part}:${variant}` or `prop:${name}`
+
+function rasterise(rows: readonly string[]): HTMLCanvasElement | null {
+  const h = rows.length;
+  const w = h ? rows[0].length : 0;
+  if (!w || !h) return null;
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  const x = c.getContext('2d');
+  if (!x) return null;
+  const img = x.createImageData(w, h);
+  for (let r = 0; r < h; r++) {
+    for (let col = 0; col < w; col++) {
+      const ch = rows[r][col];
+      const i = (r * w + col) * 4;
+      if (ch === '.' || ch === undefined) {
+        img.data[i + 3] = 0;
+        continue;
+      }
+      const hex = (PALETTE as Record<string, string>)[ch];
+      if (!hex) {
+        img.data[i + 3] = 0;
+        continue;
+      }
+      img.data[i] = parseInt(hex.slice(1, 3), 16);
+      img.data[i + 1] = parseInt(hex.slice(3, 5), 16);
+      img.data[i + 2] = parseInt(hex.slice(5, 7), 16);
+      img.data[i + 3] = 255;
+    }
+  }
+  x.putImageData(img, 0, 0);
+  return c;
+}
+
+/** Rasterise every part variant AND every prop once, at 1 pixel per cell. */
+function buildAtlas(): Map<VariantKey, HTMLCanvasElement> {
+  const atlas = new Map<VariantKey, HTMLCanvasElement>();
+  (Object.keys(PARTS) as PartName[]).forEach((part) => {
+    const def = PARTS[part] as any;
+    Object.keys(def.variants).forEach((variant) => {
+      const c = rasterise(def.variants[variant].matrix as readonly string[]);
+      if (c) atlas.set(`${part}:${variant}`, c);
+    });
+  });
+  (Object.keys(PROPS) as PropName[]).forEach((name) => {
+    const c = rasterise(PROPS[name].matrix);
+    if (c) atlas.set(`prop:${name}`, c);
+  });
+  return atlas;
+}
+
+/* -------------------------------------------------------------------------- */
+/* 2. player                                                                   */
+/* -------------------------------------------------------------------------- */
+
+interface ResolvedPart {
+  dx: number;
+  dy: number;
+  variant: string;
+}
+type ResolvedPose = Record<string, ResolvedPart>;
+
+function ease(u: number, kind: Easing | undefined): number {
+  switch (kind) {
+    case 'hold': return 0;
+    case 'in': return u * u;
+    case 'out': return 1 - (1 - u) * (1 - u);
+    case 'inOut': return u < 0.5 ? 2 * u * u : 1 - 2 * (1 - u) * (1 - u);
+    default: return u;
+  }
+}
+
+/** Durations are pure functions of the data, so memoise rather than re-add. */
+const DURATIONS = new Map<Animation, number>();
+function animDuration(anim: Animation): number {
+  const hit = DURATIONS.get(anim);
+  if (hit !== undefined) return hit;
+  let total = 0;
+  for (const f of anim.frames) total += f.d;
+  DURATIONS.set(anim, total);
+  return total;
+}
+
+/* Two scratch slots and one pose object, reused every frame. Sampling a pose
+   used to allocate 11 objects and a record per frame; at 60fps that is 700
+   short-lived objects a second for no reason at all. */
+const SCRATCH_A: ResolvedPart = { dx: 0, dy: 0, variant: '' };
+const SCRATCH_B: ResolvedPart = { dx: 0, dy: 0, variant: '' };
+const POSE: ResolvedPose = {};
+for (const part of DRAW_ORDER) POSE[part] = { dx: 0, dy: 0, variant: '' };
+
+function poseInto(anim: Animation, frameIndex: number, part: PartName, out: ResolvedPart) {
+  const p = (anim.frames[frameIndex].pose as Pose)[part] as
+    | { dx?: number; dy?: number; variant?: string }
+    | undefined;
+  out.dx = p?.dx ?? 0;
+  out.dy = p?.dy ?? 0;
+  /* Sparse poses fall back to REST, never to the previous frame. That is the
+     contract in sparrowSprite, and it is what keeps a limb from sticking. */
+  out.variant = p?.variant ?? ((PARTS[part] as any).rest as string);
+}
+
+/** Which keyframe index the head is sitting in. PVZ needs this for the pea. */
+let SAMPLED_FRAME = 0;
+
+/**
+ * Sample the timeline at `t` ms into POSE. Positions blend between the
+ * bracketing keyframes; variants take the earlier frame's value and snap.
+ */
+function sampleInto(anim: Animation, t: number): boolean {
+  const frames = anim.frames;
+  const n = frames.length;
+  const total = animDuration(anim);
+  let done = false;
+  let time = t;
+
+  if (anim.loop) {
+    time = total > 0 ? t % total : 0;
+  } else if (t >= total) {
+    time = total;
+    done = true;
+  }
+
+  let i = 0;
+  let acc = 0;
+  while (i < n - 1 && acc + frames[i].d <= time) {
+    acc += frames[i].d;
+    i++;
+  }
+  SAMPLED_FRAME = i;
+  const d = frames[i].d || 1;
+  const rawU = Math.min(1, Math.max(0, (time - acc) / d));
+  const u = ease(rawU, frames[i].ease);
+  const nextIndex = anim.loop ? (i + 1) % n : Math.min(i + 1, n - 1);
+
+  for (let k = 0; k < DRAW_ORDER.length; k++) {
+    const part = DRAW_ORDER[k];
+    poseInto(anim, i, part, SCRATCH_A);
+    poseInto(anim, nextIndex, part, SCRATCH_B);
+    const slot = POSE[part];
+    slot.dx = SCRATCH_A.dx + (SCRATCH_B.dx - SCRATCH_A.dx) * u;
+    slot.dy = SCRATCH_A.dy + (SCRATCH_B.dy - SCRATCH_A.dy) * u;
+    slot.variant = SCRATCH_A.variant;
+  }
+  return done;
+}
+
+/**
+ * Net facing flips accumulated up to time `t`. `jumpTwist` carries two, which
+ * cancel; the somersaults carry none. Applied on top of bird.facing so a
+ * flourish cannot leave the bird permanently backwards.
+ */
+function flipsBefore(anim: Animation, t: number): number {
+  const total = animDuration(anim);
+  let time = anim.loop ? (total > 0 ? t % total : 0) : Math.min(t, total);
+  let flips = 0;
+  let acc = 0;
+  for (let i = 0; i < anim.frames.length; i++) {
+    if (acc > time) break;
+    if (anim.frames[i].flip) flips++;
+    acc += anim.frames[i].d;
+  }
+  return flips;
+}
+
+/* -------------------------------------------------------------------------- */
+/* 3. what he says                                                             */
+/* -------------------------------------------------------------------------- */
+
+/** Unprompted, section-agnostic. Kept short: a bubble is not an essay. */
+const RANDOM_LINES: readonly string[] = [
+  'He rewrote this three times. I watched all three.',
+  'If you scroll fast enough I have to improvise.',
+  'There is a CV on this page. He would like you to notice it.',
+  'I live on the headings. It is a good arrangement.',
+  'Ask me something. I am contractually informed.',
+  'He is in Hemel Hempstead. Sometimes London. Never here.',
+  'First class, Computer Science, Sheffield. He made me learn that.',
+  'Something is being built that he will not let me name.',
+  'I have opinions about the kerning.',
+  'The bird is load-bearing.'
+];
+
+/** Fired by an event rather than a timer. */
+const LINE_WALL_JUMP: readonly string[] = [
+  'Parkour.',
+  'Do not try that on a real wall.',
+  'I meant to do that.'
+];
+const LINE_CURSOR_PERCH: readonly string[] = [
+  'Do not move.',
+  'This will do nicely.',
+  'A perch is a perch.'
+];
+const LINE_STARTLE: readonly string[] = [
+  'I was awake. Obviously.',
+  'Do not do that.',
+  'Who. What. Where.'
+];
+const LINE_CHASE: readonly string[] = [
+  'Come back down here.',
+  'You are drifting.',
+  'Hold still, I am catching up.'
+];
+const LINE_PVZ: readonly string[] = ['We have a situation.', 'Lawn defence.', 'Not again.'];
+const LINE_WAKE: readonly string[] = ['I was resting my eyes.', 'What did I miss?'];
+
+/*
+ * ANGER, IN WORDS. The client asked for the anger level to be "reflected in
+ * the messages", so the drag pools are banded rather than shuffled together:
+ * which pool he draws from is a readout of the same number that drives the
+ * struggle amplitude and the escape odds. Three bands, because two reads as a
+ * switch and four is more gradation than a one-line bubble can carry.
+ */
+const LINE_DRAG_CALM: readonly string[] = [
+  'Put me down.',
+  'This is not a handle.',
+  'I was standing there.'
+];
+const LINE_DRAG_CROSS: readonly string[] = [
+  'Let. Go.',
+  'I am not a window.',
+  'You are going to regret this.'
+];
+const LINE_DRAG_FURIOUS: readonly string[] = [
+  'RIGHT.',
+  'That is IT.',
+  'You have made a powerful enemy.'
+];
+const LINE_ESCAPE: readonly string[] = [
+  'Freedom.',
+  'Told you.',
+  'Never again.'
+];
+const LINE_RETALIATE: readonly string[] = [
+  'I am taking this.',
+  'You do not deserve a cursor.',
+  'Mine now. Reflect on your choices.'
+];
+const LINE_RETURN: readonly string[] = [
+  'Here. Behave.',
+  'You may have it back.',
+  'We will say no more about it.'
+];
+/** Thrown off the cursor by a hard mouse movement. */
+const LINE_SHAKEN: readonly string[] = [
+  'Rude.',
+  'I was PERCHED.',
+  'Steady on.'
+];
+/** He decided the cursor was not a career. */
+const LINE_CURSOR_LEAVE: readonly string[] = [
+  'That was long enough.',
+  'Back to the furniture.',
+  'You need that. Probably.'
+];
+
+function pickLine(pool: readonly string[]): string {
+  return pool[(Math.random() * pool.length) | 0];
+}
+
+/** Which drag pool the current anger reads from. */
+function angerPool(anger: number): readonly string[] {
+  if (anger > 0.66) return LINE_DRAG_FURIOUS;
+  if (anger > 0.33) return LINE_DRAG_CROSS;
+  return LINE_DRAG_CALM;
+}
+
+/* -------------------------------------------------------------------------- */
+/* 4. physics types                                                            */
+/* -------------------------------------------------------------------------- */
+
+interface Perch {
+  /** null for the synthetic cursor perch. Identity is how a re-measure
+      recognises furniture it has already seen. */
+  el: Element | null;
+  x0: number;
+  x1: number;
+  y: number;
+  w: number;
+  /**
+   * True when the element is anchored to the VIEWPORT rather than to the page
+   * (position: fixed, or inside something that is). Its document y is then
+   * `scrollY + a constant`, re-derived every frame by `syncAnchored` instead
+   * of measured. Also disqualifies it as the boot seat: the bird should open
+   * on a piece of the page, not on the edge of the screen.
+   */
+  fixed?: boolean;
+}
+
+const GRAVITY = 2100; // px/s^2, document space
+
+/* ==========================================================================
+   THE PERCH CONTRACT
+   ==========================================================================
+
+   A perch is a HORIZONTAL VISIBLE LINE the bird can stand on: a rule, a
+   border, the top of a card, the cap line of a heading. It is not a bounding
+   box. Boxes carry padding, leading, tilt, and empty column to the right of
+   short text — stand a bird on a box edge and he floats above the mark or
+   sinks into it. Closing that gap is the whole point of what follows.
+
+   Furniture is declared IN THE MARKUP, so a component owns its own landing
+   surfaces and this file never has to know their class names:
+
+     data-perch
+         This element is landable. The perch is the top edge of its border
+         box, spanning its full width. Correct for anything whose frame is the
+         mark: a rule, a bordered plate, a table row, a card.
+
+     data-perch-text
+         The visible mark is the FIRST LINE OF TEXT, not the box. The span is
+         narrowed to that line's actual ink, so he cannot stand on the empty
+         two thirds of a column beside a short eyebrow. The vertical edge
+         still comes from the content box (line-box tops are reported
+         inconsistently between engines; padding and border are not), so pair
+         this with an inset that names the cap line.
+
+     data-perch-inset="6" | "0.10em" | "13%"
+         How far BELOW the box top the visible edge actually is. Plain numbers
+         are px; `em` multiplies this element's own computed font size, so the
+         value survives a clamp(); `%` is a share of the element's height.
+         Negative is legal.
+
+         For text the target is the HIGHEST INK on the first line — the
+         ascender line, not the cap line. Set him on the cap line and the
+         ascenders of h, l and t pass through his feet, which reads as a bug;
+         set him on the ascender line and he is a few pixels clear of the
+         capitals, which reads as a bird standing on a word.
+
+         Do not guess it. Measure it, per face and per line-height:
+
+             const p = document.createElement('span');
+             p.style.cssText =
+               'display:inline-block;width:0;height:0;vertical-align:baseline';
+             el.insertBefore(p, el.firstChild);
+             const baseline = p.getBoundingClientRect().top;   // then remove p
+             ctx.font = [fontStyle, fontWeight, fontSize, fontFamily].join(' ');
+             const ink = ctx.measureText('bdfhklt').actualBoundingBoxAscent;
+             inset = (baseline - ink - contentBoxTop) / fontSize;   // in em
+
+         Every value in the v2 tree was taken that way. As a first estimate,
+         for line-height L, font-size F and a face whose ascent, descent and
+         ink height are A, D and I ems, it is L/2 + F(A/2 - D/2 - I) — good to
+         about 0.02em on this page's faces, which is a whole pixel at display
+         sizes, hence the measurement.
+
+         Current values: 0.04em on the hero title (L = 0.86F), 0.10em on
+         .v2-h2 and .v2-route-title (L = 1.02F), 0.12em on .v2-reel-title and
+         .v2-foot-say (L = 1.06-1.08F), 0.33em on a lede (L = 1.62F) and
+         0.38em on mono set at the base 1.68. A display line at 210px and the
+         same rule at 56px do not share a pixel inset, which is exactly why em
+         is accepted here.
+
+     data-perch-side="10"
+         Horizontal inset per side, px, for the rare non-text case where the
+         visible mark is narrower than the box.
+
+   Two corrections need no attribute:
+
+     Rotation. A tilted card's bounding box is both wider and taller than the
+     card, and its top is above the visible frame — which is why the polaroids
+     could never have lined up from a rect alone. The top edge is rebuilt from
+     the untransformed box and the computed matrix, and the span is trimmed to
+     the middle of that edge so his feet stay within PERCH_TILT_SLOP of it.
+
+     Reveals. Entrance transitions move the mark without changing layout, so
+     nothing fires a resize and a perch measured at boot stays 14px low for
+     the life of the page. Anything still faded out is not landable yet, and
+     `transitionend` re-measures once it has arrived.
+
+   Elements that are position: sticky, or sit inside something sticky, are
+   skipped outright: their document position is only true until they stick,
+   and a perch that quietly slides out from under the bird is worse than no
+   perch at all.
+   ========================================================================== */
+const PERCH_ATTR = '[data-perch]';
+
+/**
+ * The pre-contract selector list, kept as a FALLBACK. Anything matched by both
+ * is harvested once, under its data-perch treatment; anything the attributes
+ * miss still lands here, so removing an attribute cannot silently strip the
+ * page of everything landable.
+ */
+const PERCH_SELECTOR =
+  '.v2-h2, .v2-shelf-cell, .v2-lede, .v2-eyebrow, .v2-hero-title, .v2-rule-hard, .v2-cue';
+
+/** Narrower than this and his feet hang off both ends. */
+const PERCH_MIN_W = 56;
+/**
+ * A 2px rule is a perfectly good line to stand on. The old floor of 4px threw
+ * away every .v2-rule-hard on the page — all eight of them — even though the
+ * selector above has always named them. Kept at 4 for the fallback list so
+ * nothing it harvests today changes; declared perches get the honest floor.
+ */
+const PERCH_MIN_H = 0.5;
+const PERCH_MIN_H_LEGACY = 4;
+/** Shoulder left at each end of a perch, px. Pre-contract behaviour, kept. */
+const PERCH_SHOULDER = 8;
+/** How far a tilted edge may leave his feet off the line before the span is
+    narrowed towards the middle of that edge, px. */
+const PERCH_TILT_SLOP = 3;
+/** Below this computed opacity the mark has not finished arriving. */
+const PERCH_MIN_OPACITY = 0.9;
+
+/** Middle 70% of the viewport. Outside it he starts working his way back. */
+const BAND_MARGIN = 0.15;
+/** How far in from the viewport edge a wall kick happens. */
+const WALL_INSET = 26;
+/** One body width, in document px. The pace every walk translates at. */
+const BODY_PX = 11 * PIXEL_SCALE;
+
+/**
+ * The fastest any CORRECTION may move him, in px/s.
+ *
+ * Clamping a position into a legal range is the classic way a rig teleports:
+ * the arithmetic is right, the assignment is instant, and thirty pixels
+ * vanish between two frames. Every clamp that used to be an assignment now
+ * goes through `approach` at this speed, so being a little off the end of a
+ * heading is walked off rather than cut away.
+ */
+const CORRECT_SPEED = 460;
+/** Terminal velocity of a fall. See the fall case for why 1900 was wrong. */
+const FALL_TERMINAL = 1250;
+/** No single fall substep may travel further than this. */
+const FALL_STEP_PX = 16;
+/** Smoothed px/frame that counts as a fast scroll. About 840 px/s. */
+const TRANSIT_VEL = 14;
+/** ...held for this long, so one wheel notch cannot launch a balloon. */
+const TRANSIT_SUSTAIN = 80;
+
+/** Move `cur` toward `target` by at most one frame of travel. */
+function approach(cur: number, target: number, dt: number, speed = CORRECT_SPEED): number {
+  const d = target - cur;
+  const step = speed * dt;
+  if (d > step) return cur + step;
+  if (d < -step) return cur - step;
+  return target;
+}
+
+type Mode =
+  | 'idle'
+  | 'walk'
+  | 'act'
+  | 'hop'
+  | 'wall'
+  | 'land'
+  | 'fall'
+  | 'fly'
+  | 'transit'
+  | 'sleep'
+  | 'chat'
+  | 'pvz'
+  /* held by the reader. He does not care for it. */
+  | 'drag';
+
+interface Waypoint {
+  kind: 'perch' | 'wall';
+  x: number;
+  y: number;
+  perch: Perch | null;
+  side: number;
+}
+
+interface ChatMsg {
+  me: boolean;
+  text: string;
+}
+
+export interface CompanionProps {
+  /** Lines the bird may say, keyed by section id. */
+  whispers?: Record<string, string[]>;
+  /** The section currently being read, from useSpine. */
+  activeSection?: string;
+  /** Live scroll velocity ref from useSpine, read per frame. */
+  velocityRef?: React.MutableRefObject<number>;
+  /** Answers questions about Jack. Falls back to a local table offline. */
+  onAsk?: (q: string) => Promise<string>;
+}
+
+/* Small record-shaped lookups, cast once so the call sites stay clean. */
+const TRANSIT_PROP_MAP = TRANSIT_PROPS as unknown as Record<string, readonly PropName[]>;
+const CHAT_PROP_MAP = CHAT_PERCH_PROPS as unknown as Record<string, readonly PropName[]>;
+const CHAT_CYCLE_MAP = CHAT_PERCH_CYCLES as unknown as Record<
+  string,
+  readonly (readonly { prop: PropName | null; d: number }[])[] | undefined
+>;
+
+/**
+ * Which of a perch's CYCLED props are showing right now.
+ *
+ * Written into one module-level array that is cleared and refilled rather than
+ * returned fresh, because this runs inside the frame loop and the loop does not
+ * allocate. The caller must therefore read the result before calling again —
+ * which the draw pass does, twice per frame, once for each layer.
+ *
+ * `t` is the bird's own clock, the same one the keyframes advance on, so the
+ * fire cannot drift against the animation that is standing in front of it.
+ */
+const cycleScratch: PropName[] = [];
+function cycledProps(perch: string, t: number): PropName[] {
+  cycleScratch.length = 0;
+  const cycles = CHAT_CYCLE_MAP[perch];
+  if (!cycles) return cycleScratch;
+  for (let c = 0; c < cycles.length; c++) {
+    const steps = cycles[c];
+    let total = 0;
+    for (let i = 0; i < steps.length; i++) total += steps[i].d;
+    if (total <= 0) continue;
+    let left = t % total;
+    for (let i = 0; i < steps.length; i++) {
+      left -= steps[i].d;
+      if (left < 0) {
+        /* a null step is a deliberate gap: the page is not turning yet */
+        if (steps[i].prop) cycleScratch.push(steps[i].prop as PropName);
+        break;
+      }
+    }
+  }
+  return cycleScratch;
+}
+const EMPTY_PROPS: readonly PropName[] = [];
+
+/**
+ * Rolls one weighted entry.
+ *
+ * BUG 3, "the balloon animation isn't there". It was there — at two points in
+ * a hundred, behind a scroll gesture that (see the transit gate in update)
+ * almost never fired. Two percent of an event the reader never triggers is
+ * indistinguishable from absent, and the client is right that a piece of art
+ * nobody sees has not shipped.
+ *
+ * The authored 92:8 still governs the opening few transits, so the surprise
+ * survives. After that the rare weights climb, and a rare the reader has
+ * never met outranks one they have — so the balloon, the saucer, the jetpack
+ * and the propeller beanie each get a turn instead of the same one repeating.
+ * This is a rising probability, not a rota: there is no transit count at
+ * which the reader can predict what happens next.
+ */
+function rareWeight(e: TransitEntry, boost: number, seen: Set<AnimationName>): number {
+  if (e.rarity !== 'rare') return e.weight;
+  return e.weight * boost * (seen.has(e.name) ? 1 : 2.6);
+}
+function rollTransit(
+  table: readonly TransitEntry[],
+  boost: number,
+  seen: Set<AnimationName>
+): TransitEntry {
+  let total = 0;
+  for (let i = 0; i < table.length; i++) total += rareWeight(table[i], boost, seen);
+  let r = Math.random() * total;
+  for (let i = 0; i < table.length; i++) {
+    r -= rareWeight(table[i], boost, seen);
+    if (r <= 0) return table[i];
+  }
+  return table[0];
+}
+
+/**
+ * Plain hops carry most of the weight — a bird that somersaults every time it
+ * moves is a screensaver. JUMP_VARIANTS is ordered plain-first for this.
+ */
+const JUMP_WEIGHTS: readonly number[] = [34, 34, 8, 7, 6, 4, 3, 3];
+function rollJump(skipPlain: boolean): AnimationName {
+  let total = 0;
+  for (let i = skipPlain ? 2 : 0; i < JUMP_VARIANTS.length; i++) total += JUMP_WEIGHTS[i];
+  let r = Math.random() * total;
+  for (let i = skipPlain ? 2 : 0; i < JUMP_VARIANTS.length; i++) {
+    r -= JUMP_WEIGHTS[i];
+    if (r <= 0) return JUMP_VARIANTS[i];
+  }
+  return JUMP_VARIANTS[0];
+}
+
+function smoothstep(u: number): number {
+  const t = u < 0 ? 0 : u > 1 ? 1 : u;
+  return t * t * (3 - 2 * t);
+}
+
+/* ==========================================================================
+   THE FLIGHT RIG
+   ==========================================================================
+
+   B1: "the flying animation needs work, he looks like he's floating."
+
+   Floating is a diagnosis, not a taste. It is what a wing cycle produces when
+   two things are true, and both were true here:
+
+     1. THE CYCLE IS SYMMETRIC. `flyFlap` spends 130ms getting the wing down
+        and 140ms getting it back up. A real wingbeat is not symmetric at all:
+        the downstroke is the powered half and it is FAST, the recovery is
+        passive and slow, and the ratio is roughly one to two. Played at even
+        speed the wing reads as waving, and a waving bird hovers.
+
+     2. THE BODY DOES NOT MOVE. Worse than that — the authored body offset is
+        IN PHASE with the wing (body 1px up when the wing is up, 1px down when
+        the wing is down), which is backwards. A downstroke pushes air down
+        and the animal UP. Body and wing belong in antiphase.
+
+   The sprite file is owned elsewhere, so neither is fixed by editing the
+   keyframes. Both are fixed here, in the rig, which is the right place for
+   them anyway: they depend on how fast he is actually travelling, which the
+   sprite cannot know.
+
+     - the wing cycle is driven by a PHASE, and the phase is warped onto the
+       animation's own timeline so the downstroke plays in FLAP_DOWN_FRAC of
+       the wall clock and the recovery gets the rest;
+     - the body BOBS in antiphase, at an amplitude that comfortably dominates
+       the authored in-phase pixel, so the net relative motion is correct;
+     - and he PITCHES forward into the direction of travel, faster flight
+       meaning more pitch, because a bird that is going somewhere leans.
+
+   This applies to sustained flight — mode 'fly' — and deliberately not to the
+   scripted transits, which are set pieces with their own timing and which the
+   client did not complain about.
+   ========================================================================== */
+
+/** Wall-clock period of one wingbeat in sustained flight, ms. */
+const FLAP_CYCLE_MS = 290;
+/** Share of that period spent on the powered downstroke. Under half. */
+const FLAP_DOWN_FRAC = 0.34;
+/** Peak body rise and fall, in sprite pixels. Net of the authored ±1. */
+const FLAP_BOB = 2.6;
+/** Peak forward pitch, in sprite pixels of head-forward / tail-back shear. */
+const FLAP_PITCH = 2.1;
+/** Flight speed that counts as "full pitch", px/s. */
+const FLAP_PITCH_REF = 900;
+/** Seconds to fade the rig in and out, so entering flight does not snap. */
+const FLAP_BLEND = 0.16;
+
+/**
+ * Milliseconds into `anim` at which the wing reaches the BOTTOM of its
+ * stroke — the boundary the phase warp bends around.
+ *
+ * Found from the data rather than hardcoded, so this keeps working if the
+ * sprite owner re-times a flap: the bottom is the keyframe whose wing sits
+ * lowest, preferring a keyframe that also names a spread or down variant so a
+ * pose that merely drifts cannot win. Memoised, because it is a pure function
+ * of an object that never changes.
+ */
+const WING_BOTTOM = new Map<Animation, number>();
+function wingBottomMs(anim: Animation): number {
+  const hit = WING_BOTTOM.get(anim);
+  if (hit !== undefined) return hit;
+  let best = -Infinity;
+  let bestAt = -1;
+  let acc = 0;
+  for (let i = 0; i < anim.frames.length; i++) {
+    const w = (anim.frames[i].pose as Pose).wing as
+      | { dy?: number; variant?: string }
+      | undefined;
+    if (w) {
+      const low = w.variant === 'spread' || w.variant === 'down' ? 1.5 : 0;
+      const score = (w.dy ?? 0) + low;
+      if (score > best) {
+        best = score;
+        bestAt = acc;
+      }
+    }
+    acc += anim.frames[i].d;
+  }
+  const out = bestAt > 0 ? bestAt : acc * 0.5;
+  WING_BOTTOM.set(anim, out);
+  return out;
+}
+
+/* ==========================================================================
+   THE DRAWN CURSOR
+   ==========================================================================
+
+   Job 4, which the client approved: the bird can steal your mouse pointer.
+
+   A browser cannot move or hide the real pointer, so this is a SWAP — the
+   system cursor is hidden with CSS over the page and an identical pixel one
+   is drawn on the companion canvas at the pointer's own coordinates. Once the
+   thing on screen is ours, he can take it.
+
+   The swap is the single most dangerous thing in this file: a page with no
+   visible pointer is a page nobody can use. Everything about it is therefore
+   written to fail back to the real cursor rather than away from it. See
+   `cursorWanted` and the watchdog for the full list of conditions, but the
+   shape of the rule is: the class goes on only while a drawn cursor was
+   actually painted in the last few frames, and comes off for anything at all.
+   ========================================================================== */
+
+/**
+ * 8x12, hotspot at its top-left pixel, drawn at CURSOR_SCALE rather than
+ * PIXEL_SCALE so it lands at 16x24 CSS px — the size of a real arrow. K is
+ * the sprite's ink and W its brightest paper, so the outline carries it on
+ * either palette without needing a theme of its own.
+ */
+const CURSOR_MATRIX: readonly string[] = [
+  'K.......',
+  'KK......',
+  'KWK.....',
+  'KWWK....',
+  'KWWWK...',
+  'KWWWWK..',
+  'KWWWWWK.',
+  'KWWWWWWK',
+  'KWWWKKKK',
+  'KWKWWK..',
+  'KK.KWWK.',
+  '...KKKK.'
+];
+/**
+ * The same arrow, filled vermilion, shown over anything clickable.
+ *
+ * This exists because the swap used to hand the real pointer back over
+ * interactive elements, and Jack reported that as a bug: "the custom mouse
+ * stops when I hover over something selectable." He is right that it looks
+ * broken — the cursor you are being shown vanishes exactly when you go to use
+ * it. But the reason it did that was real: `cursor: pointer` is how the page
+ * says "this does something", and losing that affordance would be a genuine
+ * regression, not a stylistic one.
+ *
+ * So the affordance moves into the drawn cursor instead of being given up.
+ * Same silhouette, same hotspot, same size — only the fill changes, which is
+ * the strongest signal available in a two-colour sprite and needs no new
+ * hotspot maths. The outline stays ink so it still reads on either palette.
+ */
+const CURSOR_MATRIX_OVER: readonly string[] = [
+  'K.......',
+  'KK......',
+  'KVK.....',
+  'KVVK....',
+  'KVVVK...',
+  'KVVVVK..',
+  'KVVVVVK.',
+  'KVVVVVVK',
+  'KVVVKKKK',
+  'KVKVVK..',
+  'KK.KVVK.',
+  '...KKKK.'
+];
+const CURSOR_SCALE = 2;
+/** Class the swap puts on <html>. The rule is injected and removed with it. */
+const CURSOR_SWAP_CLASS = 'v2-bird-cursor-swap';
+/**
+ * Anything the reader might click, type into or focus.
+ *
+ * This no longer hands the real cursor back — it selects the vermilion arrow
+ * instead, so the affordance survives without the pointer disappearing. It is
+ * still used elsewhere to keep him from perching on live controls.
+ */
+const INTERACTIVE_SELECTOR =
+  'a,button,input,select,textarea,label,summary,option,[role="button"],' +
+  '[role="link"],[role="textbox"],[contenteditable],[tabindex]:not([tabindex="-1"])';
+
+/* ==========================================================================
+   DRAG, ANGER, AND THE CURSOR PERCH
+   ========================================================================== */
+
+/** Pixels of pointer travel before a press on him becomes a drag, not a click. */
+const DRAG_SLOP = 5;
+/** Anger gained per pixel the pointer drags him. 620px of hauling maxes it. */
+const ANGER_PER_PX = 0.0016;
+/** Anger lost per second once you stop. "Comes down pretty quick." */
+const ANGER_DECAY = 0.85;
+/** Grace before the decay starts, so a pause mid-drag does not reset him. */
+const ANGER_GRACE_MS = 240;
+/** How often he tries to break free while held. */
+const ESCAPE_TICK_MS = 420;
+/** Above this, breaking free is not enough: he takes the cursor with him. */
+const RETALIATE_ANGER = 0.62;
+/** How long he keeps it, ms. Bounded on purpose — see the watchdog. */
+const THEFT_MS = 3000;
+
+/** Pointer speed he can ride out while perched on it, px/s. */
+const PERCH_RIDE_SPEED = 340;
+/** Sustained pointer speed that throws him off, px/s. */
+const PERCH_BUCK_SPEED = 1500;
+/** A single frame's pointer jump that throws him off, px. */
+const PERCH_BUCK_JERK = 44;
+/** How long he will stay on the cursor before leaving of his own accord. */
+const PERCH_STAY_MIN_MS = 5400;
+const PERCH_STAY_JITTER_MS = 9000;
+
+/* -------------------------------------------------------------------------- */
+/* 5. component                                                                */
+/* -------------------------------------------------------------------------- */
+
+export default function Companion({
+  whispers,
+  activeSection,
+  velocityRef,
+  onAsk
+}: CompanionProps) {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [chatting, setChatting] = useState(false);
+
+  /* Everything the loop reads lives behind a ref so the engine effect can run
+     exactly once and never be torn down by a parent re-render. */
+  const whispersRef = useRef(whispers);
+  whispersRef.current = whispers;
+  const sectionRef = useRef(activeSection);
+  sectionRef.current = activeSection;
+  const velRef = useRef(velocityRef);
+  velRef.current = velocityRef;
+  const onAskRef = useRef(onAsk);
+  onAskRef.current = onAsk;
+
+  const chat = useRef({
+    open: false,
+    busy: false,
+    version: 0,
+    log: [] as ChatMsg[],
+    perch: CHAT_PERCHES[0]
+  });
+  /* Announced to screen readers, which cannot read a canvas. */
+  const [srLog, setSrLog] = useState<ChatMsg[]>([]);
+
+  const closeChat = useCallback(() => {
+    if (!chat.current.open) return;
+    chat.current.open = false;
+    setChatting(false);
+  }, []);
+
+  const submit = useCallback(async (q: string) => {
+    const c = chat.current;
+    if (!q.trim() || c.busy) return;
+    c.log.push({ me: true, text: q.slice(0, 240) });
+    c.version++;
+    c.busy = true;
+    setSrLog(c.log.slice(-6));
+    const el = inputRef.current;
+    if (el) el.disabled = true;
+    let answer: string;
+    try {
+      answer = onAskRef.current
+        ? await onAskRef.current(q)
+        : 'Ask me about MotionGen, the rasterizer, the classifier, or the road.';
+    } catch {
+      answer = 'That did not go through. Try me again in a moment.';
+    }
+    c.log.push({ me: false, text: answer });
+    if (c.log.length > 40) c.log.splice(0, c.log.length - 40);
+    c.version++;
+    c.busy = false;
+    setSrLog(c.log.slice(-6));
+    const el2 = inputRef.current;
+    if (el2) {
+      el2.disabled = false;
+      el2.focus();
+    }
+  }, []);
+
+  /* ---------------------------------------------------------------------- */
+  /* the engine                                                              */
+  /* ---------------------------------------------------------------------- */
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let reduced = motionQuery.matches;
+    const onMotion = () => {
+      reduced = motionQuery.matches;
+      /* Opting into reduced motion mid-session must not leave a drawn cursor
+         in charge, since under reduced motion nothing draws one. */
+      if (reduced) restoreCursor();
+    };
+    if (motionQuery.addEventListener) motionQuery.addEventListener('change', onMotion);
+
+    const atlas = buildAtlas();
+    /* Rasterised once, like everything else the compositor draws. Null means
+       the swap can never engage, which is the correct way for it to fail. */
+    const cursorImg = rasterise(CURSOR_MATRIX);
+    const cursorImgOver = rasterise(CURSOR_MATRIX_OVER);
+
+    /* ---- theme -------------------------------------------------------- */
+    /* The sprite palette is fixed, but the bubble and chat chrome are ours,
+       so they follow the page's own tokens and flip with the theme. */
+    const theme = { paper: '#F0ECE3', ink: '#17140F', ink3: '#655C4F', verm: '#9E3524' };
+    function readTheme() {
+      const cs = getComputedStyle(document.documentElement);
+      const get = (n: string, f: string) => (cs.getPropertyValue(n) || '').trim() || f;
+      theme.paper = get('--paper-hi', '#F0ECE3');
+      theme.ink = get('--ink', '#17140F');
+      theme.ink3 = get('--ink-3', '#655C4F');
+      theme.verm = get('--verm-text', get('--verm', '#9E3524'));
+      bubble.dirty = true;
+      chatUi.dirty = true;
+    }
+
+    let W = 0;
+    let H = 0;
+    let dpr = 1;
+    function resize() {
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      W = window.innerWidth;
+      H = window.innerHeight;
+      canvas!.width = Math.round(W * dpr);
+      canvas!.height = Math.round(H * dpr);
+      ctx!.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx!.imageSmoothingEnabled = false;
+      chatUi.dirty = true;
+    }
+
+    /* ---- perches, measured from real page furniture ------------------- */
+    /*
+     * BUG 1, cause (b): re-measuring used to build brand new Perch objects.
+     * The bird held a pointer to the old one, so the instant a layout shift
+     * moved a heading the bird either kept standing on a ghost or was handed
+     * a perch whose y had moved 200px — and since idle assigns bird.y from
+     * bird.perch.y every frame, that read as a teleport.
+     *
+     * Now perches are keyed by their element and UPDATED IN PLACE, and the
+     * delta is applied to the bird as well. The bird rides the furniture: it
+     * stays exactly where it was relative to the words under its feet, which
+     * is the only reading of "did not move" that a reader can perceive.
+     */
+    const byEl = new Map<Element, Perch>();
+    let perches: Perch[] = [];
+    const cursorPerch: Perch = { el: null, x0: 0, x1: 0, y: 0, w: 28 };
+
+    /**
+     * Perches on viewport-anchored furniture, with the VIEWPORT-space edge that
+     * was measured for each. Their document coordinates are re-derived from the
+     * scroll offset every frame by `syncAnchored` — arithmetic only, no layout
+     * read and nothing allocated inside the loop.
+     */
+    const anchored: Array<{ p: Perch; yv: number; x0v: number; x1v: number }> = [];
+
+    /** One Range, reused: reading a first line must not allocate per element. */
+    const lineRange = document.createRange();
+
+    /** measureEdge writes here, so harvesting allocates nothing per element. */
+    const edge = { x0: 0, x1: 0, y: 0, w: 0, fixed: false };
+
+    /**
+     * True when the last pass skipped furniture that had not finished
+     * revealing. Those elements are re-measured when their transition ends.
+     */
+    let perchesPending = false;
+
+    /**
+     * '' normally, 'fixed' when the element is anchored to the viewport,
+     * 'sticky' when its document position is only true until it sticks.
+     * Memoised for the length of one pass, so the walk is shared by siblings.
+     */
+    const anchorCache = new Map<Element, string>();
+    function anchorOf(el: Element): string {
+      const hit = anchorCache.get(el);
+      if (hit !== undefined) return hit;
+      const pos = window.getComputedStyle(el).position;
+      let out = '';
+      if (pos === 'fixed') out = 'fixed';
+      else if (pos === 'sticky') out = 'sticky';
+      else {
+        const parent = el.parentElement;
+        out = parent && parent !== document.body ? anchorOf(parent) : '';
+      }
+      anchorCache.set(el, out);
+      return out;
+    }
+
+    /** One `data-perch-*` value in px. See THE PERCH CONTRACT above. */
+    function readInset(raw: string | undefined, fontPx: number, basis: number): number {
+      if (!raw) return 0;
+      const n = parseFloat(raw);
+      if (!Number.isFinite(n)) return 0;
+      if (raw.indexOf('%') >= 0) return (n / 100) * basis;
+      if (raw.indexOf('em') >= 0) return n * fontPx;
+      return n;
+    }
+
+    /**
+     * The 2x2 basis of an element's own transform, or null when it is
+     * axis-aligned and the plain rect is already correct. matrix() carries six
+     * numbers and matrix3d() sixteen; the 2D basis is the first two columns of
+     * either.
+     */
+    function readTilt(t: string): { a: number; b: number; c: number; d: number } | null {
+      if (!t || t === 'none') return null;
+      const open = t.indexOf('(');
+      if (open < 0) return null;
+      const n = t.slice(open + 1, t.lastIndexOf(')')).split(',');
+      const a = parseFloat(n[0]);
+      const b = parseFloat(n[1]);
+      const c = parseFloat(n.length > 6 ? n[4] : n[2]);
+      const d = parseFloat(n.length > 6 ? n[5] : n[3]);
+      if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+      if (!Number.isFinite(c) || !Number.isFinite(d)) return null;
+      /* pure translation and pure scale need no reconstruction */
+      if (Math.abs(b) < 1e-4 && Math.abs(c) < 1e-4) return null;
+      return { a, b, c, d };
+    }
+
+    /**
+     * Writes the VISIBLE top edge of `el` into `edge`, in VIEWPORT space, and
+     * returns false when the element cannot be stood on. `declared` is true for
+     * elements carrying data-perch; the fallback selector list keeps its old,
+     * blunter rules so nothing it harvests today moves.
+     */
+    function measureEdge(el: Element, declared: boolean): boolean {
+      const cs = window.getComputedStyle(el);
+      if (cs.visibility === 'hidden' || cs.display === 'none') return false;
+
+      /* Mid-entrance, or not revealed at all: the mark is not where it will be
+         and the reader cannot see it either. Come back at transitionend.
+         Tested BEFORE the width, because a rule revealing itself with
+         scaleX(0) has no width yet — that is unrevealed, not unlandable. */
+      const alpha = parseFloat(cs.opacity);
+      if (Number.isFinite(alpha) && alpha < PERCH_MIN_OPACITY) {
+        perchesPending = true;
+        return false;
+      }
+
+      const r = el.getBoundingClientRect();
+      if (r.width < 1) return false;
+
+      const anchor = anchorOf(el);
+      if (anchor === 'sticky') return false;
+
+      const he = el as HTMLElement;
+      const boxW = he.offsetWidth || r.width;
+      const boxH = he.offsetHeight || r.height;
+      const fontPx = parseFloat(cs.fontSize) || 16;
+
+      let x0 = r.left;
+      let x1 = r.right;
+      let y = r.top;
+
+      const m = readTilt(cs.transform);
+      if (m) {
+        const hw = boxW / 2;
+        const hh = boxH / 2;
+        /* A parallelogram's axis-aligned bounds are centred on it whatever the
+           transform-origin, so the rect still gives us the centre exactly. */
+        const cx = (r.left + r.right) / 2;
+        const cy = (r.top + r.bottom) / 2;
+        const mid = cx - hh * m.c;
+        y = cy - hh * m.d;
+        const rise = Math.abs(hw * m.b);
+        const half =
+          Math.abs(hw * m.a) *
+          (rise > PERCH_TILT_SLOP ? Math.max(0.35, PERCH_TILT_SLOP / rise) : 1);
+        x0 = mid - half;
+        x1 = mid + half;
+      }
+
+      if (declared && he.dataset.perchText !== undefined) {
+        /* the ink of the first line, not the column it happens to be set in */
+        lineRange.selectNodeContents(el);
+        const rects = lineRange.getClientRects();
+        let lx0 = 0;
+        let lx1 = 0;
+        let ltop = Infinity;
+        for (let i = 0; i < rects.length; i++) {
+          const q = rects[i];
+          if (q.width < 1 || q.height < 1) continue;
+          if (q.top < ltop - 0.5) {
+            ltop = q.top;
+            lx0 = q.left;
+            lx1 = q.right;
+          } else if (q.top < ltop + 0.5) {
+            lx0 = Math.min(lx0, q.left);
+            lx1 = Math.max(lx1, q.right);
+          }
+        }
+        /* No ink, or less of it than a bird is wide: not landable. Falling
+           back to the box here would hand him the whole column beside a short
+           eyebrow, which is the exact failure this attribute exists to fix. */
+        if (!(lx1 - lx0 >= PERCH_MIN_W)) return false;
+        x0 = lx0;
+        x1 = lx1;
+        /* content top, not the line-box top: engines disagree about the
+           latter, and padding and border they do not. The drop from here to
+           the ink is then the author's inset. */
+        y =
+          r.top +
+          (parseFloat(cs.borderTopWidth) || 0) +
+          (parseFloat(cs.paddingTop) || 0);
+      }
+
+      const side = readInset(he.dataset.perchSide, fontPx, boxW);
+      if (side) {
+        x0 += side;
+        x1 -= side;
+      }
+      y += readInset(he.dataset.perchInset, fontPx, boxH);
+
+      if (x1 - x0 < PERCH_MIN_W) return false;
+      if (r.height < (declared ? PERCH_MIN_H : PERCH_MIN_H_LEGACY)) return false;
+
+      edge.w = x1 - x0;
+      edge.x0 = x0 + PERCH_SHOULDER;
+      edge.x1 = x1 - PERCH_SHOULDER;
+      edge.y = y;
+      edge.fixed = anchor === 'fixed';
+      return true;
+    }
+
+    function measure() {
+      const found: Perch[] = [];
+      const kept = new Set<Element>();
+      const visited = new Set<Element>();
+      anchorCache.clear();
+      anchored.length = 0;
+      perchesPending = false;
+
+      const take = (el: Element, declared: boolean) => {
+        /* An element named by both the attribute and the fallback list is
+           harvested once, under the attribute's treatment. */
+        if (visited.has(el)) return;
+        visited.add(el);
+        if (!measureEdge(el, declared)) return;
+
+        const x0 = edge.x0 + window.scrollX;
+        const x1 = edge.x1 + window.scrollX;
+        const y = edge.y + window.scrollY;
+        let p = byEl.get(el);
+        if (p) {
+          if (bird.perch === p) {
+            /* carry the bird with the furniture rather than under it */
+            bird.x += x0 - p.x0;
+            bird.y += y - p.y;
+          }
+          p.x0 = x0;
+          p.x1 = x1;
+          p.y = y;
+          p.w = edge.w;
+          p.fixed = edge.fixed;
+        } else {
+          p = { el, x0, x1, y, w: edge.w, fixed: edge.fixed };
+          byEl.set(el, p);
+        }
+        kept.add(el);
+        found.push(p);
+        if (edge.fixed) anchored.push({ p, yv: edge.y, x0v: edge.x0, x1v: edge.x1 });
+      };
+
+      document.querySelectorAll(PERCH_ATTR).forEach((el) => take(el, true));
+      document.querySelectorAll(PERCH_SELECTOR).forEach((el) => take(el, false));
+
+      byEl.forEach((_v, k) => {
+        if (!kept.has(k)) byEl.delete(k);
+      });
+      found.sort((a, b) => a.y - b.y);
+      perches = found;
+      syncAnchored();
+    }
+
+    /**
+     * Fixed furniture — the section rail — sits at a SCREEN position, so its
+     * document coordinates move with every scroll. Re-derived here from the
+     * viewport edge measured last: arithmetic only, no layout read, nothing
+     * allocated. Called once a frame from `trackScroll`, and the bird is
+     * carried with it exactly as `measure` carries him.
+     */
+    function syncAnchored() {
+      if (!anchored.length) return;
+      const sx = window.scrollX;
+      const sy = window.scrollY;
+      for (let i = 0; i < anchored.length; i++) {
+        const a = anchored[i];
+        const x0 = a.x0v + sx;
+        const y = a.yv + sy;
+        if (bird.perch === a.p) {
+          bird.x += x0 - a.p.x0;
+          bird.y += y - a.p.y;
+        }
+        a.p.x0 = x0;
+        a.p.x1 = a.x1v + sx;
+        a.p.y = y;
+      }
+    }
+
+    /* ---- state -------------------------------------------------------- */
+    const bird = {
+      x: 0,
+      y: 0,
+      vx: 0,
+      vy: 0,
+      g: GRAVITY,
+      facing: 1 as 1 | -1,
+      perch: null as Perch | null,
+      mode: 'idle' as Mode,
+      modeT: 0,
+      anim: 'breathe' as AnimationName,
+      animT: 0,
+      animLoopUntil: 0,
+      /* One clock, accumulated from dt, in ms. Cooldowns, rests and the
+         animation head all read from this. Using performance.now() for
+         cooldowns while animT advanced on dt made the two disagree, and the
+         bird spent almost all its time breathing instead of doing anything. */
+      clock: 0,
+      restUntil: 0,
+      sinceMove: 0,
+      settledMs: 0,
+      strandedMs: 0,
+      /* continuous drift for locomotion idles — see BUG 1 cause (c) */
+      driftVx: 0,
+      driftUntil: 0,
+      /* walking */
+      walkVx: 0,
+      walkUntil: 0,
+      /* hop flourish held for the whole flight, or null for airUp/apex/down */
+      jumpAnim: null as AnimationName | null,
+      hopUrgency: 0,
+      hopGate: 0,
+      /* fly target */
+      flyX: 0,
+      flyY: 0,
+      flySpeed: 620,
+      flyPerch: null as Perch | null,
+      /* queued interaction after arriving somewhere */
+      queuedAct: null as AnimationName | null,
+      /* how long the current fall has run, for the glide swap */
+      fallMs: 0,
+      /* a fall opened by being thrown: hold the tumble until this clock */
+      tumbleUntil: 0,
+      sleepUntil: 0,
+      dreamIdx: 0,
+      dreamUntil: 0
+    };
+
+    /* ---- the rig ------------------------------------------------------- */
+    /*
+     * Everything the compositor adds ON TOP of the sampled pose. Kept in one
+     * preallocated object and applied in exactly one place (`applyRig`), so
+     * there is never a question of which of two systems moved a limb.
+     *
+     * None of this touches bird.x or bird.y. The continuity rule at the top
+     * of the file is about where he IS; this is about how he is drawn, and
+     * every term in it is a continuous function of time with a hard cap, so
+     * it cannot produce a jump either.
+     */
+    const rig = {
+      /** 0..1 blend of the flight rig. Eased, so entering flight is smooth. */
+      flight: 0,
+      /** wingbeat phase, 0..1. 0 is the top of the stroke. */
+      flapPhase: 0,
+      /** body offset in sprite px, +down. Antiphase to the wing. */
+      bob: 0,
+      /** forward shear in sprite px. Positive is toward the facing. */
+      pitch: 0,
+      /** 0..1 blend of the look-up gaze, and which way across it looks. */
+      gaze: 0,
+      gazeDir: 0,
+      /** struggle shake, sprite px, applied to the whole puppet. */
+      shakeX: 0,
+      shakeY: 0
+    };
+
+    /* ---- plan (a chain of waypoints) ---------------------------------- */
+    const PLAN: Waypoint[] = [
+      { kind: 'perch', x: 0, y: 0, perch: null, side: 0 },
+      { kind: 'perch', x: 0, y: 0, perch: null, side: 0 },
+      { kind: 'perch', x: 0, y: 0, perch: null, side: 0 },
+      { kind: 'perch', x: 0, y: 0, perch: null, side: 0 }
+    ];
+    let planLen = 0;
+    let planIdx = 0;
+    function beginPlan() {
+      planLen = 0;
+      planIdx = 0;
+    }
+    function pushWp(kind: 'perch' | 'wall', x: number, y: number, perch: Perch | null, side: number) {
+      if (planLen >= PLAN.length) return;
+      const w = PLAN[planLen];
+      w.kind = kind;
+      w.x = x;
+      w.y = y;
+      w.perch = perch;
+      w.side = side;
+      planLen++;
+    }
+
+    /* ---- act queue ----------------------------------------------------- */
+    const ACTS: AnimationName[] = ['breathe', 'breathe', 'breathe', 'breathe', 'breathe', 'breathe'];
+    let actLen = 0;
+    let actIdx = 0;
+    function startAct(a: AnimationName, b?: AnimationName, c?: AnimationName, d?: AnimationName) {
+      actLen = 0;
+      actIdx = 0;
+      ACTS[actLen++] = a;
+      if (b) ACTS[actLen++] = b;
+      if (c) ACTS[actLen++] = c;
+      if (d) ACTS[actLen++] = d;
+      setMode('act');
+      startAnim(ACTS[0]);
+    }
+
+    /* ---- transit ------------------------------------------------------- */
+    const transit = {
+      name: 'upFlap' as AnimationName,
+      up: true,
+      t: 0,
+      /* total time in this transit, which `t` is allowed to rewind */
+      held: 0,
+      /* 0 for the looping ones: they run until the scroll settles. */
+      dur: 0,
+      sy0: 0,
+      sy1: 0,
+      props: EMPTY_PROPS
+    };
+
+    /* ---- pvz ----------------------------------------------------------- */
+    /*
+     * Assembled from PVZ_SEQUENCE and PVZ_LOOP rather than spelled out, so
+     * the rig carries no animation name of its own: the bracketed middle of
+     * the sequence repeats once per zombie and the rest plays straight
+     * through. Rebuilt in place, so a set piece costs no allocation.
+     */
+    const PVZ_SCRIPT: AnimationName[] = [];
+    function buildPvzScript(waves: number) {
+      PVZ_SCRIPT.length = 0;
+      const loopAt = PVZ_SEQUENCE.indexOf(PVZ_LOOP[0]);
+      const after = loopAt + PVZ_LOOP.length;
+      for (let i = 0; i < loopAt; i++) PVZ_SCRIPT.push(PVZ_SEQUENCE[i]);
+      for (let w = 0; w < waves; w++)
+        for (let i = 0; i < PVZ_LOOP.length; i++) PVZ_SCRIPT.push(PVZ_LOOP[i]);
+      for (let i = after; i < PVZ_SEQUENCE.length; i++) PVZ_SCRIPT.push(PVZ_SEQUENCE[i]);
+    }
+    buildPvzScript(2);
+    const pvz = {
+      step: 0,
+      side: 1 as 1 | -1,
+      floorY: 0,
+      frameT: 0,
+      frame: 0,
+      shotFired: false,
+      z0Alive: false,
+      z0x: 0,
+      z1Alive: false,
+      z1x: 0,
+      peaLive: false,
+      peaX: 0,
+      peaY: 0,
+      splatT: 0,
+      splatX: 0,
+      splatY: 0,
+      gate: 0
+    };
+
+    /* ---- speech bubble -------------------------------------------------- */
+    const bubbleCanvas = document.createElement('canvas');
+    const bubble = {
+      text: '',
+      until: 0,
+      dirty: false,
+      w: 0,
+      h: 0,
+      tailCells: 4,
+      /* body size in font cells, so the live tail knows where the underside
+         of the box is without measuring the canvas back */
+      bodyW: 0,
+      bodyH: 0
+    };
+    const BUBBLE_LINES: string[] = [];
+
+    function say(text: string, ms = 5200) {
+      if (!text) return;
+      if (bubble.text === text && bubble.until > bird.clock) return;
+      bubble.text = text;
+      bubble.until = bird.clock + ms;
+      bubble.dirty = true;
+    }
+
+    function buildBubble() {
+      bubble.dirty = false;
+      const maxChars = Math.max(
+        12,
+        Math.min(30, Math.floor((Math.min(W - 28, 360) / FONT_PX - 16) / ADVANCE))
+      );
+      const n = wrapText(bubble.text, maxChars, BUBBLE_LINES);
+      if (!n) {
+        bubble.w = 0;
+        bubble.h = 0;
+        return;
+      }
+      const contentW = WRAP_WIDEST;
+      const contentH = n * LINE_CELLS - 3;
+      const padX = 4;
+      const padY = 3;
+      const bodyW = contentW + padX * 2 + 2;
+      const bodyH = contentH + padY * 2 + 2;
+      const totalW = bodyW + 1; // +1 cell for the drop shadow
+      const totalH = bodyH + 1;
+
+      bubbleCanvas.width = Math.max(1, totalW * FONT_PX);
+      bubbleCanvas.height = Math.max(1, totalH * FONT_PX);
+      const g = bubbleCanvas.getContext('2d');
+      if (!g) return;
+      g.imageSmoothingEnabled = false;
+      g.clearRect(0, 0, bubbleCanvas.width, bubbleCanvas.height);
+      const P = FONT_PX;
+
+      /* drop shadow, one cell down-right, so the bubble sits off the page */
+      g.fillStyle = theme.ink3;
+      g.globalAlpha = 0.34;
+      g.fillRect(P, P, bodyW * P, bodyH * P);
+      g.globalAlpha = 1;
+
+      /* body: ink border with the corners notched, paper inside */
+      g.fillStyle = theme.ink;
+      g.fillRect(0, 0, bodyW * P, bodyH * P);
+      g.clearRect(0, 0, P, P);
+      g.clearRect((bodyW - 1) * P, 0, P, P);
+      g.clearRect(0, (bodyH - 1) * P, P, P);
+      g.clearRect((bodyW - 1) * P, (bodyH - 1) * P, P, P);
+      g.fillStyle = theme.paper;
+      g.fillRect(P, P, (bodyW - 2) * P, (bodyH - 2) * P);
+
+      /* The cartoon tail is deliberately NOT baked in here. The body has to
+         be clamped inside the viewport, and a tail baked at a fixed column
+         then ends up pointing at empty paper whenever he stands near an edge.
+         It is drawn live on the page canvas instead — see drawBubbleTail —
+         so it always aims at him. */
+
+      for (let i = 0; i < n; i++) {
+        blitText(g, BUBBLE_LINES[i], 1 + padX, 1 + padY + i * LINE_CELLS, P, theme.ink);
+      }
+
+      bubble.w = bubbleCanvas.width;
+      bubble.h = bubbleCanvas.height;
+      bubble.bodyW = bodyW;
+      bubble.bodyH = bodyH;
+    }
+
+    /**
+     * The tail, drawn on the page canvas so it can point at him wherever the
+     * body ended up. `dir` is +1 for a bubble above him (the wedge hangs down
+     * off the underside) and -1 for one below (it points back up).
+     */
+    function drawBubbleTail(bx: number, by: number, sx: number, dir: 1 | -1) {
+      const P = FONT_PX;
+      const tail = bubble.tailCells;
+      /* the TIP is the narrow end, so solve for the tip landing on him */
+      const want = Math.round((sx - bx) / P) - tail + 1;
+      const tx = Math.max(2, Math.min(Math.max(2, bubble.bodyW - tail - 3), want));
+      for (let r = 0; r < tail; r++) {
+        const wCells = tail - r + 1;
+        const x = bx + (tx + r) * P;
+        const y = dir === 1 ? by + (bubble.bodyH + r) * P : by - (r + 1) * P;
+        ctx!.fillStyle = theme.ink;
+        ctx!.fillRect(x, y, wCells * P, P);
+        if (wCells > 2) {
+          ctx!.fillStyle = theme.paper;
+          ctx!.fillRect(x, y, (wCells - 2) * P, P);
+        }
+      }
+    }
+
+    /* ---- chat window ---------------------------------------------------- */
+    const chatCanvas = document.createElement('canvas');
+    const CHAT_LINES: string[] = [];
+    /* A sentinel no real draft can equal, so the first frame always builds.
+       Written as an escape rather than as a raw control character: a literal
+       NUL in the source makes every text tool treat this file as a binary
+       blob, which it spent a while doing. */
+    const NO_DRAFT = '\u0000';
+    const chatUi = {
+      dirty: true,
+      /* screen-space box, frozen on open and re-clamped on resize */
+      x: 0,
+      y: 0,
+      w: 0,
+      h: 0,
+      seatX: 0,
+      seatY: 0,
+      /* glide from wherever he was standing into the seat, never a snap */
+      glide: 0,
+      fromX: 0,
+      fromY: 0,
+      lastVersion: -1,
+      lastDraft: NO_DRAFT,
+      lastBusy: false,
+      caretCells: 0,
+      openedAt: 0,
+      /* last written <input> geometry, so the style is only touched on a
+         real change rather than on every frame */
+      inX: -1,
+      inY: -1,
+      inW: -1
+    };
+
+    function chatDraft(): string {
+      const el = inputRef.current;
+      return el ? el.value : '';
+    }
+
+    function layoutChat(freeze: boolean) {
+      const w = Math.min(340, Math.max(220, W - 24));
+      const h = Math.min(214, Math.max(150, H - 150));
+      chatUi.w = w;
+      chatUi.h = h;
+      const sx = bird.x - window.scrollX;
+      const sy = bird.y - window.scrollY;
+      if (freeze) {
+        chatUi.x = Math.max(12, Math.min(W - w - 12, sx - w * 0.5));
+        chatUi.y = Math.max(64, Math.min(H - h - 12, sy + 2));
+      } else {
+        chatUi.x = Math.max(12, Math.min(W - w - 12, chatUi.x));
+        chatUi.y = Math.max(64, Math.min(H - h - 12, chatUi.y));
+      }
+      chatUi.seatX = Math.max(chatUi.x + 30, Math.min(chatUi.x + w - 30, sx));
+      chatUi.seatY = chatUi.y;
+      chatUi.dirty = true;
+      positionInput();
+    }
+
+    /*
+     * The transparent <input> is parked over the pixel input row.
+     *
+     * React mounts it one frame AFTER the chat opens, so calling this once
+     * from layoutChat() ran against a null ref and the input then sat at 0,0
+     * until the next resize: the caret, the text selection and every mobile
+     * keyboard anchor appeared in the top-left corner of the page instead of
+     * inside the window. It is therefore synced every frame while the chat is
+     * open, and only written when a number has genuinely changed.
+     */
+    function positionInput() {
+      const el = inputRef.current;
+      if (!el) return;
+      const x = Math.round(chatUi.x + 10);
+      const y = Math.round(chatUi.y + chatUi.h - 30);
+      const w = Math.round(chatUi.w - 20);
+      if (x === chatUi.inX && y === chatUi.inY && w === chatUi.inW) return;
+      chatUi.inX = x;
+      chatUi.inY = y;
+      chatUi.inW = w;
+      el.style.left = `${x}px`;
+      el.style.top = `${y}px`;
+      el.style.width = `${w}px`;
+      el.style.height = '22px';
+    }
+
+    function buildChat() {
+      chatUi.dirty = false;
+      const P = FONT_PX;
+      const wCells = Math.floor(chatUi.w / P);
+      const hCells = Math.floor(chatUi.h / P);
+      chatCanvas.width = Math.max(1, wCells * P);
+      chatCanvas.height = Math.max(1, hCells * P);
+      const g = chatCanvas.getContext('2d');
+      if (!g) return;
+      g.imageSmoothingEnabled = false;
+      g.clearRect(0, 0, chatCanvas.width, chatCanvas.height);
+
+      /* frame: two-cell ink border, notched corners, paper field */
+      g.fillStyle = theme.ink;
+      g.fillRect(0, 0, wCells * P, hCells * P);
+      g.clearRect(0, 0, P, P);
+      g.clearRect((wCells - 1) * P, 0, P, P);
+      g.clearRect(0, (hCells - 1) * P, P, P);
+      g.clearRect((wCells - 1) * P, (hCells - 1) * P, P, P);
+      g.fillStyle = theme.paper;
+      g.fillRect(2 * P, 2 * P, (wCells - 4) * P, (hCells - 4) * P);
+
+      /* title rail */
+      const title = 'ASK ABOUT JACK';
+      blitText(g, title, 4, 4, P, theme.verm);
+      blitText(g, 'ESC', wCells - 4 - textCells('ESC'), 4, P, theme.ink3);
+      g.fillStyle = theme.ink;
+      g.fillRect(3 * P, (4 + GLYPH_H + 3) * P, (wCells - 6) * P, P);
+
+      /* log, newest at the bottom, oldest scrolled off the top */
+      const logTop = 4 + GLYPH_H + 7;
+      const inputTop = hCells - 4 - GLYPH_H - 4;
+      const room = Math.max(1, Math.floor((inputTop - logTop) / LINE_CELLS));
+      const maxChars = Math.max(8, Math.floor((wCells - 10) / ADVANCE));
+
+      /* Build the display lines back to front, then draw the tail that fits. */
+      const rows: Array<{ text: string; me: boolean }> = [];
+      const log = chat.current.log;
+      for (let i = log.length - 1; i >= 0 && rows.length < room + 8; i--) {
+        const m = log[i];
+        const n = wrapText(m.text, maxChars, CHAT_LINES);
+        for (let k = n - 1; k >= 0; k--) rows.push({ text: CHAT_LINES[k], me: m.me });
+      }
+      if (chat.current.busy) rows.unshift({ text: 'thinking', me: false });
+      const take = Math.min(room, rows.length);
+      for (let i = 0; i < take; i++) {
+        const row = rows[take - 1 - i];
+        const y = logTop + i * LINE_CELLS;
+        if (row.me) {
+          const x = wCells - 4 - textCells(row.text);
+          blitText(g, row.text, x, y, P, theme.ink);
+          g.fillStyle = theme.ink3;
+          g.fillRect((x - 2) * P, y * P, P, GLYPH_H * P);
+        } else {
+          blitText(g, row.text, 6, y, P, theme.ink);
+          g.fillStyle = theme.verm;
+          g.fillRect(4 * P, y * P, P, GLYPH_H * P);
+        }
+      }
+
+      /* input rail */
+      g.fillStyle = theme.ink;
+      g.fillRect(3 * P, (inputTop - 3) * P, (wCells - 6) * P, P);
+      const draft = chatDraft();
+      const shown = draft.length > maxChars ? draft.slice(draft.length - maxChars) : draft;
+      if (shown) {
+        blitText(g, shown, 4, inputTop, P, theme.ink);
+      } else if (!chat.current.busy) {
+        blitText(g, 'type a question', 4, inputTop, P, theme.ink3);
+      }
+      chatUi.caretCells = 4 + textCells(shown) + (shown ? 1 : 0);
+      /* stash where the caret goes, in cells from the box origin */
+      (chatUi as any).caretY = inputTop;
+    }
+
+    /* ---- pointer -------------------------------------------------------- */
+    const pointer = {
+      x: -9999,
+      y: -9999,
+      lastX: -9999,
+      lastY: -9999,
+      stillMs: 0,
+      seen: false,
+      /*
+       * B2 needs the difference between a small movement and a large one, so
+       * the rig has to know how hard the pointer is being thrown about.
+       *
+       * `jerk` is raw travel in the last frame and is what catches a flick:
+       * one frame of 60px is a flick however calm the average was. `speed` is
+       * the same signal lowpassed into px/sec and is what catches a sustained
+       * haul. Both are computed once per update from the sampled position,
+       * never in the move handler — a trackpad can fire pointermove far more
+       * often than the frame, and a per-event derivative of that is noise.
+       */
+      vx: 0,
+      vy: 0,
+      speed: 0,
+      jerk: 0,
+      /* Sampled EVERY frame, unlike lastX/lastY which carry a 2px deadband
+         for the stillness test. A derivative taken off a deadbanded signal
+         reads zero, zero, zero, three — which is a flick that never happened,
+         and B2 would throw him off the cursor for it. */
+      prevX: -9999,
+      prevY: -9999,
+      /** Set by the frame that decides whether the real cursor comes back. */
+      overUi: false,
+      uiCheckAt: 0
+    };
+    function onMove(e: PointerEvent) {
+      pointer.x = e.clientX;
+      pointer.y = e.clientY;
+      pointer.seen = true;
+      /*
+       * THE SECOND WATCHDOG, and the one that matters most.
+       *
+       * The interval watchdog is the tidy version, but timers are throttled
+       * hard in a backgrounded or otherwise deprioritised tab — measured here
+       * at not firing AT ALL across thirteen seconds of a stalled loop, with
+       * the swap left on the whole time. A timer is therefore not something
+       * the "page has no visible cursor" case may depend on.
+       *
+       * This is: the reader moving the mouse is the exact moment they need to
+       * see a pointer, the event fires in any tab that can receive input at
+       * all, and the check is one subtraction. If nothing has painted a
+       * cursor for a few frames, they get the real one back immediately.
+       */
+      if (swap.on && performance.now() - swap.paintedAt > 400) restoreCursor();
+      if (drag.pressed) onDragMove();
+    }
+    function pointerDocX() {
+      return pointer.x + window.scrollX;
+    }
+    function pointerDocY() {
+      return pointer.y + window.scrollY;
+    }
+    function pointerOnScreen() {
+      return pointer.seen && pointer.x > 0 && pointer.x < W && pointer.y > 0 && pointer.y < H;
+    }
+
+    /**
+     * Is the pointer over something the reader might need to operate?
+     *
+     * This is the load-bearing safety check for the cursor swap: over a link,
+     * a button, a field or anything focusable, the real pointer comes back,
+     * so the site's own affordances still read and the page stays usable
+     * whatever the bird is doing.
+     *
+     * Hit-tested rather than inferred from event targets, because the bird
+     * canvas covers the viewport and swallows the hover the moment it turns
+     * its own pointer-events on. Throttled to ~11 times a second: it forces
+     * layout, and no reader crosses a link boundary faster than that.
+     */
+    function checkOverUi() {
+      if (bird.clock - pointer.uiCheckAt < 90) return;
+      pointer.uiCheckAt = bird.clock;
+      if (!pointer.seen || !pointerOnScreen()) {
+        pointer.overUi = false;
+        return;
+      }
+      let el: Element | null = null;
+      try {
+        el = document.elementFromPoint(pointer.x, pointer.y);
+      } catch {
+        /* A hit test that throws is a hit test that cannot clear the flag. */
+        pointer.overUi = true;
+        return;
+      }
+      if (!el) {
+        pointer.overUi = false;
+        return;
+      }
+      /* Our own canvas is not a control, and it is what elementFromPoint
+         returns whenever he is being hovered. Look under it. */
+      if (el === canvas) {
+        canvas!.style.pointerEvents = 'none';
+        el = document.elementFromPoint(pointer.x, pointer.y);
+        canvas!.style.pointerEvents = peOn ? 'auto' : 'none';
+      }
+      pointer.overUi = !!el && !!el.closest(INTERACTIVE_SELECTOR);
+    }
+
+    /* ---- drag, anger, and the stolen cursor ----------------------------- */
+    /*
+     * B4: "you should be able to drag him ... he has an anger level and the
+     * more you drag him the more he tries to break free and do things like
+     * steal your mouse ... the anger level comes down pretty quick though."
+     *
+     * One number, `anger`, in 0..1, and everything reads from it:
+     *   - the struggle animation, which escalates through three bands;
+     *   - the shake amplitude, linearly;
+     *   - the odds of the escape roll, which fires every ESCAPE_TICK_MS;
+     *   - which speech pool the bubble draws from;
+     *   - and whether breaking free is merely an escape or a reprisal.
+     *
+     * It is charged by DISTANCE HAULED rather than by time held, so picking
+     * him up and putting him down is forgiven and dragging him round the page
+     * is not. And it decays at ANGER_DECAY a second the moment you stop,
+     * which is the client's "comes down pretty quick" — about a second and a
+     * quarter from furious to placid.
+     */
+    let anger = 0;
+    let angerIdleMs = 0;
+
+    const drag = {
+      /** a press has landed on him but has not yet travelled DRAG_SLOP */
+      pressed: false,
+      /** the press has become a drag */
+      active: false,
+      /** press origin in screen space, for the slop test and the click test */
+      pressX: 0,
+      pressY: 0,
+      pressAt: 0,
+      /** where on his body he was grabbed, document space */
+      grabX: 0,
+      grabY: 0,
+      /** total travel this drag, which is what charges the anger */
+      hauled: 0,
+      escapeAt: 0,
+      /** cycles the struggle animation without re-rolling every frame */
+      strugglePick: 0
+    };
+
+    /**
+     * The cursor swap. `on` is the only thing that hides the system pointer,
+     * and it is written in exactly one place, at the end of draw, from
+     * evidence that a drawn cursor was actually painted this frame.
+     */
+    const swap = {
+      /** the class is currently on <html> */
+      on: false,
+      /** injected with the component and removed with it */
+      styleEl: null as HTMLStyleElement | null,
+      /** wall-clock ms of the last frame that painted a pixel cursor */
+      paintedAt: 0,
+      /** where the drawn cursor is, screen space */
+      cx: 0,
+      cy: 0,
+      /** 0 free, 1 carried by the bird, 2 being handed back */
+      hold: 0,
+      /** clock at which he gives it back regardless */
+      holdUntil: 0,
+      /** true once he has turned round and is flying it home */
+      returning: false
+    };
+
+    /* ---- helpers -------------------------------------------------------- */
+    function startAnim(name: AnimationName, loopMs = 0) {
+      bird.anim = name;
+      bird.animT = 0;
+      bird.animLoopUntil = loopMs;
+    }
+    function setMode(m: Mode) {
+      if (bird.mode === m) return;
+      bird.mode = m;
+      bird.modeT = 0;
+    }
+    function currentAnim(): Animation {
+      return ANIMATIONS[bird.anim];
+    }
+    function animDone(): boolean {
+      const a = currentAnim();
+      const dur = bird.animLoopUntil || animDuration(a);
+      return bird.animT >= dur;
+    }
+
+    /**
+     * Scroll speed measured HERE, in px/sec, rather than taken only from
+     * velocityRef. Two reasons: the prop is optional and is smoothed in
+     * px/frame for gesture detection, and the comfort band needs a physical
+     * rate it can multiply by a flight time. Both are consulted; whichever is
+     * larger wins, so a host that supplies velocityRef still drives transits.
+     */
+    let scrollVel = 0;
+    let lastScrollY = 0;
+    /** How far the page moved since the last frame. A transit rides this. */
+    let scrollDelta = 0;
+    /** How long the scroll has been over TRANSIT_VEL, in ms. */
+    let fastMs = 0;
+    function trackScroll(dt: number) {
+      const y = window.scrollY;
+      scrollDelta = y - lastScrollY;
+      const raw = dt > 0 ? scrollDelta / dt : 0;
+      lastScrollY = y;
+      /* viewport-anchored perches follow the screen, so their document
+         coordinates are only true for the scroll offset they were taken at */
+      syncAnchored();
+      scrollVel += (raw - scrollVel) * Math.min(1, dt * 12);
+      if (Math.abs(scrollVel) < 1) scrollVel = 0;
+    }
+
+    /** Urgency for a screen y. 0 inside the band, rising the further out. */
+    function urgencyAt(sy: number): number {
+      const top = H * BAND_MARGIN;
+      const bot = H * (1 - BAND_MARGIN);
+      if (sy < top) return Math.min(1.4, (top - sy) / Math.max(1, top));
+      if (sy > bot) return Math.min(1.4, (sy - bot) / Math.max(1, H - bot));
+      return 0;
+    }
+
+    /** Where a document point will appear once the current scroll plays out. */
+    function projectedScreenY(docY: number, lookahead: number): number {
+      return docY - window.scrollY - scrollVel * lookahead;
+    }
+
+    /** How comfortable a perch will be by the time he could get there. */
+    function perchUrgency(p: Perch): number {
+      return urgencyAt(projectedScreenY(p.y, 0.45));
+    }
+
+    /**
+     * How badly he needs to move, looking half a second AHEAD.
+     *
+     * Reacting to where he is now is what made him "stay at the top of the
+     * screen when you scroll, only coming down when it's too late": by the
+     * time a sustained scroll had pushed him out of the band, it had also
+     * moved every perch he might aim for. Taking the worse of now and
+     * half-a-second-from-now means a steady scroll starts him moving while he
+     * is still comfortable, which is what being prompt actually requires.
+     */
+    function bandUrgency(): number {
+      const now = urgencyAt(bird.y - window.scrollY);
+      const soon = urgencyAt(projectedScreenY(bird.y, 0.5));
+      return Math.max(now, soon);
+    }
+
+    function nearestPerch(): Perch | null {
+      let best: Perch | null = null;
+      let bd = Infinity;
+      for (let i = 0; i < perches.length; i++) {
+        const p = perches[i];
+        const dx = (p.x0 + p.x1) * 0.5 - bird.x;
+        const dy = p.y - bird.y;
+        const d = dx * dx + dy * dy;
+        if (d < bd) {
+          bd = d;
+          best = p;
+        }
+      }
+      return best;
+    }
+
+    /**
+     * The perch that best answers the comfort band: near the middle of the
+     * viewport, not too far sideways, and not the one already underfoot. The
+     * randomness shrinks as urgency rises — when he is badly out of position
+     * he stops browsing and just goes.
+     */
+    function pickBandPerch(urgency: number): Perch | null {
+      const scrollY = window.scrollY;
+      let best: Perch | null = null;
+      let bs = -Infinity;
+      const jitter = 90 * Math.max(0, 1 - urgency);
+      /* LEAD THE TARGET. A hop takes about half a second; during a 500px/s
+         scroll every perch on screen travels 250px in that time. Scoring
+         perches by where they are now lands him on something that has already
+         left the band by the time his feet touch it, and he sets off again
+         immediately — which is what the endless catch-up looked like. */
+      const lead = 0.45;
+      for (let i = 0; i < perches.length; i++) {
+        const p = perches[i];
+        const sy = projectedScreenY(p.y, lead);
+        if (sy < -20 || sy > H + 20) continue;
+        let s = -Math.abs(sy - H * 0.52);
+        s -= Math.abs((p.x0 + p.x1) * 0.5 - bird.x) * 0.16;
+        if (p === bird.perch) s -= 300;
+        if (p.w > 200) s += 26;
+        s += Math.random() * jitter;
+        if (s > bs) {
+          bs = s;
+          best = p;
+        }
+      }
+      return best ?? nearestPerch();
+    }
+
+    function targetXOn(p: Perch): number {
+      const lo = p.x0 + 12;
+      const hi = Math.max(lo, p.x1 - 12);
+      const wobble = (Math.random() - 0.5) * (hi - lo) * 0.5;
+      return Math.max(lo, Math.min(hi, (p.x0 + p.x1) * 0.5 + wobble));
+    }
+
+    /**
+     * Build a hop chain to a perch. Big moves get help: an intermediate perch
+     * to break the climb into two hops, or a kick off the wall behind him.
+     * Both are just extra waypoints; the land handler walks the chain.
+     */
+    function planTo(p: Perch | null, urgency: number) {
+      if (!p) {
+        enterFall();
+        return;
+      }
+      const tx = targetXOn(p);
+      const dy = p.y - bird.y;
+      const dx = tx - bird.x;
+      beginPlan();
+
+      if (Math.abs(dy) > 340) {
+        /* chain: land on something between, then carry on */
+        let mid: Perch | null = null;
+        let bd = Infinity;
+        const wantY = bird.y + dy * 0.5;
+        for (let i = 0; i < perches.length; i++) {
+          const q = perches[i];
+          if (q === p || q === bird.perch) continue;
+          const between = dy > 0 ? q.y > bird.y + 40 && q.y < p.y - 40 : q.y < bird.y - 40 && q.y > p.y + 40;
+          if (!between) continue;
+          const d = Math.abs(q.y - wantY) + Math.abs((q.x0 + q.x1) * 0.5 - bird.x) * 0.25;
+          if (d < bd) {
+            bd = d;
+            mid = q;
+          }
+        }
+        if (mid) pushWp('perch', targetXOn(mid), mid.y, mid, 0);
+      }
+
+      if (
+        planLen === 0 &&
+        urgency > 0.32 &&
+        (Math.abs(dy) > 260 || Math.abs(dx) > W * 0.46) &&
+        Math.random() < 0.7
+      ) {
+        /* Wall jump. He goes to the wall BEHIND the direction of travel and
+           kicks off it, which is what parkour actually looks like; going to
+           the wall he is already heading for would just be a longer hop. */
+        const side: 1 | -1 = dx >= 0 ? -1 : 1;
+        const wallX = side === 1 ? window.scrollX + W - WALL_INSET : window.scrollX + WALL_INSET;
+        const wallY = bird.y + dy * 0.28;
+        pushWp('wall', wallX, wallY, null, side);
+      }
+
+      pushWp('perch', tx, p.y, p, 0);
+      launchTo(PLAN[0], urgency);
+    }
+
+    function launchTo(wp: Waypoint, urgency: number) {
+      const dx = wp.x - bird.x;
+      const dy = wp.y - bird.y;
+      /* Urgency buys speed by raising the local gravity: the arc gets tighter
+         and the whole flight gets shorter, which reads as hurrying. Capped at
+         2x — beyond that the launch velocity passes 2000px/s and he crosses
+         the viewport inside four frames, which does not read as a hurrying
+         bird so much as a missing one. */
+      const g = GRAVITY * (1 + Math.min(1, urgency));
+      let rise = Math.max(50, Math.abs(dx) * 0.3, -dy + 44);
+      rise = Math.min(rise, urgency > 0.6 ? 420 : 620);
+      let vUp = Math.sqrt(2 * g * rise);
+      let tUp = vUp / g;
+      let tDown = Math.sqrt(Math.max((2 * (rise + dy)) / g, 1e-4));
+      let total = Math.max(tUp + tDown, 0.09);
+
+      /* A long sideways hop solved for a short flight gives a horizontal
+         speed of several thousand px/s, which is a streak rather than a bird.
+         Buy the time back by throwing him higher instead of faster: rise goes
+         roughly as total^2, so one correction pass lands close enough. */
+      const MAX_VX = 1500;
+      if (Math.abs(dx) / total > MAX_VX) {
+        const wantTotal = Math.abs(dx) / MAX_VX;
+        rise = Math.max(rise, (g * wantTotal * wantTotal) / 8);
+        vUp = Math.sqrt(2 * g * rise);
+        tUp = vUp / g;
+        tDown = Math.sqrt(Math.max((2 * (rise + dy)) / g, 1e-4));
+        total = Math.max(tUp + tDown, 0.09);
+      }
+      bird.vx = dx / total;
+      bird.vy = -vUp;
+      bird.g = g;
+      if (Math.abs(dx) > 6) bird.facing = dx >= 0 ? 1 : -1;
+      bird.perch = null;
+      bird.hopUrgency = urgency;
+      setMode('hop');
+
+      /* JUMP FLARE: sometimes the hop is a somersault instead of a hop. */
+      const short = total < 0.62 && Math.abs(dy) < 130;
+      if (short && wp.kind === 'perch' && Math.random() < 0.26) {
+        bird.jumpAnim = rollJump(true);
+        startAnim(bird.jumpAnim);
+      } else {
+        bird.jumpAnim = null;
+        startAnim('launch');
+      }
+    }
+
+    /** Arrive. `back` rewinds the sub-frame overshoot so nothing snaps. */
+    function land(p: Perch | null, ty: number, back: number) {
+      if (back > 0) bird.x -= bird.vx * back;
+      bird.y = ty;
+      bird.vx = 0;
+      bird.vy = 0;
+      bird.g = GRAVITY;
+      bird.jumpAnim = null;
+      bird.perch = p;
+      /*
+       * BUG 1. This used to clamp bird.x into the perch's span on the spot.
+       * The fall test accepts a touchdown up to 26px past either end of the
+       * furniture, so that one line could move him 34px sideways on the very
+       * frame he landed — a sideways snap at the exact moment the reader is
+       * watching him arrive. He now walks the last few pixels on, over the
+       * following frames, through holdPerch().
+       */
+      setMode('land');
+      startAnim('land');
+    }
+
+    /**
+     * Keep him honestly on the furniture, at a bounded speed. Everything that
+     * used to assign `bird.y = perch.y` or clamp `bird.x` into the span calls
+     * this instead, so re-measured furniture, a touchdown a little off the
+     * end and a chased cursor perch all resolve as movement, not as a cut.
+     */
+    function holdPerch(dt: number) {
+      const p = bird.perch;
+      if (!p) return;
+      bird.y = approach(bird.y, p.y, dt, 1400);
+      const lo = p.x0 + 8;
+      const hi = Math.max(lo, p.x1 - 8);
+      if (bird.x < lo) bird.x = approach(bird.x, lo, dt);
+      else if (bird.x > hi) bird.x = approach(bird.x, hi, dt);
+    }
+
+    function enterIdle() {
+      setMode('idle');
+      bird.driftVx = 0;
+      bird.driftUntil = 0;
+      startAnim('breathe', 300 + Math.random() * 260);
+    }
+
+    /**
+     * BUG 2. `enterFall` used to leave bird.vy exactly as it found it. Called
+     * out of a transit — which never touches vy — he inherited the launch
+     * velocity of whatever hop the transit interrupted, so a fall could open
+     * by rocketing several hundred pixels UPWARD before gravity won it back.
+     * Falls now begin from rest unless the caller is a hop, which genuinely
+     * is handing over a live arc.
+     */
+    function enterFall(keepVel = false) {
+      bird.perch = null;
+      bird.jumpAnim = null;
+      if (!keepVel) {
+        bird.vx = 0;
+        bird.vy = 0;
+      }
+      bird.g = GRAVITY;
+      bird.fallMs = 0;
+      /* Callers that want a tumble set this AFTER calling in; an ordinary
+         fall must never inherit one from the fall before it. */
+      bird.tumbleUntil = 0;
+      setMode('fall');
+      startAnim('airDown');
+    }
+
+    function enterFly(tx: number, ty: number, p: Perch | null, speed = 620) {
+      bird.perch = null;
+      bird.jumpAnim = null;
+      bird.vx = 0;
+      bird.vy = 0;
+      bird.flyX = tx;
+      bird.flyY = ty;
+      bird.flyPerch = p;
+      bird.flySpeed = speed;
+      /* Open the wingbeat at the TOP of the stroke, so flight begins with a
+         powered downstroke rather than wherever the previous one left off. */
+      rig.flapPhase = 0;
+      setMode('fly');
+      startAnim('flyFlap');
+    }
+
+    /* ---- drag -------------------------------------------------------------
+     *
+     * A press on him is ambiguous until it moves: it is a click that opens the
+     * chat, or it is a grab. The chat toggle therefore waits for pointerup —
+     * which is also what fixes the ambiguity honestly, rather than by guessing
+     * from a timer.
+     * ---------------------------------------------------------------------- */
+
+    function angerSay(ms = 2400) {
+      say(pickLine(angerPool(anger)), ms);
+    }
+
+    function beginDrag() {
+      if (reduced) return;
+      drag.active = true;
+      drag.hauled = 0;
+      drag.escapeAt = bird.clock + ESCAPE_TICK_MS;
+      drag.strugglePick = 0;
+      onCursor = false;
+      bird.perch = null;
+      bird.jumpAnim = null;
+      bird.vx = 0;
+      bird.vy = 0;
+      if (chat.current.open) closeChat();
+      setMode('drag');
+      startAnim('flutter', 0);
+      angerSay(2200);
+    }
+
+    /** Which struggle plays. Three bands, escalating, cycled not re-rolled. */
+    function struggleAnim(): AnimationName {
+      if (anger > 0.66) return drag.strugglePick % 2 === 0 ? 'jumpTwist' : 'shiver';
+      if (anger > 0.33) return drag.strugglePick % 2 === 0 ? 'flutter' : 'headShake';
+      return drag.strugglePick % 3 === 2 ? 'headShake' : 'flutter';
+    }
+
+    /**
+     * Break free. He is thrown clear of the pointer along the line away from
+     * it, with an upward bias so it reads as a wrench rather than a drop, and
+     * the live velocity is handed straight to the fall — which is the same
+     * continuity contract a timed-out hop uses.
+     */
+    function escapeDrag() {
+      const px = pointerDocX();
+      const py = pointerDocY();
+      let dx = bird.x - px;
+      let dy = bird.y - py;
+      const d = Math.hypot(dx, dy);
+      if (d < 1) {
+        dx = bird.facing;
+        dy = -0.6;
+      } else {
+        dx /= d;
+        dy /= d;
+      }
+      const speed = 380 + anger * 620;
+      drag.active = false;
+      drag.pressed = false;
+      bird.vx = dx * speed;
+      bird.vy = Math.min(dy * speed, -220) - anger * 180;
+      bird.facing = (dx >= 0 ? 1 : -1) as 1 | -1;
+      enterFall(true);
+      /* A tumble, not a stumble: hold the somersault for long enough to read
+         before the fall's own glide logic takes the animation back. */
+      bird.tumbleUntil = bird.clock + 460 + anger * 220;
+      startAnim(dx >= 0 ? 'jumpFlipFront' : 'jumpFlipBack');
+      const retaliate = anger >= RETALIATE_ANGER;
+      if (retaliate) stealCursor(false);
+      else say(pickLine(LINE_ESCAPE), 2400);
+    }
+
+    /** Let go of him. Not an escape: no tumble, no reprisal, just indignation. */
+    function releaseDrag() {
+      if (!drag.active) return;
+      drag.active = false;
+      drag.pressed = false;
+      const p = pickBandPerch(0.6);
+      if (p) enterFly(targetXOn(p), p.y, p, 700);
+      else enterFall();
+      if (anger > 0.4) angerSay(2200);
+    }
+
+    /* ---- the reprisal ------------------------------------------------------
+     *
+     * He takes the drawn cursor and flies off with it. Bounded three ways: a
+     * hard time limit, a click, and the pointer reaching anything the reader
+     * might actually need to operate. See `cursorWanted` — the real pointer
+     * comes back the instant any of those is true, whatever the bird is doing.
+     * ---------------------------------------------------------------------- */
+    /** Somewhere else on screen, away from where the reader's hand is. */
+    function theftAwayX(): number {
+      return window.scrollX + (pointer.x < W * 0.5 ? W * 0.78 : W * 0.22);
+    }
+    function theftAwayY(): number {
+      return window.scrollY + H * (0.22 + Math.random() * 0.34);
+    }
+
+    /**
+     * @param flyNow false when the caller has just handed him a live arc it
+     *   wants to keep — escapeDrag throws him into a tumble, and flying off
+     *   on the same frame would replace the tumble with a flap and lose the
+     *   whole read of "wrenched free, THEN swooped". The fall's own recovery
+     *   picks the flight up when the tumble is done.
+     */
+    function stealCursor(flyNow = true) {
+      if (reduced || swap.hold !== 0) return;
+      swap.hold = 1;
+      swap.returning = false;
+      swap.holdUntil = bird.clock + THEFT_MS;
+      say(pickLine(LINE_RETALIATE), 2600);
+      if (flyNow) enterFly(theftAwayX(), theftAwayY(), null, 880);
+    }
+
+    function dropCursor(handBack: boolean) {
+      if (swap.hold === 0) return;
+      swap.hold = 0;
+      swap.returning = false;
+      if (handBack) say(pickLine(LINE_RETURN), 2200);
+    }
+
+    /* ---- idle scheduling ------------------------------------------------ */
+    const lastPlayed = new Map<AnimationName, number>();
+    const recent: AnimationName[] = [];
+    /* preallocated: the picker runs on every idle change, not every frame,
+       but there is no reason for it to churn arrays either. */
+    const POOL: typeof IDLE_TABLE[number][] = [];
+
+    function chooseIdle(now: number) {
+      /* There are 22 stationary idles against 9 locomotion ones, so at any
+         instant most of the locomotion pool is sitting on cooldown and the
+         picker has little to choose from but stillness. Shortening the
+         locomotion cooldowns keeps enough of them eligible for the bird to
+         actually move about as often as it sits, which is the brief. */
+      const LOCOMOTION_COOLDOWN_SCALE = 0.86;
+      POOL.length = 0;
+      for (let i = 0; i < IDLE_TABLE.length; i++) {
+        const e = IDLE_TABLE[i];
+        const last = lastPlayed.get(e.name) ?? -Infinity;
+        const cd = e.group === 'locomotion' ? e.cooldownMs * LOCOMOTION_COOLDOWN_SCALE : e.cooldownMs;
+        if (now - last < cd) continue;
+        const gap = recent.indexOf(e.name);
+        const minGap = e.group === 'locomotion' ? Math.min(e.minGap, 3) : e.minGap;
+        if (gap !== -1 && recent.length - gap <= minGap) continue;
+        POOL.push(e);
+      }
+      if (!POOL.length) for (let i = 0; i < IDLE_TABLE.length; i++) POOL.push(IDLE_TABLE[i]);
+
+      /* Weights stay as authored: IDLE_TABLE already balances the two groups
+         at 99 each. The only correction needed is to eligibility, above. */
+      let total = 0;
+      for (let i = 0; i < POOL.length; i++) total += POOL[i].weight;
+      let r = Math.random() * total;
+      let pick = POOL[0];
+      for (let i = 0; i < POOL.length; i++) {
+        r -= POOL[i].weight;
+        if (r <= 0) {
+          pick = POOL[i];
+          break;
+        }
+      }
+      lastPlayed.set(pick.name, now);
+      recent.push(pick.name);
+      if (recent.length > 8) recent.shift();
+
+      if (pick.name === 'sleep') {
+        setMode('sleep');
+        bird.sleepUntil = bird.clock + 9600 + Math.random() * 7000;
+        bird.dreamIdx = (Math.random() * DREAM_ITEMS.length) | 0;
+        bird.dreamUntil = bird.clock + 3000 + Math.random() * 1000;
+        startAnim('sleep', 0);
+        return pick;
+      }
+
+      if (pick.name === 'walkCycle') {
+        /* WALKING: real translation at the animation's own pace, and
+           sometimes one of the two added walks instead of the original. */
+        startWalk(WALKS[(Math.random() * WALKS.length) | 0]);
+        return pick;
+      }
+
+      if (pick.group === 'locomotion') {
+        /* JUMP FLARE on ordinary hops. */
+        let name: AnimationName = pick.name;
+        if ((name === 'hopInPlace' || name === 'hopForward') && Math.random() < 0.28) {
+          name = rollJump(true);
+        }
+        const loopMs = (IDLE_LOOP_MS as Record<string, number>)[name] ?? 0;
+        startAnim(name, loopMs);
+        /*
+         * BUG 1, cause (c): this used to be `bird.x = bird.x + dist * dir`,
+         * a single assignment that teleported the bird up to 74px sideways
+         * between two frames. Now the same distance is spread as a velocity
+         * across the animation's own duration, so a sidestep is a sidestep.
+         */
+        const dist = 16 + Math.random() * 40;
+        const dir: 1 | -1 = name === 'hopBackward' ? (-bird.facing as 1 | -1) : Math.random() < 0.5 ? -1 : 1;
+        if (name !== 'hopInPlace' && name !== 'turnAround' && name !== 'pivot') {
+          if (name !== 'hopBackward') bird.facing = dir;
+          const ms = bird.animLoopUntil || animDuration(ANIMATIONS[name]);
+          bird.driftVx = (dist * dir) / (ms / 1000);
+          bird.driftUntil = bird.clock + ms;
+        }
+        return pick;
+      }
+
+      const loopMs = (IDLE_LOOP_MS as Record<string, number>)[pick.name] ?? 0;
+      startAnim(pick.name, loopMs);
+      return pick;
+    }
+
+    function startWalk(name: AnimationName) {
+      const cycle = animDuration(ANIMATIONS[name]);
+      if (cycle <= 0) {
+        enterIdle();
+        return;
+      }
+      const cycles = 1 + ((Math.random() * 3) | 0);
+      /* One body width per full cycle, and BACKWARD for the moonwalk — the
+         disagreement between the feet and the direction is the whole trick. */
+      const dir: 1 | -1 = name === 'moonwalk' ? -1 : Math.random() < 0.5 ? -1 : 1;
+      if (name !== 'moonwalk') bird.facing = dir;
+      bird.walkVx = (BODY_PX / (cycle / 1000)) * (name === 'moonwalk' ? -bird.facing : dir);
+      bird.walkUntil = bird.clock + cycle * cycles;
+      setMode('walk');
+      startAnim(name, cycle * cycles);
+    }
+
+    /* ---- interactions --------------------------------------------------- */
+    const gate = {
+      edgePeck: 0,
+      cursorPerch: 0,
+      airPeck: 0,
+      lookUp: 0,
+      perchFlick: 0,
+      greet: 0,
+      recoil: 0,
+      chatter: 12000
+    };
+    let onCursor = false;
+    /** When he intends to stop riding the cursor of his own accord. */
+    let cursorPerchUntil = 0;
+
+    /**
+     * B3: "when the cursor is above him he should look upwards and jump and
+     * peck at the cursor sometimes."
+     *
+     * The jump and the peck were already here; the LOOK UP was not, which is
+     * the note. It is two things, deliberately:
+     *
+     *   - a CONTINUOUS gaze, driven every frame from this predicate into
+     *     rig.gaze, so his head is genuinely tilted at the pointer whenever
+     *     the pointer is over him, for as long as it is there. That is what
+     *     "looks upwards" means as a state.
+     *   - and the discrete `lookUp` animation, which now also opens the jump
+     *     sequence — he looks up, THEN jumps, which is both the order the
+     *     client described and the order that reads as intent rather than as
+     *     a bird being startled by the ceiling.
+     */
+    function cursorIsAbove(px: number, py: number): boolean {
+      return py < bird.y - 24 && py > bird.y - 300 && Math.abs(px - bird.x) < 170;
+    }
+
+    function tryMouseInteractions(dt: number) {
+      if (chat.current.open || reduced) return;
+      if (!pointerOnScreen()) return;
+      const px = pointerDocX();
+      const py = pointerDocY();
+
+      /* (c0) cursor above him → look up at it. Cheap, frequent, and the
+         thing that was missing: he does this on its own, not only as the
+         opening beat of a jump. */
+      if (
+        cursorIsAbove(px, py) &&
+        bird.mode === 'idle' &&
+        bird.clock > gate.lookUp &&
+        pointer.stillMs > 240
+      ) {
+        gate.lookUp = bird.clock + 4200 + Math.random() * 2600;
+        bird.facing = (px >= bird.x ? 1 : -1) as 1 | -1;
+        /* Sometimes it stays a look. Sometimes it becomes the jump — "jump
+           and peck at the cursor SOMETIMES" is the brief, and the peck has
+           its own longer cooldown so it cannot become the default. */
+        if (
+          bird.clock > gate.airPeck &&
+          Math.abs(px - bird.x) < 62 &&
+          py > bird.y - 190 &&
+          Math.random() < 0.55
+        ) {
+          gate.airPeck = bird.clock + 8200;
+          if (Math.random() < 0.5)
+            startAct('lookUp', 'jumpHigh', 'peckAtCursor', 'peckAtCursor');
+          else startAct('lookUp', 'jumpHigh', 'peckAtCursor');
+        } else {
+          startAct('lookUp');
+        }
+        return;
+      }
+
+      /* (a) cursor resting on an edge he can stand on → hop over and peck it */
+      if (bird.clock > gate.edgePeck && pointer.stillMs > 900) {
+        for (let i = 0; i < perches.length; i++) {
+          const p = perches[i];
+          if (py > p.y - 2 || py < p.y - 36) continue;
+          if (px < p.x0 || px > p.x1) continue;
+          if (p === bird.perch && Math.abs(px - bird.x) < 46) continue;
+          gate.edgePeck = bird.clock + 11000;
+          beginPlan();
+          pushWp('perch', Math.max(p.x0 + 8, Math.min(p.x1 - 8, px)), p.y, p, 0);
+          bird.queuedAct = 'peckAtCursor';
+          launchTo(PLAN[0], 0.4);
+          return;
+        }
+      }
+
+      /* (b) cursor still for a long time → he goes and lands on it */
+      if (
+        bird.clock > gate.cursorPerch &&
+        pointer.stillMs > 4500 &&
+        !onCursor &&
+        Math.hypot(px - bird.x, py - bird.y) > 60
+      ) {
+        gate.cursorPerch = bird.clock + 22000;
+        perchOnPointer();
+      }
+
+      void dt;
+    }
+
+    /** Set the synthetic perch under the pointer and fly to it. */
+    function perchOnPointer() {
+      const px = pointerDocX();
+      const py = pointerDocY();
+      cursorPerch.x0 = px - 14;
+      cursorPerch.x1 = px + 14;
+      cursorPerch.y = py;
+      onCursor = true;
+      cursorPerchUntil = bird.clock + PERCH_STAY_MIN_MS + Math.random() * PERCH_STAY_JITTER_MS;
+      say(pickLine(LINE_CURSOR_PERCH), 3600);
+      enterFly(px, py, cursorPerch, 700);
+    }
+
+    /**
+     * B2: "small movements can keep him on (until he decides to leave) but
+     * large movements will shake him off with an appropriate animation."
+     *
+     * Three outcomes, and which one you get is a property of how hard you
+     * move, not of how long he has been there:
+     *
+     *   RIDE   — under PERCH_RIDE_SPEED the perch simply chases the pointer at
+     *            a capped speed and he compensates: the rig leans him against
+     *            the direction of travel, and above a gentler threshold he
+     *            throws in a wing flick to keep his footing. Nothing ends.
+     *   BUCK   — past PERCH_BUCK_SPEED sustained, or PERCH_BUCK_JERK in a
+     *            single frame, he is thrown clear: a real tumble with a spin,
+     *            handed to the fall with live velocity, then a recovery flap.
+     *   LEAVE  — and if you do neither he gets bored and goes, which is the
+     *            "until he decides to leave" half of the note.
+     */
+    function trackCursorPerch(dt: number) {
+      if (!onCursor) return;
+      if (bird.mode === 'drag' || chat.current.open) {
+        onCursor = false;
+        return;
+      }
+      const px = pointerDocX();
+      const py = pointerDocY();
+      const dx = px - (cursorPerch.x0 + 14);
+      const dy = py - cursorPerch.y;
+      const d = Math.hypot(dx, dy);
+      /* The chase speeds up when the pointer is running away, so a brisk but
+         survivable movement does not simply outrun the perch and strand him.
+         Still capped: following exactly would hand a teleport straight in. */
+      const chase = 640 + Math.min(1400, pointer.speed * 0.9);
+      const step = Math.min(d, chase * dt);
+      if (d > 0.01) {
+        const nx = cursorPerch.x0 + 14 + (dx / d) * step;
+        const ny = cursorPerch.y + (dy / d) * step;
+        if (bird.perch === cursorPerch) {
+          bird.x += nx - (cursorPerch.x0 + 14);
+        }
+        cursorPerch.x0 = nx - 14;
+        cursorPerch.x1 = nx + 14;
+        cursorPerch.y = ny;
+      }
+
+      const riding = bird.perch === cursorPerch;
+      const heading = bird.mode === 'fly' && bird.flyPerch === cursorPerch;
+      if (!riding && !heading) {
+        /*
+         * Something else took him off it — a comfort-band hop, a peck at a
+         * heading, a transit. `onCursor` is the flag that says the synthetic
+         * perch is in use, and if it does not follow him off, the perch never
+         * releases: the leave timer below is gated on riding and would never
+         * fire, and he could never be sent to the cursor again for the rest
+         * of the session. Measured: he could sit "on the cursor" while
+         * standing on a heading, indefinitely.
+         */
+        onCursor = false;
+        return;
+      }
+
+      /* BUCK. Only once he is actually on it — being shaken off a perch you
+         have not reached yet is not a thing that can happen. */
+      if (riding && (pointer.speed > PERCH_BUCK_SPEED || pointer.jerk > PERCH_BUCK_JERK)) {
+        buckOff();
+        return;
+      }
+
+      /* RIDE. A wing flick to keep his footing, gated so it reads as a
+         correction rather than as flapping. */
+      if (
+        riding &&
+        pointer.speed > PERCH_RIDE_SPEED &&
+        bird.clock > gate.perchFlick &&
+        (bird.mode === 'idle' || bird.mode === 'land')
+      ) {
+        gate.perchFlick = bird.clock + 900;
+        startAct(Math.random() < 0.6 ? 'flutter' : 'stretchWing');
+      }
+
+      /* LEAVE. His decision, on his own clock. */
+      if (!pointerOnScreen()) {
+        leaveCursor(false);
+        return;
+      }
+      if (riding && bird.clock > cursorPerchUntil) leaveCursor(true);
+    }
+
+    /** He steps off the cursor on purpose and finds real furniture. */
+    function leaveCursor(sayIt: boolean) {
+      if (!onCursor) return;
+      onCursor = false;
+      if (bird.perch !== cursorPerch) return;
+      if (sayIt) say(pickLine(LINE_CURSOR_LEAVE), 2600);
+      planTo(pickBandPerch(0.5), 0.5);
+    }
+
+    /**
+     * Thrown off. The throw carries the pointer's own velocity, capped, so he
+     * goes the way the hand went — and then tumbles, because being flung off
+     * something is not a controlled dismount.
+     */
+    function buckOff() {
+      onCursor = false;
+      bird.perch = null;
+      bird.jumpAnim = null;
+      const vx = Math.max(-900, Math.min(900, pointer.vx * 0.45));
+      bird.vx = vx;
+      bird.vy = -180 - Math.min(340, pointer.speed * 0.08);
+      bird.facing = (vx >= 0 ? 1 : -1) as 1 | -1;
+      enterFall(true);
+      bird.tumbleUntil = bird.clock + 520;
+      startAnim(vx >= 0 ? 'jumpFlipFront' : 'jumpFlipBack');
+      say(pickLine(LINE_SHAKEN), 2400);
+    }
+
+    /* ---- hover / click --------------------------------------------------- */
+    function hitTest(cx: number, cy: number) {
+      const sx = bird.x - window.scrollX;
+      const sy = bird.y - window.scrollY;
+      const halfW = (SPRITE_WIDTH * PIXEL_SCALE) / 2;
+      const hgt = SPRITE_HEIGHT * PIXEL_SCALE;
+      return cx > sx - halfW && cx < sx + halfW && cy > sy - hgt && cy < sy + 12;
+    }
+    function inChatBox(cx: number, cy: number) {
+      return (
+        chat.current.open &&
+        cx >= chatUi.x &&
+        cx <= chatUi.x + chatUi.w &&
+        cy >= chatUi.y &&
+        cy <= chatUi.y + chatUi.h
+      );
+    }
+
+    let hovering = false;
+    /* Cached, because writing the same inline style every frame is a style
+       recalculation every frame for no change at all. */
+    let peOn = false;
+    let peCursorVal = '';
+    function onHoverCheck() {
+      const h = hitTest(pointer.x, pointer.y);
+      if (h !== hovering) {
+        hovering = h;
+        if (h && !reduced && !chat.current.open) {
+          if (bird.mode === 'sleep') {
+            /* SLEEP STARTLE. startledAwake opens on the exact terminal pose
+               of `sleep`, so cutting straight in is invisible — no transition
+               animation, no settle, just the cut. */
+            setMode('act');
+            actLen = 1;
+            actIdx = 0;
+            ACTS[0] = 'startledAwake';
+            startAnim('startledAwake');
+            say(pickLine(LINE_STARTLE), 3200);
+          } else if (bird.mode === 'idle' && bird.clock > gate.greet) {
+            gate.greet = bird.clock + 6500;
+            const r = Math.random();
+            startAct(r < 0.4 ? 'greetBow' : r < 0.72 ? 'headShake' : 'showOff');
+          }
+        }
+      }
+      const wantEvents = h || inChatBox(pointer.x, pointer.y);
+      if (wantEvents !== peOn) {
+        peOn = wantEvents;
+        canvas!.style.pointerEvents = wantEvents ? 'auto' : 'none';
+      }
+      /* The canvas sets its own cursor when he is hoverable, and an inline
+         style on the element beats an inherited one on <html> — so while the
+         swap is in force it has to name `none` itself or the real pointer
+         reappears over the bird and there are two of them. */
+      const want = swap.on ? 'none' : h ? 'pointer' : '';
+      if (want !== peCursorVal) {
+        peCursorVal = want;
+        canvas!.style.cursor = want;
+      }
+    }
+
+    function openChat() {
+      if (chat.current.open) return;
+      chat.current.open = true;
+      chat.current.perch = CHAT_PERCHES[(Math.random() * CHAT_PERCHES.length) | 0];
+      chat.current.version++;
+      chatUi.openedAt = bird.clock;
+      chatUi.lastVersion = -1;
+      chatUi.inX = -1;
+      chatUi.glide = 0;
+      chatUi.fromX = bird.x - window.scrollX;
+      chatUi.fromY = bird.y - window.scrollY;
+      layoutChat(true);
+      bubble.until = 0;
+      setMode('chat');
+      startAnim(chat.current.perch, 0);
+      setChatting(true);
+    }
+
+    function onDown(e: PointerEvent) {
+      /* Any click at all hands the cursor back. He is annoying, not a denial
+         of service: the moment the reader tries to USE the pointer they get
+         it, wherever the bird had got to with it. */
+      if (swap.hold !== 0) dropCursor(false);
+
+      if (hitTest(e.clientX, e.clientY)) {
+        e.preventDefault();
+        /*
+         * A press on him is not yet a click. It becomes a chat toggle on
+         * pointerup if it never travelled, and a drag the moment it does —
+         * which is the only way to tell the two apart without a timer that
+         * guesses. A1 stays fixed either way: nothing moves on open.
+         */
+        drag.pressed = true;
+        drag.active = false;
+        drag.pressX = e.clientX;
+        drag.pressY = e.clientY;
+        drag.pressAt = bird.clock;
+        drag.grabX = bird.x - (e.clientX + window.scrollX);
+        drag.grabY = bird.y - (e.clientY + window.scrollY);
+        drag.hauled = 0;
+        return;
+      }
+      /* Clicking anywhere else closes it — but not the window itself, and not
+         the same gesture that opened it. */
+      if (chat.current.open) {
+        if (inChatBox(e.clientX, e.clientY)) {
+          inputRef.current?.focus();
+          return;
+        }
+        if (bird.clock - chatUi.openedAt > 120) closeChat();
+        return;
+      }
+      /* A click that lands NEAR him but not on him: he flinches away from it.
+         Gated hard, because the reader is mostly clicking links. */
+      if (
+        !reduced &&
+        bird.mode === 'idle' &&
+        bird.clock > gate.recoil &&
+        Math.abs(e.clientX - (bird.x - window.scrollX)) < 110 &&
+        Math.abs(e.clientY - (bird.y - window.scrollY)) < 90
+      ) {
+        gate.recoil = bird.clock + 5200;
+        bird.facing = (e.clientX + window.scrollX >= bird.x ? 1 : -1) as 1 | -1;
+        startAct('recoilHop');
+      }
+    }
+
+    /** Called from the move handler while a press is live. */
+    function onDragMove() {
+      if (!drag.pressed) return;
+      if (!drag.active) {
+        const moved =
+          Math.abs(pointer.x - drag.pressX) + Math.abs(pointer.y - drag.pressY);
+        if (moved > DRAG_SLOP) beginDrag();
+      }
+    }
+
+    function onUp() {
+      if (!drag.pressed) return;
+      if (drag.active) {
+        releaseDrag();
+        return;
+      }
+      /* Never travelled: it was a click, and a click is the chat. */
+      drag.pressed = false;
+      if (chat.current.open) closeChat();
+      else openChat();
+    }
+
+    /** A cancelled gesture is a release, not an escape. */
+    function onCancel() {
+      if (!drag.pressed) return;
+      if (drag.active) releaseDrag();
+      drag.pressed = false;
+      drag.active = false;
+    }
+
+    /* ---- whisper on arriving at a section --------------------------------- */
+    let lastWhispered = '';
+    function maybeWhisper() {
+      const sec = sectionRef.current;
+      if (!sec || sec === lastWhispered || chat.current.open) return;
+      const lines = whispersRef.current?.[sec];
+      if (!lines?.length) return;
+      lastWhispered = sec;
+      say(lines[(Math.random() * lines.length) | 0], 5400);
+    }
+
+    /* ---- pvz -------------------------------------------------------------- */
+    function startPvz() {
+      buildPvzScript(2);
+      pvz.step = 0;
+      pvz.side = bird.facing;
+      pvz.floorY = bird.y;
+      pvz.frame = 0;
+      pvz.frameT = 0;
+      pvz.shotFired = false;
+      pvz.peaLive = false;
+      pvz.splatT = 0;
+      pvz.z0Alive = true;
+      pvz.z1Alive = true;
+      pvz.z0x = bird.x + pvz.side * (W * 0.46);
+      pvz.z1x = bird.x + pvz.side * (W * 0.66);
+      pvz.gate = bird.clock + 170000;
+      setMode('pvz');
+      startAnim(PVZ_SCRIPT[0]);
+      say(pickLine(LINE_PVZ), 3000);
+    }
+
+    function updatePvz(dt: number) {
+      const ms = dt * 1000;
+      pvz.frameT += ms;
+      if (pvz.frameT >= ZOMBIE_FRAME_MS) {
+        pvz.frameT -= ZOMBIE_FRAME_MS;
+        pvz.frame ^= 1;
+      }
+      /* zombies shamble in from the leading edge */
+      const zs = 44 * dt * -pvz.side;
+      if (pvz.z0Alive) pvz.z0x += zs;
+      if (pvz.z1Alive) pvz.z1x += zs;
+
+      const name = PVZ_SCRIPT[pvz.step];
+      /* Spawn on ENTRY TO FRAME 1 of pvzShoot. Frame 2 reads as pushed, not
+         fired — the muzzle has already started closing by then. */
+      if (name === 'pvzShoot' && !pvz.shotFired && SAMPLED_FRAME >= 1) {
+        pvz.shotFired = true;
+        pvz.peaLive = true;
+        const mx = pvz.side === 1 ? PVZ_MUZZLE.x : SPRITE_WIDTH - PVZ_MUZZLE.x;
+        pvz.peaX = bird.x - (SPRITE_WIDTH * PIXEL_SCALE) / 2 + mx * PIXEL_SCALE;
+        pvz.peaY = bird.y - (BASELINE_Y - PVZ_MUZZLE.y) * PIXEL_SCALE;
+      }
+      if (pvz.peaLive) {
+        pvz.peaX += 320 * dt * pvz.side;
+        const hit = (zx: number) => Math.abs(pvz.peaX - zx) < 16;
+        if (pvz.z0Alive && hit(pvz.z0x)) {
+          pvz.z0Alive = false;
+          pvz.peaLive = false;
+          pvz.splatT = 260;
+          pvz.splatX = pvz.peaX;
+          pvz.splatY = pvz.peaY;
+        } else if (pvz.z1Alive && hit(pvz.z1x)) {
+          pvz.z1Alive = false;
+          pvz.peaLive = false;
+          pvz.splatT = 260;
+          pvz.splatX = pvz.peaX;
+          pvz.splatY = pvz.peaY;
+        } else if (Math.abs(pvz.peaX - bird.x) > W) {
+          pvz.peaLive = false;
+        }
+      }
+      if (pvz.splatT > 0) pvz.splatT -= ms;
+
+      if (animDone()) {
+        pvz.step++;
+        pvz.shotFired = false;
+        if (pvz.step >= PVZ_SCRIPT.length) {
+          enterIdle();
+          return;
+        }
+        /* If the lawn is already clear, skip straight to the hat coming off. */
+        if (!pvz.z0Alive && !pvz.z1Alive) {
+          const isLoop = PVZ_LOOP.indexOf(PVZ_SCRIPT[pvz.step]) !== -1;
+          if (isLoop) pvz.step = PVZ_SCRIPT.length - 1;
+        }
+        startAnim(PVZ_SCRIPT[pvz.step]);
+      }
+    }
+
+    /* ---- transit ---------------------------------------------------------- */
+    /* BUG 3 bookkeeping: how many transits since the reader last saw a rare
+       one, and which rares they have already met this session. */
+    const seenRare = new Set<AnimationName>();
+    let sinceRare = 0;
+    let pityAt = 7 + ((Math.random() * 4) | 0);
+
+    function startTransit(up: boolean, forced?: AnimationName) {
+      const table = up ? TRANSIT_UP : TRANSIT_DOWN;
+      let name: AnimationName;
+      let wasRare = false;
+      const sinceBefore = sinceRare;
+      const pityBefore = pityAt;
+      if (forced) {
+        name = forced;
+      } else {
+        /* Authored odds for the opening few, then the rares climb, and past
+           the pity count they dominate. The reader always meets the balloon
+           eventually, and never on a beat they can anticipate. */
+        const boost =
+          sinceRare >= pityAt ? 26 : sinceRare < 3 ? 1 : Math.min(12, (sinceRare - 2) * 2);
+        const entry = rollTransit(table, boost, seenRare);
+        name = entry.name;
+        wasRare = entry.rarity === 'rare';
+        if (wasRare) {
+          seenRare.add(name);
+          sinceRare = 0;
+          pityAt = 7 + ((Math.random() * 4) | 0);
+        } else {
+          sinceRare++;
+        }
+      }
+      let anim = ANIMATIONS[name];
+      const startSy = bird.y - window.scrollY;
+      /*
+       * The three scripted descents carry a payoff and take their own sweet
+       * time delivering it. Starting one from off the top of the screen means
+       * the whole gag plays somewhere the reader is not looking and he is
+       * merely absent for two seconds — which was the single largest slice of
+       * time he spent out of frame. If he is not on screen, the common
+       * looping glide gets him back into view instead, and the rare is put
+       * back exactly as it was: not marked seen, and the pity clock not
+       * reset, so it is still owed and comes round again shortly.
+       */
+      if (!anim.loop && !forced && (startSy < 40 || startSy > H - 40)) {
+        if (wasRare) {
+          seenRare.delete(name);
+          sinceRare = sinceBefore + 1;
+          pityAt = pityBefore;
+        }
+        name = table[0].name;
+        anim = ANIMATIONS[name];
+      }
+      transit.name = name;
+      transit.up = up;
+      transit.t = 0;
+      transit.held = 0;
+      transit.props = TRANSIT_PROP_MAP[name] ?? EMPTY_PROPS;
+      transit.sy0 = bird.y - window.scrollY;
+      if (anim.loop) {
+        /* Loops cover any distance: hold for the flight, hand over to `land`. */
+        transit.dur = 0;
+        transit.sy1 = transit.sy0;
+      } else {
+        /* The three scripted descents carry a payoff. Give them exactly the
+           travel time their own duration asks for or the punchline lands
+           somewhere the reader is not looking. */
+        transit.dur = animDuration(anim);
+        const p = pickBandPerch(0.9);
+        transit.sy1 = p ? p.y - window.scrollY : H * 0.62;
+        transit.sy1 = Math.max(H * 0.24, Math.min(H * 0.82, transit.sy1));
+      }
+      bird.perch = null;
+      bird.jumpAnim = null;
+      setMode('transit');
+      startAnim(name, 0);
+    }
+
+    function updateTransit(dt: number, vel: number) {
+      transit.t += dt * 1000;
+      const scrollY = window.scrollY;
+      const scrollX = window.scrollX;
+
+      if (transit.dur > 0) {
+        const u = transit.t / transit.dur;
+        /*
+         * SANCTIONED SCREEN-SPACE MOVE. A transit rides the viewport: on
+         * screen he holds a smooth path from sy0 to sy1 while the document
+         * races past behind him. His DOCUMENT y therefore tracks scrollY,
+         * which is the only place in this file that is allowed to happen.
+         */
+        bird.y = scrollY + transit.sy0 + (transit.sy1 - transit.sy0) * smoothstep(u);
+        if (transit.t >= transit.dur) {
+          const p = pickBandPerch(0.8);
+          if (p) planTo(p, 0.8);
+          else enterFall();
+        }
+      } else {
+        /*
+         * SANCTIONED SCREEN-SPACE MOVE, and the real fix for "he sometimes
+         * stays at the top of the screen when you scroll, only coming down
+         * when it's too late".
+         *
+         * The first line is the whole thing. His position is stored in
+         * DOCUMENT space, so a page that moves 34px in a frame drags his
+         * screen position 34px with it. The old code then converged on the
+         * comfort band from wherever that left him — at a 36px-per-frame cap
+         * against a 34px-per-frame scroll, the net progress was under three
+         * pixels a frame, and he crawled back into view over several seconds
+         * however high the cap went. That is the lateness the client saw, and
+         * it is arithmetic, not tuning.
+         *
+         * Adding the scroll delta back cancels the drag: a transit RIDES the
+         * viewport, exactly as the header of this file says it does. His
+         * document y tracks scrollY, on screen the page moves and he does
+         * not, and the convergence underneath is then his own movement at the
+         * full capped rate no matter how hard the reader is scrolling.
+         *
+         * The cap stays, because a bare exponential approach across a 1400px
+         * flick is over 3000px/s on the first frame, which reads as a streak
+         * rather than as a bird.
+         */
+        bird.y += scrollDelta;
+        const sy = bird.y - scrollY;
+        const wantSy = H * (transit.up ? 0.4 : 0.58);
+        const TRANSIT_MAX_VY = 2200;
+        const wanted = (wantSy - sy) * Math.min(1, dt * 7);
+        /* Ramp the cap in over the first 180ms so entering a transit is an
+           acceleration rather than a step from 3px a frame to 36. */
+        const ramp = Math.min(1, transit.t / 180);
+        const cap = TRANSIT_MAX_VY * dt * (0.25 + 0.75 * ramp);
+        bird.y += Math.max(-cap, Math.min(cap, wanted));
+        bird.x += Math.sin(transit.t * 0.0017) * 16 * dt;
+        transit.held += dt * 1000;
+        /* Nowhere worth sitting and nothing moving: after a few seconds stop
+           hovering and take whatever is nearest, so he cannot end up flapping
+           in place forever over a stretch of page with no furniture on it. */
+        if (transit.held > 5200) {
+          const n = nearestPerch();
+          if (n) planTo(n, 0.5);
+          else enterFall();
+          return;
+        }
+        /* Hold the loop until the scroll has actually settled AND he is back
+           inside the band. Exiting on the scroll alone dropped him into a hop
+           that the still-moving page immediately undid, which is how he ended
+           up a thousand pixels above the viewport playing catch-up forever. */
+        if (transit.t > 380 && Math.abs(vel) < 12 && bandUrgency() < 0.25) {
+          /* Land only on something worth landing on. Handing him a perch that
+             is already off the top of the screen just restarts the chase, and
+             one stretch of this page has no perch in view at all — there, the
+             right answer is to keep flying, which is what a bird with nowhere
+             to sit actually does. */
+          const p = pickBandPerch(0.7);
+          if (p && perchUrgency(p) < 0.3) planTo(p, 0.7);
+          else transit.t = 200; // hold the hover, re-check shortly
+        }
+      }
+      bird.x = Math.max(scrollX + 40, Math.min(scrollX + W - 40, bird.x));
+    }
+
+    /* ---- update ------------------------------------------------------------ */
+    /** The dt the last update ran with. draw() borrows it; see drawCursor. */
+    let lastDt = 1 / 60;
+
+    function update(dt: number) {
+      lastDt = dt;
+      bird.clock += dt * 1000;
+      bird.modeT += dt;
+      bird.animT += dt * 1000;
+
+      trackScroll(dt);
+      /* velocityRef is px/frame; scrollVel is px/sec. Compare like for like
+         and take whichever is reporting the faster gesture. */
+      const refVel = velRef.current?.current ?? 0;
+      const ownVel = scrollVel / 60;
+      const vel = Math.abs(ownVel) > Math.abs(refVel) ? ownVel : refVel;
+
+      /* pointer stillness, and how hard it is being thrown about */
+      const fresh = pointer.prevX < -9000 || pointer.prevY < -9000;
+      const pdx = fresh ? 0 : pointer.x - pointer.prevX;
+      const pdy = fresh ? 0 : pointer.y - pointer.prevY;
+      pointer.prevX = pointer.x;
+      pointer.prevY = pointer.y;
+      const travel = Math.hypot(pdx, pdy);
+      pointer.jerk = travel;
+      pointer.vx = dt > 0 ? pdx / dt : 0;
+      pointer.vy = dt > 0 ? pdy / dt : 0;
+      /* Lowpassed, and it decays toward zero on a still pointer rather than
+         holding the last flick forever. */
+      const rawSpeed = dt > 0 ? travel / dt : 0;
+      pointer.speed += (rawSpeed - pointer.speed) * Math.min(1, dt * 14);
+      if (pointer.speed < 3) pointer.speed = 0;
+      if (Math.abs(pointer.x - pointer.lastX) + Math.abs(pointer.y - pointer.lastY) > 2) {
+        pointer.lastX = pointer.x;
+        pointer.lastY = pointer.y;
+        pointer.stillMs = 0;
+      } else {
+        pointer.stillMs += dt * 1000;
+      }
+
+      /*
+       * ANGER. Charged inside the drag case, spent everywhere: it decays on
+       * the same clock whatever he is doing, so a bird that broke free
+       * furious is placid again about a second later, which is exactly the
+       * shape the client asked for.
+       */
+      if (drag.active) {
+        angerIdleMs = 0;
+      } else {
+        angerIdleMs += dt * 1000;
+        if (angerIdleMs > ANGER_GRACE_MS && anger > 0) {
+          anger = Math.max(0, anger - ANGER_DECAY * dt);
+        }
+      }
+      /* A press that never became a drag and never got its pointerup — the
+         pointer left the window mid-gesture, say. Do not hold it forever. */
+      if (drag.pressed && !drag.active && bird.clock - drag.pressAt > 2600) {
+        drag.pressed = false;
+      }
+
+      /*
+       * BUG 1. The drift a locomotion idle sets up used to be applied here,
+       * unconditionally, in every mode. A sidestep begun on a heading went on
+       * quietly adding sideways velocity through the hop that followed it,
+       * through a fall, through a whole transit — a phantom shove with no
+       * animation under it and no way to see where it came from. It belongs
+       * to standing still, so it only runs while he is standing still.
+       */
+      if (bird.mode !== 'idle' && bird.mode !== 'act') {
+        bird.driftVx = 0;
+        bird.driftUntil = 0;
+      } else if (bird.driftUntil > bird.clock) {
+        bird.x += bird.driftVx * dt;
+      } else {
+        bird.driftVx = 0;
+      }
+
+      trackCursorPerch(dt);
+
+      /*
+       * TRANSIT VARIETY. Not while chatting, and not mid lawn defence.
+       *
+       * BUG 3, the other half of it. The old gate was |vel| > 38 px/frame:
+       * 2280 px/s of SMOOTHED velocity, which on useSpine's 0.24 lowpass
+       * needs a sustained flick north of 3000 px/s to reach. In ordinary
+       * reading it fired essentially never — so no transit played, so no
+       * rare transit could play, so the balloon did not exist. The gate is
+       * now a firm scroll held briefly, which is what "fast scroll" means to
+       * a reader; the sustain window is what stops a single wheel notch from
+       * launching him into the sky.
+       */
+      /* Being held is not a scroll problem. A transit fired mid-drag would
+         tear him out of the reader's hand for reasons neither of them
+         understands, so the drag outranks it. */
+      const transitOk =
+        !chat.current.open &&
+        bird.mode !== 'transit' &&
+        bird.mode !== 'pvz' &&
+        bird.mode !== 'drag';
+      if (Math.abs(vel) > TRANSIT_VEL) fastMs += dt * 1000;
+      else fastMs = 0;
+      if (transitOk && fastMs > TRANSIT_SUSTAIN) {
+        fastMs = 0;
+        startTransit(vel < 0);
+      } else {
+        /*
+         * CATCH-UP. There is a whole band of scroll speeds — a firm trackpad
+         * drag, say — that is too slow to read as a flick but far too fast to
+         * out-hop: a hop covers a few hundred pixels in half a second while
+         * the page is eating five hundred a second, so he loses ground on
+         * every single one and ends up stranded off the top of the screen
+         * flailing. That is precisely the "stays at the top of the screen,
+         * only coming down when it's too late" complaint, and no amount of
+         * hopping harder fixes it, because hopping is the thing that cannot
+         * win. So: if he has been pinned at full urgency for a third of a
+         * second, he stops hopping and flies, which always keeps up because a
+         * transit tracks the viewport rather than the document.
+         */
+        if (bandUrgency() > 0.9) bird.strandedMs += dt * 1000;
+        else bird.strandedMs = 0;
+        const sy = bird.y - window.scrollY;
+        /* Only take to the air when hopping genuinely cannot win: the page is
+           moving faster than a hop nets, or he is already off the edge. Being
+           merely a little low on a static page is not a reason to fly — it is
+           a reason to sit, which the idle branch now does. */
+        const losingGround = Math.abs(scrollVel) > 300 || sy < -20 || sy > H + 20;
+        /* `fly` used to be excluded here on the theory that he was already
+           on his way. He was, at 780px/s, against a page doing three thousand
+           — which is the same losing race hopping runs, so it gets the same
+           answer. It is by far the largest remaining contributor to time
+           spent off the top of the screen. */
+        if (transitOk && bird.strandedMs > 340 && losingGround) {
+          bird.strandedMs = 0;
+          startTransit(sy > H * 0.5);
+        }
+      }
+
+      switch (bird.mode) {
+        case 'chat': {
+          if (!chat.current.open) {
+            enterIdle();
+            break;
+          }
+          /* Glide into the seat rather than snapping onto the window. The
+             window is screen-fixed, so the glide is interpolated in SCREEN
+             space and only then converted back to document space — blending
+             a document origin toward a screen target would drift by however
+             far the reader scrolled during the quarter second. */
+          if (chatUi.glide < 1) {
+            chatUi.glide = Math.min(1, chatUi.glide + dt / 0.26);
+            const u = smoothstep(chatUi.glide);
+            bird.x = window.scrollX + chatUi.fromX + (chatUi.seatX - chatUi.fromX) * u;
+            bird.y = window.scrollY + chatUi.fromY + (chatUi.seatY - chatUi.fromY) * u;
+          } else {
+            bird.x = window.scrollX + chatUi.seatX;
+            bird.y = window.scrollY + chatUi.seatY;
+          }
+          bird.facing = 1;
+          const wantAnim = chat.current.busy ? CHAT_RESPONDING : chat.current.perch;
+          if (bird.anim !== wantAnim) startAnim(wantAnim, 0);
+          break;
+        }
+
+        case 'idle': {
+          if (chat.current.open) {
+            setMode('chat');
+            break;
+          }
+          if (!bird.perch) {
+            enterFall();
+            break;
+          }
+          holdPerch(dt);
+
+          /* face whatever the reader's cursor is doing, when it is close */
+          const mdx = pointerDocX() - bird.x;
+          if (Math.abs(mdx) > 40 && Math.abs(mdx) < 420) {
+            bird.facing = mdx > 0 ? 1 : -1;
+          }
+
+          /*
+           * COMFORT BAND. He wants the middle 70% of the viewport. The check
+           * runs EVERY FRAME and the gate before the next hop shrinks with
+           * urgency, so being carried off the top of the screen produces a
+           * response in about a seventh of a second rather than whenever the
+           * idle scheduler next happens to feel like moving. That lateness
+           * was the complaint.
+           */
+          let u = bandUrgency();
+          const psy = bird.perch.y - window.scrollY;
+          if (psy < -30 || psy > H + 10) u = 1.4;
+          if (u > 0.06 && bird.clock > bird.hopGate) {
+            /*
+             * Only move if there is somewhere BETTER to stand. Whole stretches
+             * of this page have no perch inside the comfort band at all — and
+             * one stretch has no perch on screen whatsoever — so an
+             * unconditional "get back in the band" drive is unsatisfiable
+             * there and the bird hops frantically on the spot forever. A bird
+             * that has looked around, found nothing better and settled for
+             * what it has is both correct and better behaviour.
+             */
+            const cand = pickBandPerch(u);
+            if (cand && perchUrgency(cand) < u - 0.12) {
+              bird.hopGate = bird.clock + (720 - 580 * Math.min(1, u));
+              if (u > 0.7 && Math.random() < 0.25) say(pickLine(LINE_CHASE), 2600);
+              onCursor = false;
+              planTo(cand, u);
+              break;
+            }
+            /* Nothing better within reach. Sit tight — but look again much
+               sooner the worse the position is, so a page that scrolls a good
+               perch into view gets used almost at once rather than after two
+               and a bit seconds of standing there being wrong. */
+            bird.hopGate = bird.clock + (u > 0.8 ? 500 : 2200);
+          }
+
+          tryMouseInteractions(dt);
+          if (bird.mode !== 'idle') break;
+
+          if (animDone()) {
+            if (bird.clock < bird.restUntil) {
+              /* a short settle between idles, not a default state */
+              startAnim('breathe', 260 + Math.random() * 220);
+            } else {
+              chooseIdle(bird.clock);
+              /* Rest only some of the time. Resting after every single idle is
+                 what buried the repertoire under breathing. */
+              bird.restUntil =
+                Math.random() < 0.45
+                  ? bird.clock + IDLE_REST_MS * 0.5 + Math.random() * IDLE_REST_JITTER_MS * 0.4
+                  : 0;
+            }
+          }
+
+          /* PVZ: rare, and only once he has been genuinely settled. Settled
+             means the page is still and the reader is not moving the mouse.
+             Requiring the pointer to have LEFT the window meant a reader
+             sitting quietly with a hand on the mouse never once qualified,
+             which made the easter egg unreachable rather than rare. */
+          if (Math.abs(vel) < 2 && (!pointerOnScreen() || pointer.stillMs > 2600))
+            bird.settledMs += dt * 1000;
+          else bird.settledMs = 0;
+          if (bird.settledMs > 11000 && bird.clock > pvz.gate && Math.random() < dt * 0.02) {
+            startPvz();
+            break;
+          }
+
+          /* every so often, move house — roughly once every twelve seconds */
+          bird.sinceMove += dt;
+          if (bird.sinceMove > 7 && Math.random() < dt * 0.12) {
+            const t = pickBandPerch(0);
+            if (t && t !== bird.perch) {
+              bird.sinceMove = 0;
+              planTo(t, 0);
+            }
+          }
+
+          /* unprompted chatter */
+          if (bird.clock > gate.chatter && bubble.until < bird.clock) {
+            gate.chatter = bird.clock + 22000 + Math.random() * 20000;
+            say(pickLine(RANDOM_LINES), 5000);
+          }
+          break;
+        }
+
+        case 'walk': {
+          if (chat.current.open) {
+            setMode('chat');
+            break;
+          }
+          if (!bird.perch) {
+            enterFall();
+            break;
+          }
+          bird.y = approach(bird.y, bird.perch.y, dt, 1400);
+          bird.x += bird.walkVx * dt;
+          const lo = bird.perch.x0 + 8;
+          const hi = bird.perch.x1 - 8;
+          if (bird.x < lo || bird.x > hi) {
+            bird.x = Math.max(lo, Math.min(hi, bird.x));
+            bird.walkVx = -bird.walkVx;
+            if (bird.anim !== 'moonwalk') bird.facing = (bird.walkVx >= 0 ? 1 : -1) as 1 | -1;
+          }
+          if (bird.clock > bird.walkUntil || animDone()) enterIdle();
+          break;
+        }
+
+        case 'act': {
+          if (chat.current.open) {
+            setMode('chat');
+            break;
+          }
+          holdPerch(dt);
+          if (animDone()) {
+            actIdx++;
+            if (actIdx >= actLen) {
+              if (bird.anim === 'startledAwake') say(pickLine(LINE_WAKE), 3000);
+              enterIdle();
+            } else {
+              startAnim(ACTS[actIdx]);
+            }
+          }
+          break;
+        }
+
+        case 'hop': {
+          const wp = PLAN[planIdx];
+          /* Keep the arc honest if the furniture moved mid-flight: the target
+             follows its element, so arrival stays where the words are. */
+          if (wp.perch) {
+            wp.y = wp.perch.y;
+            wp.x = Math.max(wp.perch.x0 + 8, Math.min(wp.perch.x1 - 8, wp.x));
+          }
+          const py = bird.y;
+          const px = bird.x;
+          bird.vy += bird.g * dt;
+          bird.x += bird.vx * dt;
+          bird.y += bird.vy * dt;
+
+          if (!bird.jumpAnim) {
+            if (bird.vy < -140) {
+              if (bird.anim !== 'airUp') startAnim('airUp');
+            } else if (bird.vy < 140) {
+              if (bird.anim !== 'airApex') startAnim('airApex');
+            } else if (bird.anim !== 'airDown') startAnim('airDown');
+          } else if (animDone() && bird.anim !== 'airDown') {
+            startAnim('airDown');
+            bird.jumpAnim = null;
+          }
+
+          if (wp.kind === 'wall') {
+            const crossed =
+              bird.vx > 0 ? px <= wp.x && bird.x >= wp.x : px >= wp.x && bird.x <= wp.x;
+            if (crossed) {
+              const span = bird.x - px;
+              const f = Math.abs(span) > 1e-6 ? (wp.x - px) / span : 1;
+              bird.y = py + (bird.y - py) * f;
+              bird.x = wp.x;
+              bird.vx = 0;
+              bird.vy = 0;
+              bird.jumpAnim = null;
+              bird.facing = (wp.side === 1 ? -1 : 1) as 1 | -1;
+              setMode('wall');
+              startAnim('crouch');
+              if (Math.random() < 0.45) say(pickLine(LINE_WALL_JUMP), 2400);
+            }
+          } else if (bird.vy > 0 && py <= wp.y && bird.y >= wp.y) {
+            /*
+             * BUG 1 + 2: resolve the crossing to a SUB-FRAME time. The old
+             * code assigned bird.x = target and bird.y = target on whichever
+             * frame first noticed it was past, which at 1000px/s is a 16px
+             * jolt on landing. Here the overshoot is rewound instead.
+             */
+            const span = bird.y - py;
+            const f = span > 1e-6 ? (wp.y - py) / span : 1;
+            land(wp.perch, wp.y, dt * (1 - f));
+          } else if (bird.modeT > 3.2 || bird.y > window.scrollY + H + 400) {
+            /* hand the live arc over: a hop that has timed out is already a
+               fall, and zeroing its velocity here would be the jolt */
+            enterFall(true);
+          }
+          break;
+        }
+
+        case 'wall': {
+          if (bird.modeT > 0.14) {
+            planIdx++;
+            if (planIdx < planLen) launchTo(PLAN[planIdx], bird.hopUrgency);
+            else enterFall();
+          }
+          break;
+        }
+
+        case 'land': {
+          /* Walk off any overshoot from the touchdown rather than cutting it
+             away; see land() and holdPerch(). */
+          holdPerch(dt);
+          /* CHAINING. Still badly out of the comfort band? Do not stop to
+             preen — take off again almost immediately. */
+          const u = bandUrgency();
+          const dwell = u > 0.25 ? 0.07 : 0.24;
+          if (bird.modeT > dwell) {
+            if (bird.queuedAct) {
+              const a = bird.queuedAct;
+              bird.queuedAct = null;
+              startAct(a);
+              break;
+            }
+            if (planIdx + 1 < planLen) {
+              planIdx++;
+              launchTo(PLAN[planIdx], Math.max(u, bird.hopUrgency));
+              break;
+            }
+            if (u > 0.22) {
+              planTo(pickBandPerch(u), u);
+              break;
+            }
+            setMode('idle');
+            /* landing should not always dump into breathe, or arriving
+               somewhere new looks like the bird has nothing to say */
+            if (Math.random() < 0.6) chooseIdle(bird.clock);
+            else startAnim('breathe', 260);
+          }
+          break;
+        }
+
+        case 'fall': {
+          /*
+           * BUG 2, "the falling animation is a bit glitchy". Three separate
+           * faults, all of which surfaced as the same jitter.
+           *
+           * (a) Terminal velocity was 1900 px/s while the frame delta is
+           *     clamped at FRAME_MS_MAX = 100ms, so one slow frame moved him
+           *     190px — straight past two or three headings without touching
+           *     any of them, because a crossing test can only see what its
+           *     own step brackets. He would sail through the page and then be
+           *     recovered from below, which is the glitch. The fall is now
+           *     SUBSTEPPED so no step travels more than FALL_STEP_PX, and
+           *     terminal velocity is low enough to read as a bird rather than
+           *     as a dropped stone.
+           *
+           * (b) The animation swap read "if he is playing neither airDown nor
+           *     downGlide, choose one" — and enterFall had already set
+           *     airDown, so the condition was false on every frame of every
+           *     fall and downGlide never played once. A four-hundred-pixel
+           *     drop looked exactly like a stumble off a kerb.
+           *
+           * (c) He arrived carrying whatever velocity the previous mode had
+           *     left in vy. See enterFall.
+           */
+          bird.fallMs += dt * 1000;
+          const steps = Math.max(
+            1,
+            Math.min(8, Math.ceil((Math.abs(bird.vy) * dt) / FALL_STEP_PX))
+          );
+          const sdt = dt / steps;
+          let landed = false;
+          for (let s = 0; s < steps && !landed; s++) {
+            const py = bird.y;
+            const px = bird.x;
+            bird.vy = Math.min(bird.vy + GRAVITY * sdt, FALL_TERMINAL);
+            bird.y += bird.vy * sdt;
+            bird.x += bird.vx * sdt;
+            bird.vx *= 1 - Math.min(1, sdt * 1.6);
+
+            /*
+             * A landing is a CROSSING: the perch's y has to lie between where
+             * he was last step and where he is now. The original test was
+             * `p.y > bird.y - 6`, true of every perch below him, and it then
+             * assigned bird.y = p.y — so a fall from the top of the page
+             * finished with the bird materialising two hundred pixels lower.
+             */
+            let hit: Perch | null = null;
+            let hitY = Infinity;
+            for (let i = 0; i < perches.length; i++) {
+              const p = perches[i];
+              if (p.y < py || p.y > bird.y) continue;
+              if (bird.x < p.x0 - 26 || bird.x > p.x1 + 26) continue;
+              if (p.y < hitY) {
+                hitY = p.y;
+                hit = p;
+              }
+            }
+            if (hit) {
+              const span = bird.y - py;
+              const f = span > 1e-6 ? (hitY - py) / span : 1;
+              bird.x = px + (bird.x - px) * f;
+              land(hit, hitY, 0);
+              landed = true;
+            }
+          }
+          if (landed) break;
+
+          /*
+           * TUMBLE AND RECOVERY. A fall he was thrown into — shaken off the
+           * cursor, or wrenched out of the reader's hand — opens on a
+           * somersault and holds it for tumbleUntil, restarting it if it runs
+           * out, because a single flip is a trick and a repeated one is a
+           * bird that has lost control. Then he catches himself with a
+           * flutter and it becomes an ordinary fall again, which is what
+           * "with an appropriate animation" has to mean if the recovery is
+           * going to read at all.
+           */
+          if (bird.clock < bird.tumbleUntil) {
+            if (animDone()) startAnim(bird.anim);
+          } else if (bird.tumbleUntil > 0) {
+            bird.tumbleUntil = 0;
+            startAnim('flutter', 0);
+            /* Made off with the cursor on the way out: that flight takes
+               priority over finding somewhere to sit. */
+            if (swap.hold === 1 && !swap.returning) {
+              enterFly(theftAwayX(), theftAwayY(), null, 880);
+              break;
+            }
+            /* Catch himself properly if there is anywhere to catch onto. */
+            const t = pickBandPerch(0.8);
+            if (t && Math.abs(t.y - bird.y) > 40) {
+              enterFly(targetXOn(t), t.y, t, 820);
+              break;
+            }
+          } else if (bird.vy > 720 && bird.fallMs > 220 && bird.anim !== 'downGlide') {
+            /* A short drop is a stumble; a long one opens into a glide. */
+            startAnim('downGlide', 0);
+          }
+
+          if (bird.y > window.scrollY + H + 200) {
+            /*
+             * BUG 1, cause (a): recovery used to reposition him 420px above a
+             * perch in a single assignment. He now FLIES back, which is both
+             * continuous and the thing a bird would actually do.
+             */
+            const t = pickBandPerch(1) ?? nearestPerch();
+            /* Fast, because this is a recovery and not a stroll: at 780 the
+               climb back from below the fold took long enough that a reader
+               who kept scrolling never saw him arrive. */
+            if (t) enterFly(targetXOn(t), t.y, t, 1200);
+            else enterFly(window.scrollX + W * 0.5, window.scrollY + H * 0.5, null, 1200);
+          }
+          break;
+        }
+
+        case 'drag': {
+          /*
+           * B4. He is held, and he is not pleased about it.
+           *
+           * He does NOT go exactly where the pointer is. He is approached
+           * toward the grab point at a bounded speed — bounded harder the
+           * angrier he is, because a bird pulling against you does not track
+           * your hand — and the difference between where the hand is and
+           * where he is IS the struggle. That also keeps the continuity rule:
+           * a flick of the mouse across the page cannot teleport him, it can
+           * only put him behind.
+           */
+          const tx = pointerDocX() + drag.grabX;
+          const ty = pointerDocY() + drag.grabY;
+          const resist = 1 - 0.45 * anger;
+          bird.x = approach(bird.x, tx, dt, 1500 * resist);
+          bird.y = approach(bird.y, ty, dt, 1500 * resist);
+          /*
+           * Facing is taken from the direction he is being HAULED, not from
+           * which side of him the pointer is on: he is held at the pointer,
+           * so that difference is a couple of pixels and its sign flips every
+           * other frame, which reads as a strobe rather than a struggle. He
+           * faces back against the pull, which is what pulling away looks
+           * like. Deadbanded so a still hand does not flip him either.
+           */
+          if (Math.abs(pointer.vx) > 70) {
+            bird.facing = (pointer.vx < 0 ? 1 : -1) as 1 | -1;
+          }
+
+          /* Hauling him about is what charges the anger, not merely holding
+             him: pick him up and put him down and he forgives you. */
+          drag.hauled += pointer.jerk;
+          if (pointer.jerk > 0) {
+            anger = Math.min(1, anger + pointer.jerk * ANGER_PER_PX);
+          }
+
+          const want = struggleAnim();
+          if (animDone()) {
+            drag.strugglePick++;
+            startAnim(struggleAnim(), 0);
+          } else if (bird.anim !== want && bird.animT > 260) {
+            drag.strugglePick++;
+            startAnim(want, 0);
+          }
+
+          /* ESCAPE. Rolled on a fixed tick so the odds mean what they say —
+             a per-frame roll would make the frame rate part of the design. */
+          if (bird.clock > drag.escapeAt) {
+            drag.escapeAt = bird.clock + ESCAPE_TICK_MS;
+            if (Math.random() < 0.05 + anger * 0.74) {
+              escapeDrag();
+              break;
+            }
+            if (Math.random() < 0.35) angerSay(1800);
+          }
+          /* Fully furious and still held: he gets out regardless, shortly. */
+          if (anger >= 0.999 && drag.hauled > 900) {
+            escapeDrag();
+            break;
+          }
+          break;
+        }
+
+        case 'fly': {
+          const dx = bird.flyX - bird.x;
+          const dy = bird.flyY - bird.y;
+          const d = Math.hypot(dx, dy);
+          if (bird.anim !== 'flyFlap' && bird.anim !== 'upFlap') {
+            startAnim(dy < -20 ? 'upFlap' : 'flyFlap', 0);
+          }
+          /*
+           * B1. Sustained flight drives the wing off a PHASE rather than off
+           * the animation clock, and warps that phase onto the animation's
+           * own timeline: FLAP_DOWN_FRAC of the wall clock covers everything
+           * up to the bottom of the stroke, and the remainder — the larger
+           * remainder — covers the recovery. Same keyframes, asymmetric beat.
+           *
+           * bird.animT is assigned rather than accumulated here, which is
+           * safe precisely because it is a display clock: `animDone` is not
+           * consulted in this mode (flyFlap and upFlap both loop) and the
+           * phase is monotonic, so the pose never runs backwards.
+           */
+          const fa = currentAnim();
+          const total = animDuration(fa);
+          const down = wingBottomMs(fa);
+          rig.flapPhase += (dt * 1000) / FLAP_CYCLE_MS;
+          rig.flapPhase -= Math.floor(rig.flapPhase);
+          bird.animT =
+            rig.flapPhase < FLAP_DOWN_FRAC
+              ? (rig.flapPhase / FLAP_DOWN_FRAC) * down
+              : down +
+                ((rig.flapPhase - FLAP_DOWN_FRAC) / (1 - FLAP_DOWN_FRAC)) * (total - down);
+
+          if (d < 7) {
+            land(bird.flyPerch, bird.flyY, 0);
+            break;
+          }
+          const step = Math.min(d, bird.flySpeed * dt);
+          bird.x += (dx / d) * step;
+          bird.y += (dy / d) * step;
+          if (Math.abs(dx) > 8) bird.facing = dx > 0 ? 1 : -1;
+          /* the target may be a moving cursor, or furniture that reflowed */
+          if (bird.flyPerch) {
+            bird.flyY = bird.flyPerch.y;
+            bird.flyX = Math.max(bird.flyPerch.x0 + 8, Math.min(bird.flyPerch.x1 - 8, bird.flyX));
+            if (bird.flyPerch === cursorPerch) {
+              bird.flyX = cursorPerch.x0 + 14;
+            }
+          }
+          break;
+        }
+
+        case 'transit': {
+          updateTransit(dt, vel);
+          break;
+        }
+
+        case 'sleep': {
+          if (chat.current.open) {
+            setMode('chat');
+            break;
+          }
+          holdPerch(dt);
+          if (bird.anim !== 'sleep') startAnim('sleep', 0);
+          if (bird.clock > bird.dreamUntil) {
+            bird.dreamUntil = bird.clock + 3000 + Math.random() * 1000;
+            bird.dreamIdx = (bird.dreamIdx + 1) % DREAM_ITEMS.length;
+          }
+          if (bandUrgency() > 0.35 || bird.clock > bird.sleepUntil) {
+            setMode('act');
+            actLen = 1;
+            actIdx = 0;
+            ACTS[0] = 'wakeUp';
+            startAnim('wakeUp');
+          }
+          break;
+        }
+
+        case 'pvz': {
+          if (chat.current.open || Math.abs(vel) > 12) {
+            enterIdle();
+            break;
+          }
+          holdPerch(dt);
+          updatePvz(dt);
+          break;
+        }
+      }
+
+      updateRig(dt);
+      updateTheft(dt);
+      checkOverUi();
+      onHoverCheck();
+      maybeWhisper();
+    }
+
+    /* ---- the rig, once a frame ------------------------------------------- */
+    /*
+     * Everything the compositor adds on top of the sampled pose is computed
+     * here and nowhere else, AFTER the mode has run, so it always describes
+     * the state he actually ended the frame in.
+     */
+    function updateRig(dt: number) {
+      /* FLIGHT. Blended in and out over FLAP_BLEND so entering and leaving
+         flight cannot snap a body offset into existence. */
+      const flying = bird.mode === 'fly';
+      rig.flight = approach(rig.flight, flying ? 1 : 0, dt, 1 / FLAP_BLEND);
+
+      if (rig.flight > 0.001) {
+        /*
+         * The bob is a cosine of the WARPED phase, which is what puts the
+         * asymmetry into the body as well as the wing: the rise happens over
+         * the short powered downstroke and the settle over the long recovery.
+         *
+         * Sign: +y is down. At phase 0 the wing is at the top of its stroke
+         * and the body is at its LOWEST, so bob is +FLAP_BOB there; half a
+         * cycle later the wing has driven down and the body is at its
+         * highest, so bob is -FLAP_BOB. That is the antiphase relationship,
+         * and it is deliberately larger than the ±1px the sprite authors in
+         * the opposite sense, so the NET motion reads the right way round.
+         */
+        const p = rig.flapPhase;
+        const dphase =
+          p < FLAP_DOWN_FRAC
+            ? (p / FLAP_DOWN_FRAC) * 0.5
+            : 0.5 + ((p - FLAP_DOWN_FRAC) / (1 - FLAP_DOWN_FRAC)) * 0.5;
+        const c = Math.cos(dphase * Math.PI * 2);
+        rig.bob = c * FLAP_BOB;
+        /* Pitch is mostly a function of speed, with a small flap ripple: a
+           bird leans hardest into the stroke that is doing the work. */
+        const spd = Math.min(1, bird.flySpeed / FLAP_PITCH_REF);
+        rig.pitch = FLAP_PITCH * spd * (0.74 - 0.26 * c);
+      } else {
+        rig.bob = 0;
+        rig.pitch = 0;
+      }
+
+      /* GAZE. B3's "look upwards", held as a state rather than fired as an
+         animation, so his head is at the pointer for as long as it is over
+         him. Only while he is grounded and unoccupied — a bird mid-hop is
+         looking where it is going. */
+      const grounded =
+        bird.mode === 'idle' || bird.mode === 'act' || bird.mode === 'land' || bird.mode === 'walk';
+      let wantGaze = 0;
+      if (grounded && !chat.current.open && pointerOnScreen()) {
+        const px = pointerDocX();
+        const py = pointerDocY();
+        if (cursorIsAbove(px, py)) {
+          /* Full tilt when it is right overhead, tailing off as it drifts up
+             and away, so the head follows rather than snapping to a bracket. */
+          const up = Math.min(1, (bird.y - py) / 150);
+          const across = 1 - Math.min(1, Math.abs(px - bird.x) / 170);
+          wantGaze = Math.max(0, Math.min(1, up * (0.45 + 0.55 * across)));
+          rig.gazeDir = px >= bird.x ? 1 : -1;
+        }
+      }
+      rig.gaze = approach(rig.gaze, wantGaze, dt, 4.5);
+
+      /* STRUGGLE SHAKE. Amplitude scales with anger, exactly as the client
+         asked. Capped at three sprite pixels and driven by two incommensurate
+         sines, so it is violent-looking, continuous, and cannot ever be
+         mistaken for a position jump. */
+      if (bird.mode === 'drag') {
+        const amp = 0.7 + anger * 2.3;
+        const t = bird.clock;
+        rig.shakeX = Math.sin(t * 0.031) * amp;
+        rig.shakeY = Math.sin(t * 0.047 + 1.1) * amp * 0.7;
+      } else if (rig.shakeX !== 0 || rig.shakeY !== 0) {
+        rig.shakeX = approach(rig.shakeX, 0, dt, 14);
+        rig.shakeY = approach(rig.shakeY, 0, dt, 14);
+      }
+    }
+
+    /* ---- the stolen cursor, once a frame ---------------------------------- */
+    function updateTheft(dt: number) {
+      if (swap.hold === 0) return;
+      /* Time is up, or the swap is not in force at all (reduced motion, tab
+         hidden, pointer over a link) — in every one of those the reader has
+         their real cursor back and holding a drawn one is meaningless. */
+      if (reduced || !pointer.seen || bird.clock > swap.holdUntil + 4000) {
+        dropCursor(false);
+        return;
+      }
+      if (swap.hold === 1 && !swap.returning && bird.clock > swap.holdUntil) {
+        swap.returning = true;
+        /* Fly it home. He aims a little above the pointer so the hand-back
+           reads as putting it down rather than colliding with it. */
+        enterFly(pointerDocX(), pointerDocY() - 26, null, 760);
+      }
+      if (swap.returning) {
+        /* Keep chasing the pointer, since the reader is probably moving it. */
+        if (bird.mode === 'fly') {
+          bird.flyX = pointerDocX();
+          bird.flyY = pointerDocY() - 26;
+        }
+        const near = Math.hypot(pointerDocX() - bird.x, pointerDocY() - bird.y);
+        if (near < 54) {
+          swap.hold = 2;
+          swap.returning = false;
+          say(pickLine(LINE_RETURN), 2200);
+          if (bird.mode === 'fly') {
+            const p = pickBandPerch(0.5);
+            if (p) enterFly(targetXOn(p), p.y, p, 700);
+          }
+        }
+      }
+      void dt;
+    }
+
+    /**
+     * Reduced motion: correct and legible, but nothing animates. He holds the
+     * first frame of `breathe` on a perch inside the comfort band, and when
+     * the page scrolls far enough that his perch leaves the viewport he is
+     * RESEATED rather than flown — a discrete reposition is the point here,
+     * since travelling smoothly across the screen is the exact thing being
+     * opted out of. Speech and chat both still work.
+     */
+    function updateReduced(dt: number) {
+      lastDt = dt;
+      bird.clock += dt * 1000;
+      trackScroll(dt);
+      bird.animT = 0;
+      if (chat.current.open) {
+        if (bird.mode !== 'chat') {
+          setMode('chat');
+          chatUi.glide = 1;
+        }
+        bird.x = window.scrollX + chatUi.seatX;
+        bird.y = window.scrollY + chatUi.seatY;
+        bird.facing = 1;
+        const wantAnim = chat.current.busy ? CHAT_RESPONDING : chat.current.perch;
+        if (bird.anim !== wantAnim) startAnim(wantAnim, 0);
+      } else {
+        if (bird.mode !== 'idle') setMode('idle');
+        if (bird.anim !== 'breathe') startAnim('breathe', 0);
+        const sy = bird.perch ? bird.perch.y - window.scrollY : -9999;
+        if (!bird.perch || sy < H * 0.1 || sy > H * 0.9) {
+          const p = pickBandPerch(1);
+          if (p) {
+            bird.perch = p;
+            bird.x = (p.x0 + p.x1) * 0.5;
+            bird.y = p.y;
+          }
+        } else {
+          bird.y = bird.perch.y;
+          bird.x = Math.max(bird.perch.x0 + 8, Math.min(bird.perch.x1 - 8, bird.x));
+        }
+      }
+      /* Reduced motion opts out of the rig entirely: a flight bob, a gaze
+         tilt and a struggle shake are all motion, and there is no version of
+         them that is "static but correct". Zeroed, not eased. */
+      rig.flight = 0;
+      rig.bob = 0;
+      rig.pitch = 0;
+      rig.gaze = 0;
+      rig.shakeX = 0;
+      rig.shakeY = 0;
+      if (swap.hold !== 0) dropCursor(false);
+      checkOverUi();
+      onHoverCheck();
+      maybeWhisper();
+    }
+
+    /* ---- draw -------------------------------------------------------------- */
+
+    /**
+     * The one place the rig touches the puppet. Runs on the sampled POSE,
+     * after sampleInto and before anything is blitted.
+     *
+     * Only POSITIONS are written here, never variants. That is not a style
+     * preference: a variant is a different drawing, and easing between two
+     * drawings is a crossfade, which is the one thing pixel art cannot
+     * survive. Every term below is a continuous float added to dx/dy, and the
+     * draw loop rounds each part to the sprite grid on its way out — so the
+     * result still lands on whole pixels and still cannot shimmer.
+     */
+    function applyRig() {
+      if (rig.flight > 0.001) {
+        const p = rig.pitch * rig.flight;
+        if (p > 0.01) {
+          /*
+           * PITCH, faked as a shear because the compositor has no rotation
+           * and a rotated pixel sparrow would not be a pixel sparrow. Head
+           * and beak go forward and down, tail goes back and up: the line
+           * through the animal tips toward the direction of travel, which is
+           * what the eye reads as pitch. dx is in SPRITE space, so it is
+           * already mirrored with the facing and is always "forwards".
+           */
+          POSE.head.dx += p;
+          POSE.head.dy += p * 0.45;
+          POSE.eye.dx += p;
+          POSE.eye.dy += p * 0.45;
+          POSE.beak.dx += p * 1.35;
+          POSE.beak.dy += p * 0.6;
+          POSE.tail.dx -= p * 0.9;
+          POSE.tail.dy -= p * 0.55;
+          POSE.body.dy += p * 0.2;
+        }
+      }
+      if (rig.gaze > 0.001) {
+        /* Head back, beak up, and turned toward the pointer across. The
+           amounts are small because the head is only nine pixels wide. */
+        const g = rig.gaze;
+        POSE.head.dy -= g * 2;
+        POSE.eye.dy -= g * 2.2;
+        POSE.beak.dy -= g * 2.4;
+        const across = g * rig.gazeDir * (bird.facing === 1 ? 1 : -1);
+        POSE.eye.dx += across;
+        POSE.beak.dx += across * 1.2;
+        POSE.tail.dy += g * 0.8;
+      }
+    }
+
+    /**
+     * The drawn cursor, and the only writer of the swap.
+     *
+     * Returns true when a pixel cursor was actually painted this frame, which
+     * is the ONLY evidence `syncCursorSwap` will accept for hiding the real
+     * one. Everything about this function is arranged so that the failure
+     * mode is a visible system cursor rather than an invisible one.
+     */
+    function cursorWanted(): boolean {
+      if (reduced) return false;
+      if (document.hidden) return false;
+      if (!pointer.seen || !pointerOnScreen()) return false;
+      /* NOT `if (pointer.overUi) return false` any more. The swap used to
+         stand down over anything clickable; the drawn cursor now changes
+         colour there instead. See CURSOR_MATRIX_OVER. */
+      if (W < 2 || H < 2) return false;
+      if (chat.current.open) return false;
+      return true;
+    }
+
+    function drawCursor(): boolean {
+      if (!cursorWanted()) {
+        /* Losing the swap while he is holding it ends the theft: the reader
+           is looking at their real pointer again and a second one flying
+           about the page would be two cursors, not a joke. */
+        if (swap.hold !== 0) dropCursor(false);
+        swap.cx = pointer.x;
+        swap.cy = pointer.y;
+        return false;
+      }
+      const img = pointer.overUi ? cursorImgOver : cursorImg;
+      if (!img) return false;
+
+      /* Where it should be. Free: exactly under the real pointer, no easing —
+         a cursor that lags is a cursor that is broken. Held or handing back:
+         eased toward the target, because that motion is the whole point. */
+      if (swap.hold === 0) {
+        swap.cx = pointer.x;
+        swap.cy = pointer.y;
+      } else {
+        let tx: number;
+        let ty: number;
+        if (swap.hold === 1) {
+          /* In the beak. The beak sits high and forward on the puppet. */
+          tx = bird.x - window.scrollX + bird.facing * 13;
+          ty = bird.y - window.scrollY - 30;
+        } else {
+          tx = pointer.x;
+          ty = pointer.y;
+        }
+        const dx = tx - swap.cx;
+        const dy = ty - swap.cy;
+        const d = Math.hypot(dx, dy);
+        /* Frame-rate independent, and fast: 2600 px/s crosses a viewport in
+           well under a second, so the handback never feels like a hostage
+           negotiation. draw() has no dt of its own, so it borrows the one the
+           update it follows was given. */
+        const step = Math.min(d, 2600 * lastDt);
+        if (d > 0.01) {
+          swap.cx += (dx / d) * step;
+          swap.cy += (dy / d) * step;
+        }
+        if (swap.hold === 2 && d < 5) {
+          swap.hold = 0;
+          swap.cx = pointer.x;
+          swap.cy = pointer.y;
+        }
+      }
+
+      const w = img.width * CURSOR_SCALE;
+      const h = img.height * CURSOR_SCALE;
+      ctx!.imageSmoothingEnabled = false;
+      ctx!.drawImage(img, Math.round(swap.cx), Math.round(swap.cy), w, h);
+      swap.paintedAt = performance.now();
+      return true;
+    }
+
+    /**
+     * Put the class on, or take it off. Called with the result of drawCursor,
+     * at the end of every frame.
+     *
+     * The class only ever goes on off the back of a cursor that was painted
+     * THIS FRAME. If the loop stalls, if the tab hides, if the component
+     * unmounts, if reduced motion turns on, if the pointer crosses a link —
+     * this is called with false, or is not called at all and the watchdog
+     * calls `restoreCursor` instead. Both paths end in the real pointer.
+     */
+    function syncCursorSwap(painted: boolean) {
+      if (painted === swap.on) return;
+      swap.on = painted;
+      document.documentElement.classList.toggle(CURSOR_SWAP_CLASS, painted);
+    }
+
+    /** The unconditional way back. Safe to call at any time, from anywhere. */
+    function restoreCursor() {
+      if (swap.hold !== 0) {
+        swap.hold = 0;
+        swap.returning = false;
+      }
+      if (swap.on) {
+        swap.on = false;
+        document.documentElement.classList.remove(CURSOR_SWAP_CLASS);
+      }
+    }
+
+    function drawPropInSprite(name: PropName) {
+      const img = atlas.get(`prop:${name}`);
+      if (!img) return;
+      const p = PROPS[name];
+      ctx!.drawImage(
+        img,
+        p.ox * PIXEL_SCALE,
+        p.oy * PIXEL_SCALE,
+        img.width * PIXEL_SCALE,
+        img.height * PIXEL_SCALE
+      );
+    }
+
+    /** Screen-space blit for things that are not attached to the puppet. */
+    function drawPropAt(name: PropName, sx: number, sy: number, mirror: boolean) {
+      const img = atlas.get(`prop:${name}`);
+      if (!img) return;
+      const w = img.width * PIXEL_SCALE;
+      const h = img.height * PIXEL_SCALE;
+      const x = Math.round(sx);
+      const y = Math.round(sy);
+      ctx!.save();
+      if (mirror) {
+        ctx!.translate(x + w, y);
+        ctx!.scale(-1, 1);
+        ctx!.drawImage(img, 0, 0, w, h);
+      } else {
+        ctx!.drawImage(img, x, y, w, h);
+      }
+      ctx!.restore();
+    }
+
+    function draw() {
+      ctx!.clearRect(0, 0, W, H);
+      const scrollX = window.scrollX;
+      const scrollY = window.scrollY;
+      const sx = bird.x - scrollX;
+      const sy = bird.y - scrollY;
+
+      const anim = currentAnim();
+      sampleInto(anim, bird.animT);
+      applyRig();
+      const frameIndex = SAMPLED_FRAME;
+
+      const onScreen = sy > -260 && sy < H + 260;
+
+      /* ---- the lawn, behind him ---- */
+      if (bird.mode === 'pvz') {
+        const floor = pvz.floorY - scrollY;
+        const zName = ZOMBIE_WALK[pvz.frame];
+        const zImg = atlas.get(`prop:${zName}`);
+        const zh = zImg ? zImg.height * PIXEL_SCALE : 0;
+        const zw = zImg ? zImg.width * PIXEL_SCALE : 0;
+        const mirror = pvz.side === -1; // authored facing LEFT
+        if (pvz.z1Alive) drawPropAt(zName, pvz.z1x - scrollX - zw * 0.5, floor - zh, mirror);
+        if (pvz.z0Alive) drawPropAt(zName, pvz.z0x - scrollX - zw * 0.5, floor - zh, mirror);
+      }
+
+      if (onScreen) {
+        /* Snap the whole puppet to the pixel grid. Drawn at a fractional
+           offset a pixel sparrow shimmers, which undoes the entire look. */
+        /*
+         * THE BODY BOB AND THE STRUGGLE SHAKE, applied to the whole puppet
+         * rather than part by part — they are the animal moving, not a limb.
+         * Rounded to WHOLE SPRITE PIXELS before scaling, so the bird bobs up
+         * the pixel grid in steps of PIXEL_SCALE and never lands between two
+         * device pixels. That staircase is the correct look; a smooth one
+         * would be a blurred one.
+         *
+         * Both are bounded by construction (FLAP_BOB, and the anger-scaled
+         * shake amplitude), so neither can produce anything a reader would
+         * read as a jump — which is why they are allowed to live here at all
+         * rather than in the physics.
+         */
+        const rigX = Math.round(rig.shakeX) * PIXEL_SCALE;
+        const rigY = Math.round(rig.bob * rig.flight + rig.shakeY) * PIXEL_SCALE;
+        const originX = Math.round(sx) - (SPRITE_WIDTH * PIXEL_SCALE) / 2 + rigX;
+        const originY = Math.round(sy) - BASELINE_Y * PIXEL_SCALE + rigY;
+
+        /* pvzBurrow and pvzPopUp drive every part 11-14px BELOW the baseline.
+           Without this clip you get a sparrow standing calmly under the floor
+           instead of a sparrow underground. This is the one hard requirement
+           the sprite data cannot enforce for itself. */
+        /*
+         * Named, not inferred. The obvious clever version of this test is
+         * "clip whenever the sampled pose reaches below the baseline", and it
+         * is wrong twice over: `peck` drives the head twelve pixels down to
+         * reach the floor and `downCrash` nine, so a depth test clips a bird
+         * who is merely bending over; and the `shadow` part is anchored at
+         * row 26 with a two-row `wide` variant, so it lives below the clip
+         * line by design in every animation there is. The two digs are the
+         * only poses that mean "underground", and they are known by name.
+         */
+        const needsClip = bird.anim === 'pvzBurrow' || bird.anim === 'pvzPopUp';
+        ctx!.save();
+        if (needsClip) {
+          ctx!.beginPath();
+          ctx!.rect(0, 0, W, originY + (BASELINE_Y + 1) * PIXEL_SCALE);
+          ctx!.clip();
+        }
+
+        ctx!.save();
+        ctx!.imageSmoothingEnabled = false;
+        const flips = flipsBefore(anim, bird.animT);
+        const facing = flips % 2 === 1 ? ((-bird.facing) as 1 | -1) : bird.facing;
+        if (facing === -1) {
+          ctx!.translate(originX + SPRITE_WIDTH * PIXEL_SCALE, originY);
+          ctx!.scale(-1, 1);
+        } else {
+          ctx!.translate(originX, originY);
+        }
+
+        /* props behind the puppet */
+        if (bird.mode === 'transit') {
+          for (let i = 0; i < transit.props.length; i++) {
+            if (PROPS[transit.props[i]].layer === 'behind') drawPropInSprite(transit.props[i]);
+          }
+        } else if (bird.mode === 'chat') {
+          const list = CHAT_PROP_MAP[chat.current.perch] ?? EMPTY_PROPS;
+          for (let i = 0; i < list.length; i++) {
+            if (PROPS[list[i]].layer === 'behind') drawPropInSprite(list[i]);
+          }
+          const cyc = cycledProps(chat.current.perch, bird.clock);
+          for (let i = 0; i < cyc.length; i++) {
+            if (PROPS[cyc[i]].layer === 'behind') drawPropInSprite(cyc[i]);
+          }
+        } else if (bird.mode === 'sleep') {
+          for (let i = 0; i < DREAM_BUBBLE_PARTS.length; i++) {
+            if (PROPS[DREAM_BUBBLE_PARTS[i]].layer === 'behind')
+              drawPropInSprite(DREAM_BUBBLE_PARTS[i]);
+          }
+        }
+
+        for (let k = 0; k < DRAW_ORDER.length; k++) {
+          const part = DRAW_ORDER[k];
+          const p = POSE[part];
+          if (!p) continue;
+          const img = atlas.get(`${part}:${p.variant}`);
+          if (!img) continue;
+          const def = PARTS[part] as any;
+          const sprite = def.variants[p.variant];
+          const ax = def.anchor.x + (sprite.ox ?? 0) + Math.round(p.dx);
+          const ay = def.anchor.y + (sprite.oy ?? 0) + Math.round(p.dy);
+          ctx!.drawImage(
+            img,
+            ax * PIXEL_SCALE,
+            ay * PIXEL_SCALE,
+            img.width * PIXEL_SCALE,
+            img.height * PIXEL_SCALE
+          );
+        }
+
+        /* props in front */
+        if (bird.mode === 'transit') {
+          for (let i = 0; i < transit.props.length; i++) {
+            if (PROPS[transit.props[i]].layer === 'front') drawPropInSprite(transit.props[i]);
+          }
+        } else if (bird.mode === 'chat') {
+          const list = CHAT_PROP_MAP[chat.current.perch] ?? EMPTY_PROPS;
+          for (let i = 0; i < list.length; i++) {
+            if (PROPS[list[i]].layer === 'front') drawPropInSprite(list[i]);
+          }
+          const cyc = cycledProps(chat.current.perch, bird.clock);
+          for (let i = 0; i < cyc.length; i++) {
+            if (PROPS[cyc[i]].layer === 'front') drawPropInSprite(cyc[i]);
+          }
+        } else if (bird.mode === 'sleep') {
+          for (let i = 0; i < DREAM_BUBBLE_PARTS.length; i++) {
+            if (PROPS[DREAM_BUBBLE_PARTS[i]].layer === 'front')
+              drawPropInSprite(DREAM_BUBBLE_PARTS[i]);
+          }
+          /* the dream itself, centred in the bubble */
+          const item = DREAM_ITEMS[bird.dreamIdx];
+          const img = atlas.get(`prop:${item}`);
+          if (img) {
+            /* Round to a whole SPRITE pixel before scaling. Centring an
+               odd-sized item on the bubble's centre otherwise lands it on a
+               half cell, which in pixel art is not a subtle offset — it is the
+               only thing on screen that does not sit on the grid, and it reads
+               as blur. dreamSeed was five pixels tall and did exactly this. */
+            const b = PROPS.dreamBubble;
+            const cx = Math.round(b.ox + 7 - img.width / 2) * PIXEL_SCALE;
+            const cy = Math.round(b.oy + 5 - img.height / 2) * PIXEL_SCALE;
+            ctx!.drawImage(img, cx, cy, img.width * PIXEL_SCALE, img.height * PIXEL_SCALE);
+          }
+        }
+        ctx!.restore();
+        ctx!.restore();
+      }
+
+      /* ---- the pea and its splat, in front of everything ---- */
+      if (bird.mode === 'pvz') {
+        if (pvz.peaLive) drawPropAt('pea', pvz.peaX - scrollX, pvz.peaY - scrollY, false);
+        if (pvz.splatT > 0)
+          drawPropAt('peaSplat', pvz.splatX - scrollX, pvz.splatY - scrollY, pvz.side === -1);
+      }
+
+      /* ---- chat window ---- */
+      if (chat.current.open) {
+        /* the input is mounted a frame late; keep it over the pixel row */
+        positionInput();
+        const draft = chatDraft();
+        if (
+          chatUi.dirty ||
+          chatUi.lastVersion !== chat.current.version ||
+          chatUi.lastDraft !== draft ||
+          chatUi.lastBusy !== chat.current.busy
+        ) {
+          chatUi.lastVersion = chat.current.version;
+          chatUi.lastDraft = draft;
+          chatUi.lastBusy = chat.current.busy;
+          buildChat();
+        }
+        ctx!.drawImage(chatCanvas, Math.round(chatUi.x), Math.round(chatUi.y));
+        /* caret, blinking, drawn live so the window does not rebuild for it */
+        if (!chat.current.busy && Math.floor(bird.clock / 530) % 2 === 0) {
+          ctx!.fillStyle = theme.ink;
+          ctx!.fillRect(
+            Math.round(chatUi.x + chatUi.caretCells * FONT_PX),
+            Math.round(chatUi.y + ((chatUi as any).caretY ?? 0) * FONT_PX),
+            FONT_PX,
+            GLYPH_H * FONT_PX
+          );
+        }
+      } else if (bubble.text && bubble.until > bird.clock && onScreen) {
+        /* ---- speech bubble ---- */
+        if (bubble.dirty) buildBubble();
+        if (bubble.w) {
+          const tailPx = bubble.tailCells * FONT_PX;
+          const headY = sy - SPRITE_HEIGHT * PIXEL_SCALE + 10;
+          let bx = Math.round(sx - bubble.bodyW * FONT_PX * 0.5);
+          bx = Math.max(8, Math.min(Math.max(8, W - bubble.w - 8), bx));
+          let by = Math.round(headY - bubble.h - tailPx);
+          let dir: 1 | -1 = 1;
+          if (by < 8) {
+            /* no room above him: sit below and turn the tail over */
+            by = Math.round(sy + 18 + tailPx);
+            dir = -1;
+          }
+          ctx!.drawImage(bubbleCanvas, bx, by);
+          drawBubbleTail(bx, by, sx, dir);
+        }
+      } else if (bubble.text && bubble.until <= bird.clock) {
+        bubble.text = '';
+      }
+
+      /* LAST. On top of the bird, the bubble and the chat window, because a
+         real cursor is on top of everything — and after them, so the class
+         can only ever be turned on by a frame that got this far. */
+      syncCursorSwap(drawCursor());
+    }
+
+    /* ---- boot ------------------------------------------------------------- */
+    resize();
+    readTheme();
+    measure();
+    lastScrollY = window.scrollY;
+    (function seat() {
+      /* never open on viewport-anchored furniture: that is a screen position,
+         not a place on the page, and on narrow screens the rail is the
+         topmost perch there is */
+      const p = perches.find((q) => q.w > 220 && !q.fixed) ?? perches.find((q) => !q.fixed);
+      if (!p) return;
+      bird.perch = p;
+      bird.x = p.x0 + Math.min(140, (p.x1 - p.x0) * 0.3);
+      bird.y = p.y;
+    })();
+
+    let measureRaf = 0;
+    const remeasure = () => {
+      cancelAnimationFrame(measureRaf);
+      measureRaf = requestAnimationFrame(() => {
+        resize();
+        measure();
+        if (chat.current.open) layoutChat(false);
+      });
+    };
+    window.addEventListener('resize', remeasure);
+    const ro = new ResizeObserver(remeasure);
+    ro.observe(document.body);
+
+    /*
+     * Reveal transitions move the visible mark without changing layout, so
+     * neither of the two observers above ever hears about them: a heading
+     * measured at boot sits 14px below where it ends up, and a polaroid 16px,
+     * for the life of the page. `measureEdge` refuses anything still faded
+     * out, and this puts it back in the list the moment it has arrived. Also
+     * catches the polaroid tilt changing under the hover snap.
+     */
+    const onTransitionEnd = (e: TransitionEvent) => {
+      if (e.propertyName === 'opacity' || e.propertyName === 'transform') remeasure();
+    };
+    document.addEventListener('transitionend', onTransitionEnd, true);
+    window.addEventListener('pointermove', onMove, { passive: true });
+    window.addEventListener('pointerdown', onDown);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onCancel);
+
+    /*
+     * THE CURSOR SWAP RULE, injected with the component and removed with it.
+     *
+     * It lives here rather than in v2.css on purpose. A stylesheet rule that
+     * hides the pointer outlives the code that is supposed to draw one — if
+     * this component ever fails to mount, throws on mount, or is removed by a
+     * route change, a rule in the sheet would leave a site with no cursor and
+     * nothing running to put it back. Injected, its lifetime is exactly the
+     * lifetime of the thing drawing the replacement.
+     *
+     * Two selectors and no universal one: `cursor` inherits, so <html> covers
+     * the whole document, and the only elements that override it are ones
+     * that set their own — which is very nearly the definition of the
+     * interactive elements the swap steps aside for anyway. That makes the
+     * worst case "the real cursor shows over a control", not "no cursor".
+     */
+    const swapStyle = document.createElement('style');
+    swapStyle.setAttribute('data-v2-bird-cursor', '');
+    /* This now needs the universal selector and !important, where before it
+       did not. Two inherited selectors were enough while the swap stood down
+       over interactive elements — the only things that override an inherited
+       `cursor` are elements setting their own, which was very nearly the same
+       set. Now that the drawn cursor stays on over those elements, every
+       `cursor: pointer` in the stylesheet would show a SECOND, real pointer
+       next to the drawn one. Two cursors is worse than either behaviour it
+       replaced, so the rule has to beat them. `cursor` is cheap to resolve and
+       this is one style element toggled by one class. */
+    swapStyle.textContent =
+      `html.${CURSOR_SWAP_CLASS}, html.${CURSOR_SWAP_CLASS} body,` +
+      `html.${CURSOR_SWAP_CLASS} * { cursor: none !important; }`;
+    document.head.appendChild(swapStyle);
+    swap.styleEl = swapStyle;
+
+    /*
+     * THE WATCHDOG. Everything above tries to keep the swap honest frame by
+     * frame; this is what covers the case where there are no frames.
+     *
+     * If the loop stalls — a thrown error, a stopped rAF, a tab that was
+     * backgrounded in a way visibilitychange did not report, a canvas that
+     * lost its context — nothing calls syncCursorSwap(false) and the class
+     * would simply stay on. So a timer outside the loop checks when a cursor
+     * was last actually painted, and hands the pointer back if it has been
+     * more than a few frames. It costs one comparison a quarter second.
+     */
+    const cursorWatchdog = window.setInterval(() => {
+      if (!swap.on) return;
+      if (document.hidden || performance.now() - swap.paintedAt > 400) restoreCursor();
+    }, 250);
+    /* Alt-tabbing away leaves the pointer somewhere we will never hear about
+       again until it comes back. Give it up now. */
+    const onBlur = () => restoreCursor();
+    window.addEventListener('blur', onBlur);
+
+    const themeObserver = new MutationObserver(readTheme);
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-v2-theme', 'class']
+    });
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && chat.current.open) closeChat();
+    };
+    window.addEventListener('keydown', onKey);
+
+    /* ---- loop -------------------------------------------------------------- */
+    let raf = 0;
+    let running = true;
+    let last = performance.now();
+    function frame(now: number) {
+      if (!running) return;
+      const dt = Math.min((now - last) / 1000, FRAME_MS_MAX / 1000);
+      last = now;
+      if (reduced) updateReduced(dt);
+      else update(dt);
+      draw();
+      raf = requestAnimationFrame(frame);
+    }
+    raf = requestAnimationFrame(frame);
+
+    function onVis() {
+      if (document.hidden) {
+        /* Hidden means no frames, which means nothing is drawing a cursor. */
+        restoreCursor();
+        running = false;
+        cancelAnimationFrame(raf);
+      } else if (!running) {
+        running = true;
+        last = performance.now();
+        raf = requestAnimationFrame(frame);
+      }
+    }
+    document.addEventListener('visibilitychange', onVis);
+
+    /* dev handle, same reasoning as InkField. The browser pane never fires
+       rAF, so `step` is the only way anything here gets tested at all. */
+    if (process.env.NODE_ENV !== 'production') {
+      (canvas as any).__bird = {
+        bird,
+        perches: () => perches,
+        /* true while some marked furniture is still fading in, so a perch
+           audit can tell "not landable yet" from "not landable" */
+        perchesPending: () => perchesPending,
+        plan: () => ({ planLen, planIdx, PLAN }),
+        transit,
+        pvz,
+        bubble,
+        chatUi,
+        atlasSize: atlas.size,
+        step: (n = 1, dt = 1 / 60) => {
+          for (let i = 0; i < n; i++) {
+            if (reduced) updateReduced(dt);
+            else update(dt);
+          }
+          draw();
+        },
+        draw,
+        setMode,
+        startAnim,
+        setReduced: (v: boolean) => {
+          reduced = v;
+        },
+        setPointer: (cx: number, cy: number) => {
+          pointer.x = cx;
+          pointer.y = cy;
+          pointer.seen = true;
+        },
+        setStill: (ms: number) => {
+          pointer.stillMs = ms;
+        },
+        forceTransit: (name: AnimationName, up?: boolean) => {
+          const isUp =
+            up ?? TRANSIT_UP.some((e) => e.name === name);
+          startTransit(isUp, name);
+        },
+        forceInteraction: (a?: AnimationName, b?: AnimationName) =>
+          startAct(a ?? INTERACTIONS[(Math.random() * INTERACTIONS.length) | 0], b),
+        forceRareTransit: (up = true) => {
+          const table = up ? TRANSIT_UP : TRANSIT_DOWN;
+          const rares: AnimationName[] = [];
+          for (let i = 0; i < table.length; i++)
+            if (table[i].rarity === 'rare') rares.push(table[i].name);
+          startTransit(up, rares[(Math.random() * rares.length) | 0]);
+        },
+        forceBalloon: () => startTransit(true, 'upBalloon'),
+        /* Sit him on one NAMED chat perch. The perch is drawn at random when
+           the window opens, so without this the only way to see a particular
+           one is to keep reopening the chat, and the two carrying moving props
+           are exactly the two worth looking at. Does not open the window: this
+           is for looking at the puppet, not at the UI. */
+        forcePerch: (name: AnimationName) => {
+          /* `chat.current.open` is what holds him there. Setting the mode and
+             the animation alone does not: the next update() sees a chat that
+             is not open, decides he has nothing to sit for, and drops him back
+             to an idle within one frame. */
+          chat.current.open = true;
+          chat.current.perch = name;
+          chat.current.version++;
+          setMode('chat');
+          startAnim(name, 0);
+        },
+        releasePerch: () => {
+          chat.current.open = false;
+          setMode('idle');
+        },
+        /* Which cycled props are showing right now, for the same reason. */
+        cycled: () => cycledProps(chat.current.perch, bird.clock).slice(),
+        rareState: () => ({ sinceRare, pityAt, seen: Array.from(seenRare) }),
+        mode: () => bird.mode,
+        anim: () => bird.anim,
+        setScrollVel: (pxPerSec: number) => {
+          scrollVel = pxPerSec;
+        },
+        /*
+         * A harness tab is frequently handed a ZERO-SIZE viewport, which
+         * collapses the comfort band to a point and makes every reading taken
+         * from it meaningless — he reads as permanently stranded and never
+         * leaves transit. Forcing a viewport is the difference between a
+         * headless test that measures the rig and one that measures the pane.
+         */
+        setViewport: (w: number, h: number) => {
+          W = w;
+          H = h;
+          canvas!.width = Math.round(w * dpr);
+          canvas!.height = Math.round(h * dpr);
+          ctx!.setTransform(dpr, 0, 0, dpr, 0, 0);
+          ctx!.imageSmoothingEnabled = false;
+          chatUi.dirty = true;
+        },
+        resize,
+        /*
+         * Pretend the page moved by `px` since the last frame. A harness
+         * document is often not scrollable at all, and the transit gate, the
+         * catch-up and the band projection all read the scroll rate, so
+         * without this none of them can be exercised.
+         */
+        pushScroll: (px: number) => {
+          lastScrollY -= px;
+        },
+        holdPerch,
+        forceJump: () => planTo(pickBandPerch(1), 1),
+        forceWalk: (name?: AnimationName) =>
+          startWalk(name ?? WALKS[(Math.random() * WALKS.length) | 0]),
+        forceSleep: () => {
+          setMode('sleep');
+          bird.sleepUntil = bird.clock + 60000;
+          startAnim('sleep', 0);
+        },
+        forcePvz: startPvz,
+        forceFall: enterFall,
+        say,
+        openChat,
+        closeChat,
+        bandUrgency,
+        planTo,
+        pickBandPerch,
+        measure,
+
+        /* ---- added for B1-B4 and the cursor swap ----------------------- */
+
+        /**
+         * B1. Read the flight rig. `phase` is the wingbeat, 0 at the top of
+         * the stroke; `bob` is the body offset in sprite px, POSITIVE DOWN,
+         * so a correct wingbeat has bob at its maximum at phase 0 and its
+         * minimum at the bottom of the downstroke. `downFrac` is where that
+         * bottom falls in the wall clock, and should be under a half.
+         */
+        flight: () => ({
+          blend: rig.flight,
+          phase: rig.flapPhase,
+          bob: rig.bob,
+          pitch: rig.pitch,
+          downFrac: FLAP_DOWN_FRAC,
+          cycleMs: FLAP_CYCLE_MS,
+          /* ms into the animation the wing bottoms out, from the data */
+          wingBottomMs: wingBottomMs(currentAnim()),
+          animT: bird.animT
+        }),
+        /** Fly somewhere, so sustained flight can be driven without a fall. */
+        forceFly: (tx?: number, ty?: number, speed = 700) =>
+          enterFly(
+            tx ?? window.scrollX + W * 0.5,
+            ty ?? window.scrollY + H * 0.3,
+            null,
+            speed
+          ),
+
+        /**
+         * B3. Read the gaze. `gaze` is 0..1 and is the look-up amount;
+         * `dir` is which way across he is looking.
+         */
+        gaze: () => ({ gaze: rig.gaze, dir: rig.gazeDir }),
+        forceLookUp: () => startAct('lookUp'),
+
+        /**
+         * B2. Put him on the pointer immediately, no dwell required. Flies
+         * there, so it takes a few hundred frames of `step` to arrive.
+         */
+        forcePerchOnPointer: () => {
+          gate.cursorPerch = bird.clock + 22000;
+          perchOnPointer();
+        },
+        /** Throw him off it, as a hard mouse movement would. */
+        forceBuckOff: buckOff,
+        /** Read the cursor-perch state. */
+        cursorPerchState: () => ({
+          onCursor,
+          riding: bird.perch === cursorPerch,
+          leavesAt: cursorPerchUntil,
+          clock: bird.clock,
+          pointerSpeed: pointer.speed,
+          pointerJerk: pointer.jerk,
+          rideSpeed: PERCH_RIDE_SPEED,
+          buckSpeed: PERCH_BUCK_SPEED,
+          buckJerk: PERCH_BUCK_JERK
+        }),
+
+        /**
+         * B4. Start or end a drag at the current pointer. `forceDrag(true)`
+         * grabs him where he stands; `forceDrag(false)` lets go the way a
+         * pointerup does. Set the pointer first if you want a specific grab.
+         */
+        forceDrag: (on = true) => {
+          if (on) {
+            drag.pressed = true;
+            drag.pressX = pointer.x;
+            drag.pressY = pointer.y;
+            drag.pressAt = bird.clock;
+            drag.grabX = bird.x - pointerDocX();
+            drag.grabY = bird.y - pointerDocY();
+            beginDrag();
+          } else {
+            releaseDrag();
+          }
+        },
+        /** Make him break free right now, reprisal included if anger allows. */
+        forceEscape: escapeDrag,
+        setAnger: (v: number) => {
+          anger = Math.max(0, Math.min(1, v));
+          angerIdleMs = 0;
+        },
+        anger: () => anger,
+        dragState: () => ({
+          pressed: drag.pressed,
+          active: drag.active,
+          hauled: drag.hauled,
+          anger,
+          struggle: bird.anim,
+          shakeX: rig.shakeX,
+          shakeY: rig.shakeY,
+          escapeChance: 0.05 + anger * 0.74,
+          pool:
+            anger > 0.66 ? 'furious' : anger > 0.33 ? 'cross' : 'calm'
+        }),
+
+        /**
+         * The cursor swap. `forceCursorSteal` is the reprisal on its own,
+         * without needing to make him angry first.
+         */
+        forceCursorSteal: stealCursor,
+        forceCursorReturn: () => {
+          swap.holdUntil = bird.clock - 1;
+        },
+        dropCursor: () => dropCursor(false),
+        cursorSwap: () => ({
+          on: swap.on,
+          classOnHtml: document.documentElement.classList.contains(CURSOR_SWAP_CLASS),
+          hold: swap.hold,
+          returning: swap.returning,
+          cx: swap.cx,
+          cy: swap.cy,
+          overUi: pointer.overUi,
+          wanted: cursorWanted(),
+          hasArt: !!cursorImg,
+          paintedAgoMs: performance.now() - swap.paintedAt,
+          ruleInDocument: !!swap.styleEl && document.head.contains(swap.styleEl)
+        }),
+        restoreCursor,
+        checkOverUi,
+
+        /**
+         * Move the pointer by a delta and let the next `step` derive the
+         * speed and jerk from it, which is how B2's thresholds get exercised:
+         * setPointer alone changes the position but the derivative is only
+         * taken inside update.
+         */
+        movePointerBy: (dx: number, dy: number) => {
+          pointer.x += dx;
+          pointer.y += dy;
+          pointer.seen = true;
+        },
+        pointerState: () => ({
+          x: pointer.x,
+          y: pointer.y,
+          speed: pointer.speed,
+          jerk: pointer.jerk,
+          stillMs: pointer.stillMs,
+          overUi: pointer.overUi
+        }),
+        rig
+      };
+    }
+
+    return () => {
+      running = false;
+      /* FIRST. Before anything else can throw: an unmount that left the page
+         with no cursor is the worst outcome this component has. */
+      restoreCursor();
+      swapStyle.remove();
+      swap.styleEl = null;
+      clearInterval(cursorWatchdog);
+      cancelAnimationFrame(raf);
+      cancelAnimationFrame(measureRaf);
+      window.removeEventListener('resize', remeasure);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerdown', onDown);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
+      window.removeEventListener('blur', onBlur);
+      window.removeEventListener('keydown', onKey);
+      document.removeEventListener('transitionend', onTransitionEnd, true);
+      document.removeEventListener('visibilitychange', onVis);
+      if (motionQuery.removeEventListener) motionQuery.removeEventListener('change', onMotion);
+      themeObserver.disconnect();
+      ro.disconnect();
+      byEl.clear();
+      DURATIONS.clear();
+      if (process.env.NODE_ENV !== 'production') delete (canvas as any).__bird;
+    };
+    /* Runs once. Everything the loop needs arrives through a ref, so a parent
+       re-render can never tear the bird down mid-hop. */
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div className="v2-bird-layer">
+      <canvas ref={canvasRef} className="v2-bird" aria-hidden="true" />
+      {chatting ? (
+        <input
+          ref={inputRef}
+          className="v2-bird-input"
+          aria-label="Ask about Jack"
+          autoFocus
+          autoComplete="off"
+          spellCheck={false}
+          maxLength={240}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              const v = e.currentTarget.value;
+              e.currentTarget.value = '';
+              submit(v);
+            } else if (e.key === 'Escape') {
+              e.preventDefault();
+              closeChat();
+            }
+          }}
+        />
+      ) : null}
+      <div className="v2-bird-sr" role="log" aria-live="polite">
+        {srLog.map((m, i) => (
+          <p key={i}>{(m.me ? 'You: ' : 'Sparrow: ') + m.text}</p>
+        ))}
+      </div>
+    </div>
+  );
+}
