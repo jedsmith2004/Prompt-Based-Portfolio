@@ -3,9 +3,14 @@
 Every option put in front of Jack, his verdict verbatim, and what was decided.
 Verbatim matters: paraphrasing a verdict is how a decision drifts.
 
-Live benches: `/v2/backdrops` (keys 1-8, D palette, T type) and `/v2/awards`
-(keys 1-4, D palette). `?bd=<name>` pins one world to every section of `/v2`;
-`?bd=off` gives a clean read.
+Live benches: `/v2/backdrops` (keys 1-8, D palette, T type), `/v2/awards`
+(keys 1-4, D palette), `/v2/skills` (keys 1-2) and `/v2/story`. `/v2/bench` is
+the index of what is still open. `?bd=<name>` pins one world to every section of
+`/v2`; `?bd=off` gives a clean read.
+
+Anything marked **provisionally** was decided by me under Jack's 2026-08-25
+instruction to figure most of it out myself. Every one of those is live, its
+bench is still standing, and reversing it costs a sentence.
 
 ---
 
@@ -131,7 +136,7 @@ ticket* the same move as *not importing the library*, and gives Recensorium its
 sharpest framing, because that platform genuinely is defined by what an agent is
 not allowed to do.
 
-## AB-08 — Dithering onto the paper palette (5 up) · 2026-08-25 · **awaiting verdict**
+## AB-08 — Dithering onto the paper palette (5 up) · 2026-08-25 · **DECIDED: Atkinson** (see AB-10)
 
 From the research pass. Rendered offline as a PNG strip rather than benched,
 because the browser pane cannot composite.
@@ -148,10 +153,10 @@ Atkinson discards 25% of the diffused error rather than passing all of it on.
 That is "wrong" and it is exactly why it suits a four-tone paper palette: the
 discarded error is what stops highlights silting up into grey.
 
-Implemented in `lib/v2/dither.ts`. **Not wired into anything yet** — the
-intended targets are the Polaroids camera-snap and InkWash.
+Implemented in `lib/v2/dither.ts`, shipped into the Polaroids. The InkWash
+half turned into a different decision once it was built: see AB-10.
 
-## AB-09 — The technologies (2 up) · 2026-08-25 · **awaiting verdict**
+## AB-09 — The technologies (2 up) · 2026-08-25 · **LIVE as constellation, provisionally**
 
 Bench at `/v2/skills`, keys 1-2.
 
@@ -163,7 +168,7 @@ pills clustered per category, roughly seventy technologies with counts.
 
 | Option | What it encodes | Verdict |
 |---|---|---|
-| **1 Constellation** *(my pick)* | Magnitude = recency-weighted use, colour = era, **lines = used together**. Each project is a named constellation; shared technologies are where two cross. | — |
+| **1 Constellation** *(my pick, now live)* | Magnitude = recency-weighted use, colour = era, **lines = used together**. Each project is a named constellation; shared technologies are where two cross. | — |
 | 2 Ledger | Rank, count, year span, and a bar you can count the segments of. | — |
 
 **Why 1.** The ledger is the more rigorous document and it is the wrong answer
@@ -173,15 +178,94 @@ Neither can tell you that gRPC and Unity belong to the same piece of work. The
 chart can, and that is a real fact about the work rather than a prettier way of
 saying "he has used a lot of things".
 
+## AB-10 — Where the dither goes · 2026-08-26 · **DECIDED: both, differently**
+
+AB-08 chose Atkinson and named two intended targets. Building the second one
+turned that into a split rather than a rollout, and the reason is worth keeping.
+
+| Target | Quantiser | Why |
+|---|---|---|
+| Polaroids | **Atkinson**, error diffusion | Stills. Diffusion is the better quantiser and the crunch suits four tones. |
+| InkWash | **Ordered, 8x8 Bayer** | It moves. |
+
+**Error diffusion cannot be used on animated content.** The error propagates
+from a different starting point every frame, so the whole pattern reorganises
+between frames and the image boils. An ordered matrix is fixed in screen space,
+so the grain sits still while the ink moves through it — which is also the
+honest reading, since the grain belongs to the printing and not to the wash.
+
+Note that AB-08 ranked Bayer *fourth of five* for a still, calling it "a texture
+laid over the image rather than tone". Both readings are correct; they are
+answers to different questions. The bench was a still.
+
+**One number, measured rather than recalled.** The threshold has to be centred
+on the matrix's true mean or bare paper speckles: 64 distinct values, mean
+0.4921875. Centred at 0.46875, which is what I first wrote, the excursion is
++0.1719 against a first-level boundary of 0.16667, and one texel in sixty-four
+of empty paper prints a dot.
+
+## AB-11 — The case treatment · 2026-08-26 · **DECIDED: it is the projects one**
+
+> *"I love the trophy case, this is sort of the idea I had with my projects but
+> we can think of something else for them."*
+
+**Decision:** the case renderer is generalised and now has two callers. The
+awards keep theirs on the bench at `/v2/awards`; the projects get a fifteen
+object case at the head of `/v2/projects`.
+
+**The reel is not replaced by it, and that is deliberate.** They answer opposite
+questions. The case says *what is all of it* and belongs on the index. The reel
+says *what is this one* and belongs on the spine, where Jack specified it: one
+object, large, arrows either side, neighbours faded and blurred.
+
+**What fifteen needed that five did not:** a depth of field. Five objects on a
+shallow ellipse is a case you can read. Fifteen measured as one continuous band
+of dots with the selection lost inside it. Anything past 2.4 slots from the
+front fades out over 1.3 more and is skipped outright. It is a no-op at five, so
+the awards plate is unchanged.
+
+## AB-12 — A name for the sparrow (7 up) · 2026-08-26 · **awaiting verdict**
+
+> *"We need a name for this little guy."*
+
+Not benched as code — it is a word. The rule I set was that it has to mean two
+things at once: one about a small brown bird, one about the work. Anything that
+only does the first is a pet name and anything that only does the second is a
+variable.
+
+| Name | Bird | Work |
+|---|---|---|
+| **Pip** *(my pick)* | A sparrow eats pips | A printed mark; the pips are a time signal; `pip` is the tool every Python engineer types daily |
+| Crumb | What a sparrow lives on | Two bits — the real unit, between a bit and a nibble |
+| Nibble | What a sparrow does | Four bits |
+| Passer | *Passer domesticus*, the actual genus | A compiler pass |
+| Nib | His beak is one | The site is ink on paper |
+| Dunnock | The real English name of a hedge sparrow | Nothing, and nobody else has taken it |
+| Chip | A sparrow's call, onomatopoeically | Silicon |
+
+**Why Pip.** It is the smallest possible name for the smallest thing on the
+page, and it is true four times rather than twice. The time-signal reading is
+the one that decided it: the pips are a small regular interruption you come to
+expect and would miss, which is exactly what he is meant to be. MotionGen's
+backend is Python, so `pip` is not a generic engineering pun, it is a tool from
+his own work.
+
+**Runners-up, honestly.** Crumb and Nibble are better jokes and a shade too
+pleased with themselves. Passer is the most accurate and the least sayable.
+Dunnock is the most English and means nothing to anyone outside these islands.
+
 ---
 
 ## Open questions for Jack
 
-1. **AB-05 #5, #7, #8** — Techno, Topography and Celestial: my proposal is
-   `models`, `practice`, `contact`. Confirm or move.
-2. **AB-06** — what treatment do the *awards* get, now that the trophy case has
-   moved to projects?
+1. **AB-12** — the name. Seven candidates above, `Pip` recommended.
+2. **AB-06** — what treatment do the *awards* get, now that the case has moved
+   to projects? `Reach` is holding the slot.
 3. **Career line, "slightly off"** — best guess is the derived 2023-2026 degree
    span, the one inferred figure on the plate. Confirm what you saw.
-4. **AB-07** — pick a narrative order at `/v2/story`. This is the biggest
-   outstanding decision; the per-section palettes are gated behind it.
+4. **AB-05 #5, #7, #8** — Techno, Topography and Celestial are live on `models`,
+   `practice`/`cv` and `contact`. Confirm or move.
+5. **P2-VOCABULARY** — eight worlds, a companion, an ASCII wall, a neural
+   playground, polaroids, a 3D reel, two cases, a route map and a constellation.
+   Which of those are the vocabulary and which are noise? Not a code task, and
+   probably the most valuable conversation left.

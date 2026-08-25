@@ -8,7 +8,262 @@ See also: [spec.md](spec.md) · [plan.md](plan.md) · [ab-log.md](ab-log.md) · 
 
 ---
 
-## 2026-08-25 (latest) — the carousel finished, and I nearly lost the file
+## 2026-08-26 (latest) — the overnight pass
+
+Jack: *"Branch and commit. Then finish off everything on your list, iterate, and
+verify... There is a LOT that needs improving, try and figure most of it out
+yourself."* Then three corrections mid-session and a goodnight.
+
+### First, the thing that should have happened a week ago
+
+Branched and committed. `master` was **seven commits behind `origin/master`**,
+and the working tree had origin's `cv.html`, `projects-data.ts` and CV PDFs
+copied across by hand — so the first move was to fast-forward and re-apply the
+two edits that were genuinely mine, rather than commit a snapshot that looked
+like I had authored Jack's changes. `origin/master`'s `.gitignore` also carries
+`.claude/`, which is why that directory is untracked and stays that way.
+
+Then five commits on `v2-rebuild`, and everything after this on its own.
+
+### P1-SCROLL: the bird stops lagging. Reported three times.
+
+Not staleness — **compositing order**. The browser scrolls on the compositor
+thread without waiting for the main thread, so a rAF callback reading
+`window.scrollY` gets the last *committed* offset. Drawing at `bird.y - scrollY`
+puts him at a position derived from an older scroll offset every single frame.
+No amount of reading scroll "more freshly" fixes a main thread that is
+structurally behind.
+
+The sprite is now painted on a strip of canvas **in normal document flow**,
+moved with `translate3d` in DOCUMENT coordinates. The compositor scrolls it for
+free and the draw call never reads `scrollY` at all. While he is perched the
+transform is a constant, which is what "stays where it is on the page" means.
+
+The band is clamped so it can never hang off the end of the document — an
+absolutely positioned box that did would grow the scroll height, which would let
+him go lower, which would grow it again. **Measured 0px added at every position
+from the top of the page to the last pixel.** The chat window and the drawn
+cursor stay on the fixed canvas, both being genuinely screen-anchored.
+
+Not verifiable here: whether it FEELS fixed. Scrolling is a no-op in the pane.
+
+### Jack's correction, mid-session, on what a "fast scroll" meant
+
+> *"when I meant fast scroll before I meant when you scroll fast enough that he
+> goes off the screen and can't jump down in time. In those edge regions (top
+> and bottom 20% maybe), he wants to jump down into the middle 60%, bit by bit,
+> but if you scroll too far and he goes off the screen, he uses one of his
+> 'abilities' (rope, ufo, etc.) to catch up to you and come back."*
+
+Both old triggers were speed-based, so a firm flick launched a parachute while
+he was sitting comfortably mid-screen — the abilities read as a reaction to the
+WHEEL rather than to his own position. There is one trigger now and it is not a
+speed: **he is off the viewport by 60px for 260ms.** The comfort band widened
+from the middle 70% to the middle 60%, and everything short of gone is its job.
+
+60px rather than 0 because a hop arc rises up to 620px and can legitimately clip
+the top edge on the way somewhere sensible; firing an ability there would
+interrupt his own recovery to do the same job worse.
+
+### Descents: the rope comes from the ceiling, and he lands underneath
+
+The rope prop is 28 rows — exactly one sprite height — and its own comment has
+always said the rig can "tile it upward for as long as the drop needs". **Nothing
+ever did.** `drawPropInSprite` blits it once, so what a reader saw was a bird
+holding a 112px offcut of rope that began in mid-air above his head. It tiles
+from the top of the viewport now.
+
+A descent that begins above the top edge now begins AT it, so the slide plays
+where it can be watched. And he lands under himself: **median sideways travel
+over 36 forced descents went 291px to 16px, worst case 699px to 79px.**
+
+That took three fixes, and the second and third were both hiding one level down
+from the first. Picking a perch under him was not enough, because `targetXOn`
+then aimed at the CENTRE of its span — on the full-width plate heading, the
+middle of the page. Fixing that was not enough either, because a long move
+chains through an intermediate perch that used the same function. And a hard
+"must be below him" rule measured worse than a graded one: on the left of the
+delivery plate the only things under him are four narrow chips six hundred
+pixels right, and the two headings directly over his head are ABOVE. Above is
+allowed now, at a price.
+
+### Transit pacing, after Jack: "going down too slow, going up too fast"
+
+He was right and the asymmetry was structural. A descent is a SCRIPTED animation
+whose travel is stretched to fill its own authored length, so `downSkydive` spent
+2.97 seconds covering 260px. An ascent is a LOOP, so its speed came entirely
+from a convergence capped at 2200px/s that crossed most of the viewport in four
+frames.
+
+**And measuring it turned up something worse.** The loop branch exits at the
+first frame past 380ms where the scroll has settled — so on a static page EVERY
+looping transit lasted exactly 383ms. `upBalloon` is two seconds of authored
+animation and a reader saw a fifth of it. The rare transits are meant to be the
+easter eggs and they were the ones being cut shortest, *because the rarer ones
+are the slower ones*. A looping transit now runs at least one whole cycle or
+900ms: the balloon is 2817ms and the saucer 2367.
+
+### The speech bubble gets out of the way
+
+> *"when he has an animation with something above his head like an umbrella,
+> make the speech bubble appear to the side or below him."*
+
+Derived from prop geometry rather than a list of animation names: a prop with a
+negative `oy` is drawn above the sprite box, which is exactly the set of things
+that would be covered. The propeller beanie is the one exception the geometry
+cannot see, because it is a hat variant, and it is named.
+
+First version measured the side gap from his CENTRE and the sprite is 80px wide,
+so the bubble landed on top of the bird it was avoiding.
+
+### A peck goes where the cursor is
+
+The sprite has no up, down or diagonal head, and authoring six more would be the
+wrong answer anyway. So the aim **rotates the authored reach** instead of adding
+to it: each part's sampled `dx` is how far this frame's keyframe drove it
+forward, that magnitude is kept, and only its direction changes. A peck straight
+ahead is identical to what the frames say; a peck at a cursor overhead travels
+exactly as far, upward.
+
+Three things measurement decided rather than taste. Aim from his HEAD, not his
+feet, or a cursor level with his eye reads as below him and he pecks the floor.
+Clamp into the forward half, because a negative forward component drives the
+beak through the back of his own skull. And charge downward at 0.55, because he
+is standing on something.
+
+### Fluid was not broken. It was invisible, twice over.
+
+Jack: *"you can't see anything, it is broken I think."*
+
+**One: the GL path could fail silently.** If the context came back but the
+program did not link, `drawGL` returned early — and by then the canvas had a GL
+context, so the 2D fallback could never be reached, because a canvas gets one
+context type for its whole life. Browsers also keep 8-16 live contexts and drop
+the oldest without asking, and the backdrop bench cycles eight worlds, three of
+which held one. Neither failure is distinguishable from working correctly.
+
+**Two: the levels.** Body alpha 0.07 and rim 0.185, attenuated to 17% over a
+wide central ellipse, then multiplied by a section intensity of 0.58 — a body
+alpha of **six thousandths** in the middle of the frame. Against the worlds Jack
+liked (Geometry peaks around 0.36 effective, Scrapbook 0.27) that is an order of
+magnitude under all of them.
+
+The shader is gone and the CPU path is the only path. Fourteen drops over a grid
+of at most 200x125 and a bilinear upscale, which on ink bleeding into wet paper
+is not a loss, it is the wetness.
+
+### Every world gets the same dev handle
+
+There was no way to drive a frame in a pane that never fires rAF, which is
+exactly how Fluid came to ship invisible. All eight worlds now expose
+`__world.frames(n)`. Along with it, `public/_proto/probe.js` — a canvas printed
+as text, since screenshots time out here. It is the first time this project has
+been able to LOOK at anything.
+
+### Geometry's small elements were frozen, and it was arithmetic
+
+Asked twice. Every phase derives from a sweep running at 0.30 rad/s, and the
+corner constructions scale that down AGAIN by 0.035 to 0.107 so they do not spin
+under a fast scroll. At rest the gasket inset took **ten minutes** to turn once,
+the Lissajous phase seven, the Fibonacci cycle one. The sweep cannot be sped up
+— the alignment term and the hidden figure depend on it being exact, which is
+the whole argument of the plate — so the small constructions get their own clock
+in real seconds, added to the sweep terms rather than replacing them. Measured:
+1.6-5.5% of pixels change per second in every quadrant.
+
+### Watercolour ages now
+
+*"Maybe they should fade faster?"* It only paled at a pass boundary, so a mark
+laid early sat at full strength until the whole composition finished. It ages
+continuously now, tied to **how much painting happened** rather than to elapsed
+time — so the sheet reaches an equilibrium instead of either silting up under a
+fast scroll or bleaching out while a reader sits still. Coverage climbs 21% to
+39% over thirty seconds and flattens, which is what an equilibrium looks like.
+
+### The trophy case: dark mode, and the port to projects
+
+Dark mode was **broken, not merely poor**. `paintAtlas` ran when the CELL SIZE
+changed and at no other time, so the glyph atlas had `--ink` baked in from
+whenever the plate was last laid out. Flipping the theme left the whole case
+drawn in the previous scheme's ink: dark glyphs on a dark ground. Measured
+across the flip: mean ink rgb(99,38,27) to rgb(235,184,169), 8.66:1 to 10.57:1.
+
+Then the port. The renderer is told what to display rather than knowing, so
+`SpecimenCase` takes a list and the awards are one caller of it. `ProjectCase`
+is the other: **fifteen projects, fifteen objects, 1936 vertices and 1197 faces**
+at the head of `/v2/projects`.
+
+**Fifteen needed depth of field and five did not.** Five objects on a shallow
+ellipse is a case you can read; fifteen measured as one continuous band of dots
+with the selection lost inside it. Anything past 2.4 slots from the front now
+fades out over 1.3 more and is **skipped outright** rather than drawn at the
+ramp's floor — the quantiser floors every covered cell so a highlight cannot
+punch a hole in an object, and that floor was leaving a haze where the back of
+the ring should be.
+
+### The films are a pile now
+
+> *"videos appear in the empty middle-right as polaroids... multiple polaroids
+> in a visible stack, cycleable with arrows"*
+
+A grid of small thumbnails is more efficient and less true. A handful of
+pictures from one place is a pile you go through, and **the depth of the pile is
+the count**: Tagounite has five, Split has one, and a grid of equal cells
+flattens that into a row length nobody reads. Only the top card carries an image
+and a link.
+
+Scrapbook also stands its own stitched thread down behind `road`. Two routes,
+at two scales and two projections, one of them un-clickable, is not twice as
+much route.
+
+### InkWash is printed now
+
+*"Still kind of ugly, but closer"*, twice. Both earlier passes tried to make a
+smooth continuous wash look better, and a smooth grey wash on paper has nowhere
+to go — it is either too faint to see or it is mud. So this changes the
+MATERIAL: pigment quantised onto four levels through an ordered dither.
+
+**Ordered, not Atkinson, and that is not a compromise.** Error diffusion is the
+better quantiser for a still, which is why the polaroids use it. On something
+that moves it is the worse one: the error propagates from a different starting
+point every frame and the pattern boils.
+
+**And the threshold centre was wrong.** I wrote 0.46875 from memory. Compiling
+the matrix and measuring it: 64 distinct values, mean **0.4921875**. Centred as
+written, the excursion is +0.1719 against a first-level boundary of 0.16667, so
+one texel in sixty-four of empty paper prints a dot — and most of this frame is
+empty by design. Centred correctly it is +/-0.16406 and paper stays paper.
+
+### Kinetic plate titles, and a bug I nearly shipped
+
+Each title arrives word by word, 55ms apart, from behind its line. Words, not
+characters: a per-character stagger on a display face at this size reads as a
+ransom note.
+
+**The spaces have to be outside the mask.** The first version put them inside
+the `overflow: hidden` wrapper where they were clipped to zero width. The line
+still broke correctly, because the line-breaker sees the character in the DOM —
+so it *looked* like it worked — but every title rendered as one run of jammed
+words and `innerText` returned "Writethepipeline". Caught by reading the text
+back rather than by looking, which in this pane is the only option anyway.
+
+### A correction I made and then had to withdraw
+
+I changed the perch harvester to measure first-line ink from TEXT NODES rather
+than from a Range over the element, and wrote a comment saying it fixed a 5px
+error the kinetic masks had introduced. **Then I measured it: the two methods
+agree to the pixel on all eight titles.** The 5px is the ordinary relationship
+between an h2 box and its em box at `line-height: 1.1`, and it predates
+everything I did tonight. The change is kept because it is the correct reading
+of what `data-perch-text` asks for, and the comment now says so instead.
+
+Third time on this project a confident diagnosis has survived right up until
+someone measured it. The pattern is always the same: the explanation is
+plausible, the fix is cheap, and nobody checks the premise.
+
+---
+
+## 2026-08-25 — the carousel finished, and I nearly lost the file
 
 The last quarter of the carousel needed `paint()` extracted out of `render()` so
 the pipeline could target three canvases. **I destroyed the component doing it.**

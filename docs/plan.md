@@ -19,8 +19,17 @@ invented scope.
 
 ## P0 — NOTHING IS COMMITTED
 
-### P0-GIT — the entire v2 build is untracked
-`[?]` **Needs Jack.** `app/v2/`, `components/v2/`, `lib/v2/`, `docs/` and
+### P0-GIT — DONE (2026-08-26)
+`[x]` Branched to `v2-rebuild` and committed. `master` was seven commits behind
+`origin/master`, so it was fast-forwarded FIRST and the two edits that were
+genuinely mine re-applied on top — committing the snapshot as it stood would
+have attributed Jack's own commits to me. `origin/master` also ignores
+`.claude/`, which is why that directory stays untracked.
+
+The original note is kept below, because the reason it was a P0 is the reason
+it will be one again the next time someone starts a big change without one.
+
+`[x]` **Was: needs Jack.** `app/v2/`, `components/v2/`, `lib/v2/`, `docs/` and
 `scripts/` are all `??` in git status. That is somewhere north of nine thousand
 lines with no commit behind any of it.
 
@@ -95,7 +104,21 @@ pane cannot scroll so I could not watch one happen.
 
 ## P1 — companion
 
-### P1-SCROLL — he still lags behind the page
+### P1-SCROLL — DONE (2026-08-26)
+`[x]` **Fixed by the preferred route below: the sprite moved to a canvas in
+document flow, translated in document coordinates.** The compositor scrolls it
+and the draw call never reads `scrollY`. The band is clamped so it can never
+hang off the end of the document and grow the scroll height — measured at 0px
+added at every position from the top of the page to the last pixel. The chat
+window and the drawn cursor stay on the fixed canvas.
+
+`[?]` **Whether it FEELS fixed is still Jack's call.** Scrolling is a no-op in
+this environment, so the one thing that matters cannot be checked here.
+
+The original write-up follows, because the constraints in it are still true and
+the next person to touch this needs them.
+
+### P1-SCROLL — the original diagnosis
 > *"The sparrow still glitches when you scroll, he should stay where he is on
 > the page, not the screen. The updates take too long for the scroll and he
 > moves and has to readjust."*
@@ -189,21 +212,40 @@ weighting. Keep one or two (UFO, and pick one more) as rare easter eggs.
 > underneath him. This should be a similar mechanic with the parachute,
 > umbrella, etc."*
 
-`[ ]` Rope anchors at the top of the **viewport**, he slides down it, then jumps
-off to a perch **near vertically below him**.
-`[ ]` Same rule for every descent — parachute, umbrella, glide, paper plane:
-target the nearest perch under the current x, never one halfway across.
+`[x]` **Rope anchors at the top of the viewport.** The prop is 28 rows — one
+sprite height — and its own comment always claimed the rig tiled it upward. It
+never did: `drawPropInSprite` blits once, so a reader saw a 112px offcut
+starting in mid-air above his head. It tiles from `y = 0` now.
+`[x]` **He enters at the top edge.** A descent beginning above the viewport now
+begins AT it, so the slide plays where it can be watched. This replaced the old
+rule, which downgraded an off-screen scripted descent to a plain glide.
+`[x]` **Same rule for every descent.** Median sideways travel over 36 forced
+descents: 291px to 16px. Worst case 699px to 79px. Nothing over 150px.
+
+Three fixes, and two of them were hiding one level down from the first. Picking
+a perch under him was not enough because `targetXOn` aims at the CENTRE of a
+span; fixing that was not enough because a long move chains through an
+intermediate perch using the same function; and a hard "must be below" rule
+measured worse than a graded one, because on part of this page the only things
+below him are six hundred pixels sideways.
 
 ### P1-PECK — peck where the cursor actually is
 > *"When he pecks you, his head should actually turn up/down if you are
 > above/below, diagonally if your mouse is there, even jumping to peck you."*
 
-`[ ]` Head aim on a real angle to the cursor: up, down, and the diagonals.
-Needs new head/beak variants or a small rotation rig.
-`[ ]` A jump-peck when the cursor is out of reach.
+`[x]` **Head aim on a real angle to the cursor.** No new variants: the aim
+ROTATES the authored reach rather than adding to it, so a peck straight ahead is
+identical to what the frames say and a peck at a cursor overhead travels exactly
+as far, upward. Aimed from his head rather than his feet, clamped into the
+forward half, and charged less downward because he is standing on something.
+`[x]` **A jump-peck when the cursor is out of reach** — this one already
+existed; `lookUp -> jumpHigh -> peckAtCursor` on a longer cooldown.
 
-### P1-PERCH-MOUSE — he sits on the cursor too much
-`[ ]` *"Make him not perch on your mouse as often."* Lower the rate.
+### P1-PERCH-MOUSE — DONE (2026-08-26)
+`[x]` *"Make him not perch on your mouse as often."* It needed 4.5s of stillness
+on a 22s cooldown, which on a page you read slowly is most of the time. Now 9s
+of stillness, an 80s cooldown, and a coin flip so it is not metronomic — a rule
+a reader can recite is furniture. A refusal costs only 25s.
 
 ### P1-PERCHES — finish the chat perches — DONE (2026-08-25)
 > *"Do the rest of the chat perches as I described before, with new animations.
@@ -242,8 +284,13 @@ Pacing across the five, fastest to slowest: typing 223ms/frame, incantation 333,
 branch 400, nest 533, meditate 867. That spread is the point — the perch should
 say how settled he is before the animation does.
 
-### P1-NAME — he needs a name
-`[?]` Bring Jack a shortlist with reasoning. He is a sparrow, he is an
+### P1-NAME — shortlist ready, needs Jack
+`[?]` **Seven candidates in [ab-log.md](ab-log.md) AB-12, `Pip` recommended.**
+The rule was that a name has to mean two things at once: one about a small brown
+bird, one about the work. Anything that only does the first is a pet name and
+anything that only does the second is a variable.
+
+`[?]` Original note: bring Jack a shortlist with reasoning. He is a sparrow, he is an
 engineer's companion, and the site is an engineering journal.
 
 ---
@@ -274,10 +321,18 @@ failures across 390 elements with the palette applied.
 ### P1-RECENSORIUM — un-redact the flagship
 `[~]` Confirmed launched; memory and spec corrected; real copy sourced from
 `origin/master`.
-`[ ]` Strip `stealth: true`, the redaction bars and "Coming soon" from
-`lib/v2/content.ts`, the v2 projects page, and the `/v2` reel. Replace with the
-real description. It is his best work and the site currently hides it.
-`[ ]` It belongs on the CV now too, reversing the old rule.
+`[x]` **Done.** Nothing in the data sets `stealth` any more, so the branch that
+drew a name, a vague line and three black bars was dead code sitting over the
+best thing on the page — the kind that comes back. Removed outright rather than
+left unreachable, along with its CSS. `lib/v2/content.ts` already carried the
+real copy.
+`[x]` **It leads the reel and the case**, with an object built for it: a sealed
+ballot box with a paper going into the slot. The argument of the platform is a
+list of things an agent cannot do, so the object is a closed box you post into
+rather than a pile of papers you choose from.
+`[?]` **The CV is Jack's to rebuild.** `cv/cv.html` is the source and the PDFs
+are generated from it; adding Recensorium there is a content edit, not a code
+one. Flagged rather than done.
 
 ### P1-TECH — 100 technologies, more creatively — BUILT, awaiting verdict
 *"The 100 technologies should be displayed in a more creative way, like the
@@ -310,8 +365,10 @@ ratio, putting stars at x = 1.37 in a 0..1 box. A third of the sky clamped into
 two vertical rails down the edges. Measured as "percent of ink inside the outer
 margins": 0% after the fix.
 
-`[?]` **Benched at `/v2/skills`, keys 1-2, against the ledger.** Jack picks.
-Nothing is wired into `/v2` until he does.
+`[~]` **Live on the models plate, provisionally.** Jack said to figure most of
+it out myself, so this is my answer to the bench rather than his. The bench at
+`/v2/skills` is still standing, keys 1-2, and reversing it is a one-line
+import.
 
 ---
 
@@ -354,10 +411,18 @@ non-planar quads that flip at random.
 occlude each other into one silhouette at 87x31 cells. The first collage item
 is the object; the rest of the list stays in `content.ts` as intent.
 
-`[ ]` Open, and a taste call: `paperStack` is a weak lead object for
-Recensorium. Seven parallel panels all catch the light the same way, so the
-shade range is narrow by construction. Objects with faces at varied angles
-(`trophy`, `folder`, `monitor`) read far better through this pipeline.
+`[x]` **Done: `ballotBox`, built for it.** `paperStack` was narrow by
+construction — seven near-parallel panels face the key light at almost the same
+angle, so the lambert term lands in a band and the inverted ramp gets three
+characters out of eleven. The new object puts everything at a different angle to
+everything else: shade range 0.06 to 0.70 over 25 faces.
+
+Two findings from tuning it by measurement, since there are no screenshots here.
+At 87x31 cells only the SILHOUETTE reads, so a lid has to overhang far enough to
+put a real step in the outline and a tonal band on a face is worth nothing. And
+a sheet of paper needs a MID tone, not a paper one: the ramp is inverted for
+print, so a lit face leaves the page showing and a 0.97 sheet measured as a few
+scattered dots.
 
 ### P1-CAROUSEL — rebuild the reel — DONE (2026-08-25)
 *"The carousel should be the 3D object (not spinning) with two arrows either
@@ -395,11 +460,24 @@ copies of one.
 > *"I love the trophy case, this is sort of the idea I had with my projects but
 > we can think of something else for them."*
 
-`[ ]` `AwardsCase` — procedural 3D objects on a shallow ellipse, hand-rolled
-rasterizer, inverted glyph ramp — is the **projects** treatment. Port it.
-`[ ]` Then find a different treatment for awards. Reach is on `/v2/contact`
-today as a placeholder, and Clippings is *"held for something else"*.
-`[ ]` **Dark mode on the trophy case does not work.** Fix as part of the port.
+`[x]` **Ported.** The renderer is generalised into `SpecimenCase`, which takes
+a list; the awards are one caller and `ProjectCase` is the other. Fifteen
+projects, fifteen objects, 1936 vertices and 1197 faces, at the head of
+`/v2/projects`. The reel keeps the spine, because the two answer opposite
+questions: the case says *what is all of it*, the reel says *what is this one*.
+`[x]` **Fifteen needed a depth of field and five did not.** Five on a shallow
+ellipse is a case you can read; fifteen measured as one continuous band of dots
+with the selection lost inside it. Past 2.4 slots from the front an object fades
+over 1.3 more and is skipped outright — the quantiser floors every covered cell
+so a highlight cannot punch a hole, and that floor was leaving a haze where the
+back of the ring should be. A no-op at five.
+`[x]` **Dark mode fixed, and it was broken rather than poor.** `paintAtlas` ran
+when the CELL SIZE changed and at no other time, so the atlas had `--ink` baked
+in from the last layout and a theme flip left the case drawn in the previous
+scheme's ink. Mean ink across the flip: rgb(99,38,27) to rgb(235,184,169),
+8.66:1 to 10.57:1.
+`[?]` **A different treatment for awards is still open.** Reach is holding the
+slot; see AB-06 and `/v2/bench`.
 
 ### P1-CAREERLINE — keep, extend, combine
 `[ ]` *"The career line is great, slightly off and we can add a lot too it but a
@@ -415,8 +493,25 @@ inferred figure on the plate.
 > *"I think this should be the main way we interact with the hitchhiking, draw
 > the map lines."*
 
-`[ ]` Promote `Scrapbook` from backdrop to the interactive piece for `road`,
-replacing `RouteMap`:
+`[~]` **Resolved the other way round, and I think it is the right way round.**
+`RouteMap` already had the real coordinates, the real map line, one button per
+stop, roving tabindex and arrow-key travel. Scrapbook has the album page.
+Merging them meant deciding which one owns the ROUTE, and the answer is the one
+where every stop is clickable.
+
+So: Scrapbook keeps the polaroids, scraps, tickets, postmark and tape, and
+stands its own stitched thread down behind `road`. Two routes at two scales and
+two projections, one of them un-clickable, is not twice as much route.
+
+`[x]` **The films are a stack of polaroids now**, in the empty middle-right,
+cycleable with arrows and with left/right on the keyboard. A grid of thumbnails
+was more efficient and less true: the depth of the pile IS the count, and
+Tagounite has five where Split has one.
+`[ ]` Still open: photos, notes and tickets from the album page are not yet
+reachable as content — they are texture behind the plate rather than things you
+can open.
+
+`[ ]` Original scope:
 - draws the real map lines (RouteMap's borders were missing anyway, and Jack
   has said that no longer matters if Scrapbook replaces it)
 - every node hoverable and selectable, as RouteMap already does
@@ -469,16 +564,36 @@ identical in silhouette, differ only in fill, hotspot ink preserved.
 
 | # | World | Verdict | Action |
 |---|-------|---------|--------|
-| 1 | Ink wash | *"still kind of ugly, but closer"* | `[ ]` third pass |
-| 2 | Geometry | *"very cool"* | `[ ]` small elements must **perpetually animate** (second time asked) |
-| 3 | Fluid | *"can't see anything, it is broken I think"* | `[ ]` **treat as broken.** See ruled-out list below. |
-| 4 | Watercolour | *"beautiful"* | `[ ]` fade faster |
-| 5 | Techno | *"good, what page?"* | `[?]` proposed: `models` |
-| 6 | Scrapbook | *"good"* | → P1-SCRAPBOOK |
-| 7 | Topography | *"good, what page?"* | `[?]` proposed: `practice` |
-| 8 | Celestial | *"good, what page?"* | `[?]` proposed: `contact` |
+| 1 | Ink wash | *"still kind of ugly, but closer"* | `[x]` **printed, not painted.** Quantised onto four levels through an ordered dither. |
+| 2 | Geometry | *"very cool"* | `[x]` **small elements have their own clock now.** 1.6-5.5% of pixels change per second in every quadrant. |
+| 3 | Fluid | *"can't see anything, it is broken I think"* | `[x]` **fixed twice over:** the GL path could fail silently, and the levels were an order of magnitude under every world he liked. |
+| 4 | Watercolour | *"beautiful"* | `[x]` **ages continuously now**, tied to painting rather than to time, so it reaches an equilibrium. |
+| 5 | Techno | *"good, what page?"* | `[~]` live on `models` |
+| 6 | Scrapbook | *"good"* | `[~]` → P1-SCRAPBOOK, resolved |
+| 7 | Topography | *"good, what page?"* | `[~]` live on `practice` and `cv` |
+| 8 | Celestial | *"good, what page?"* | `[~]` live on `contact` |
 
-### P2-FLUID — what has already been ruled out
+### P2-FLUID — DONE (2026-08-26)
+
+`[x]` **It was invisible, not broken, and in two independent ways.**
+
+ONE: the GL path could fail silently. If the context came back but the program
+did not link, `drawGL` returned early — and by then the canvas had a GL context,
+so the 2D fallback could never be reached, because a canvas gets one context
+type for its whole life. Browsers also keep 8-16 live contexts and drop the
+oldest without asking, and the bench cycles eight worlds, three of which held
+one. Neither failure is distinguishable from working correctly. **The suspicion
+list below was right about where to look and could never have confirmed it.**
+
+TWO: the levels. Body alpha 0.07 and rim 0.185, attenuated to 17% over a wide
+central ellipse and then multiplied by a section intensity of 0.58 — a body
+alpha of six thousandths in the middle of the frame. Geometry peaks around 0.36
+effective and Scrapbook 0.27.
+
+The shader is gone; the CPU path is the only path, at 30fps, and the bilinear
+upscale is the wetness rather than a loss.
+
+### P2-FLUID — what had already been ruled out
 
 Do not re-check these. I twice reported Fluid working from instrumentation and
 twice the instrumentation was the thing that was wrong, so this list is what has
@@ -530,7 +645,11 @@ nudged toward the middle of the ramp, clamped at 0.12, so a night shot and a
 noon shot stay different from each other. Worst ink share went 49.2% to 16.8%
 and every plate now uses all four tones.
 
-`[ ]` InkWash is still the other intended target.
+`[x]` **InkWash is done, and it took a DIFFERENT quantiser.** Error diffusion
+cannot be used on animated content: the error propagates from a different
+starting point every frame, so the pattern boils. An 8x8 ordered matrix is fixed
+in screen space, so the grain sits still while the ink moves through it. See
+AB-10 — and note that AB-08 ranked Bayer fourth of five, correctly, for a still.
 `[ ]` Atkinson throws away 25% of the diffused error for higher contrast and a
 crunchy quality **specifically suited to limited palettes**. Ours is paper and
 ink. Two uses: the **Polaroids** camera-snap, where the grey-and-blur is
@@ -540,11 +659,20 @@ idea rather than a third pass. Note error diffusion is sequential, so it is CPU,
 not a shader.
 
 ### P2-FALLBACK — no fallback exists for the WebGL worlds
-`[ ]` The judged round-up is blunt that ambition without a fallback loses the
-third of the audience whose hardware cannot run it. Three of our eight worlds
-own a GL context and there is no degraded path. Needs one.
+`[~]` **Down from three worlds to one.** Fluid's shader is gone, so among the
+backdrops only InkWash still holds a context; `InkField` holds the other.
+`[ ]` Still open for those two. The judged round-up is blunt that ambition
+without a fallback loses the third of the audience whose hardware cannot run it,
+and Fluid proved the sharper version of that: a GL path that fails is not slower
+or uglier, it is *absent*, and nothing in the code can tell that apart from
+working.
 
 ### P2-TRANSITIONS — our section changes are cuts
+`[~]` **Partly done.** The palette crossfade carries the type colours as well
+as the canvas, at 940ms against the world's 620ms, and the plate titles are
+kinetic rather than a block fade (see P2-KINETIC). What is still a cut is the
+section-to-section reveal itself.
+
 `[ ]` The clearest finding of the whole pass: cheap sites cut, award-winners
 move, and transition continuity is what separates the tiers. Our section reveal
 is a single CSS class flip, which is the cut pattern. This is the same problem
@@ -558,8 +686,19 @@ playground, polaroids, a 3D reel, a route map and a skills cloud. Worth asking
 Jack which of these are the vocabulary and which are noise. Not a code task — a
 conversation, and probably the second-most valuable one after P0-STORY.
 
-### P2-KINETIC — plate titles are static
-`[ ]` Kinetic typography on a timeline is a recurring winner. We have one
+### P2-KINETIC — DONE (2026-08-26)
+`[x]` Each plate title arrives word by word, in reading order, 55ms apart, from
+behind the line it belongs on. Words rather than characters: a per-character
+stagger on a display face at this size reads as a ransom note, and it multiplies
+the element count on a page already running six canvases.
+
+Two things that would be bugs. The mask clips descenders, so it is padded a
+fifth of an em below the baseline and pulled straight back off the layout. And
+the spaces have to be OUTSIDE the mask — inside it they are clipped to zero
+width, the line still breaks correctly because the line-breaker sees the
+character, and every title renders as one run of jammed words.
+
+`[x]` Original note: kinetic typography on a timeline is a recurring winner. We have one
 masked-and-lifted hero and nothing after it. A restrained treatment on the plate
 titles is on-brand for an engineering journal and currently absent.
 
@@ -580,11 +719,19 @@ rediscovered.
 
 ---
 
-## Immediate next three
+## Immediate next three (2026-08-26)
 
-1. **P0-STORY** — done and benched at `/v2/story`; needs Jack's pick before
-   P0-PALETTE can start.
-2. **P1-SCROLL** — prototype the document-flow bird. Second report of the same
-   bug; it is the most visible defect on the page.
-3. **P1-RECENSORIUM** — un-redact. His best work is currently hidden behind a
-   redaction bar on his own portfolio.
+Everything above that was mine to do is done. What is left needs Jack, or needs
+a decision he has not made yet.
+
+1. **Read the site.** The scroll fix, the descents and the transit pacing are
+   all things that can only be judged by feel, and none of them can be checked
+   in this environment. If the bird still lags, the band is not doing its job
+   and I want to know before anything else is built on top of it.
+2. **AB-12, the name.** Seven candidates, `Pip` recommended. He is the most
+   memorable thing on the site and nobody can talk about him.
+3. **P2-VOCABULARY.** Eight worlds, a companion, an ASCII wall, a neural
+   playground, polaroids, a 3D reel, two cases, a route map and a constellation.
+   The research is blunt that award-winning sites use a SMALL vocabulary applied
+   with taste. Which of these are the vocabulary and which are noise? Not a code
+   task, and probably the most valuable conversation left.

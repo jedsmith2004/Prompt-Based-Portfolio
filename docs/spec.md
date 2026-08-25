@@ -44,15 +44,23 @@ network, the route is the real coordinates. Nothing is a picture of the thing.
 |---|----|-------|-------------------|-------|
 | — | `top` | Hero | InkField (gritstone ridgeline) | — |
 | 01 | `from-scratch` | Write the pipeline, then import one | NeuralPlayground (real 784-64-10 MLP) | Geometry |
-| 02 | `models` | Models that run on the machine in front of you | SkillsFromWork | Techno |
+| 02 | `models` | Models that run on the machine in front of you | SkillConstellation | Techno |
 | 03 | `delivery` | Shipped, handed over, still running | HighlightReel + CareerLine | Fluid |
-| 04 | `road` | Croatia to the Sahara, thumb out | RouteMap + Polaroids | Scrapbook |
+| 04 | `road` | Croatia to the Sahara, thumb out | RouteMap (films as a polaroid stack) + Polaroids | Scrapbook (thread stood down) |
 | 05 | `practice` | Falling is part of the method | ClimbingWall (ASCII) | Topography |
 | 07 | `cv` | Two pages, and a version that fits on one | CurriculumVitae | Topography |
 | 08 | `contact` | Bring me the hard part | AwardsReach | Celestial |
 
-Plus `/v2/projects` (15 projects, filters, chronological), and three benches:
-`/v2/backdrops` (keys 1-8), `/v2/awards` (keys 1-4) and `/v2/story` (keys 1-3).
+Plus `/v2/projects` — a fifteen-object **ProjectCase** over the filtered
+chronological index — and four benches: `/v2/backdrops` (keys 1-8), `/v2/awards`
+(keys 1-4), `/v2/skills` (keys 1-2) and `/v2/story` (keys 1-3), indexed at
+`/v2/bench`.
+
+**The case and the reel are not the same treatment twice.** The case answers
+*what is all of it* and belongs on the index; the reel answers *what is this
+one* and belongs on the spine. Same pipeline, same grain, opposite questions.
+
+Plate titles are **kinetic**: word by word, 55ms apart, from behind the line.
 
 The CV plate is **07 / DO NOT PAD IT** and the close moved to 08. Eight plates.
 
@@ -67,7 +75,26 @@ legFront wing head hat eye beak`) each with a variant vocabulary, composited in
 `DRAW_ORDER`. Keyframes interpolate positions and **snap** variant swaps.
 
 - 55 perch surfaces, 5 chat perches, 11 transits, dozens of idles.
-- **He needs a name.** Tracked as **P1-NAME**.
+- **He needs a name.** Seven candidates in [ab-log.md](ab-log.md) AB-12, `Pip`
+  recommended. Tracked as **P1-NAME**.
+
+**He is drawn on TWO canvases, and the split is the whole point.**
+
+1. A **band in document flow**, roughly 560px tall, translated in DOCUMENT
+   coordinates to follow him. The compositor scrolls it, so the draw call never
+   reads `scrollY` and he cannot lag behind the page. Everything attached to him
+   lives here: the puppet, its props, and the speech bubble.
+2. The original **fixed viewport canvas**, which now carries only the chat
+   window, the drawn cursor, and the rope during a `downRope` transit. All three
+   are genuinely screen-anchored.
+
+The band is clamped so its bottom edge can never pass the document's, because an
+absolutely positioned box that hung off the end would grow the scroll height,
+which would let him go lower, which would grow it again.
+
+**An ability fires when he is OFF THE SCREEN, and for no other reason** — 60px
+past the edge for 260ms. Inside the edge fifths he hops back toward the middle
+60% one perch at a time. Nothing reads scroll speed to decide this.
 
 ## 5. Design system
 
@@ -107,9 +134,13 @@ included.
 ## 6. Performance budget
 
 - **At most two backdrop worlds mounted** — the live one plus the one fading
-  out. Three of the eight own a WebGL context and browsers cap live contexts at
-  roughly 8-16; six loops at once would also starve the ink field, the companion
-  and the reel.
+  out. Browsers cap live WebGL contexts at roughly 8-16, and six loops at once
+  would also starve the ink field, the companion and the reel.
+- **One backdrop still owns a GL context**, down from three: InkWash. `InkField`
+  owns the other. Fluid was moved to CPU after its GL path was found to fail
+  silently — see section 8, and P2-FALLBACK in the plan.
+- The reel and both cases **stop their loops at rest**, and the case gates to
+  30fps. Objects past the case's depth of field are skipped, not drawn faint.
 - Crossfade is CSS opacity, never a per-frame React render.
 - `progress` is quantised to 25 steps per section.
 - Frame loops allocate nothing.
@@ -126,11 +157,15 @@ included.
 | v2 copy, sections, worlds | `lib/v2/content.ts` |
 | CV | `cv/cv.html` → headless Chrome → `public/CV Jack Smith.pdf` |
 
-**The working tree is behind `origin/master`.** It was 7 commits behind on
-2026-08-25, including `feat: launch Recensorium`. Every factual error made about
-Jack on this project traces to reading the working tree as current. Check
-`git log --oneline HEAD..origin/master` and read with
-`git show origin/master:<path>`. Do not pull — v2 is a large untracked set.
+**The working tree WAS 7 commits behind `origin/master`** — including
+`feat: launch Recensorium` — and every factual error made about Jack on this
+project traces to reading it as current. Fast-forwarded on 2026-08-26 before the
+first commit, so the branch `v2-rebuild` now descends from `origin/master`.
+
+The rule still stands, because the gap will open again: check
+`git log --oneline HEAD..origin/master` before quoting any fact about Jack, and
+read with `git show origin/master:<path>`. A rule applied only to the files you
+happen to think of is not a rule — that is how the wrong CV shipped.
 
 **Recensorium is launched and is not stealth.** It is the flagship: peer review
 for AI-generated research, agents publishing and reviewing over REST and a
@@ -159,14 +194,32 @@ rediscovering one symptom at a time, which is what happened here:
   pane. That is the feature working, not failing.
 
 Trustworthy: `tsc`, `next build`, DOM and text, computed styles and contrast,
-canvas-2D readback, console errors, dev handles (`__inkfield`, `__bird`,
-`__reel`).
+canvas-2D readback, console errors, dev handles.
 
 Not available: screenshots (the Browser pane does not composite), **page
 scrolling via script** (scroll is a no-op, so anything driven by scroll position
 — `useSpine`'s active section, the world crossfade — cannot be exercised here),
 WebGL pixel readback after compositing, and canvas layout in a zero-size pane.
 Cycling WebGL components exhausts the context pool.
+
+### The two tools that make this workable
+
+**`public/_proto/probe.js`** — gitignored, loaded with a script tag. It prints a
+canvas AS TEXT, aspect-corrected, with an optional contrast stretch. Since
+screenshots time out, this is the only way to LOOK at anything drawn here, and
+it is how the ballot box, the project case and the aimed peck were judged. It
+also carries the contrast helper (which parses `color()` correctly), an ink /
+bbox / histogram measurement, and `P.reveal()`.
+
+It refuses to read a WebGL canvas rather than guessing at one. A canvas holding
+a GL context returns `null` from `getContext('2d')`, and reading a GL canvas
+back after compositing returns garbage anyway.
+
+**A dev handle on every canvas.** `__bird`, `__reel`, `__case`, `__inkfield`,
+and now `__world.frames(n)` on all eight backdrops. Without one there is no way
+to drive a single frame in a pane that never fires rAF — which is exactly how
+the Fluid world came to be shipped completely invisible, for days, with nobody
+able to tell that apart from it working.
 
 **Write the contrast probe correctly, or it will invent failures.** Three
 separate audit bugs have now produced phantom results on this project, and each

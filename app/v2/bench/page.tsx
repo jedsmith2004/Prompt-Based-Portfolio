@@ -3,12 +3,17 @@
 /* ============================================================================
    /v2/bench — the index of everything waiting on a decision.
 
-   Four A/B benches exist and each of them gates work. Hunting four URLs and
-   then reading docs/ab-log.md to remember what each one was asking is friction
-   on the only step I cannot do myself, so this puts the question, the options,
-   my recommendation and what is blocked behind it on one page.
+   Hunting five URLs and then reading docs/ab-log.md to remember what each one
+   was asking is friction on the only step I cannot do myself, so this puts the
+   question, the options, my recommendation and what is blocked behind it on
+   one page.
 
    Deliberately plain. It is a working document for one reader, not a plate.
+
+   UPDATED 2026-08-26, after a night's work. Four of the five things that were
+   here are now DECIDED — by me, provisionally, because Jack said "try and
+   figure most of it out yourself". Every one of those is reversible and the
+   bench it was decided on is still standing, so disagreeing costs a sentence.
    ========================================================================== */
 
 import Link from 'next/link';
@@ -30,63 +35,61 @@ interface Pending {
 
 const PENDING: Pending[] = [
   {
-    href: '/v2/skills',
-    keys: '1-2',
-    title: 'The 100 technologies',
+    href: '/v2',
+    keys: '',
+    title: 'What to call him',
     question:
-      'A star chart where a line joins technologies used together, or the ranked ledger?',
-    options: ['Constellation', 'Ledger'],
-    pick: 'Constellation',
+      'The sparrow needs a name. Seven candidates, each of which means two things at once.',
+    options: ['Pip', 'Crumb', 'Nibble', 'Passer', 'Nib', 'Dunnock', 'Chip'],
+    pick: 'Pip',
     because:
-      'The ledger is the more rigorous document and the wrong answer to the question you asked. Your live site already has a frequency cloud; the ledger is that same one number, measured precisely, and duller for it. Neither can tell you gRPC and Unity belong to the same piece of work. The chart can.',
-    blocks: 'Nothing is on /v2 yet. The section still shows the ledger.'
+      'It is the smallest possible name for the smallest thing on the page, and it is true four times over. A sparrow eats pips. A pip is a printed mark, which is the material this whole site is made of. The pips are a time signal — a small regular interruption, which is exactly what he is. And pip is the command every Python engineer types daily, which is what the MotionGen backend is written in. Crumb and Nibble are the runners-up and are better jokes: a crumb is two bits and a nibble is four, and a sparrow does both. Passer is the sparrow genus and also a compiler pass. Dunnock is the real English name of a hedge sparrow and the only one nobody else has taken.',
+    blocks:
+      'Nothing technically. But he is the most memorable thing on the site and he currently has no name, which means nobody can talk about him.'
   },
   {
     href: '/v2/awards',
     keys: '1-4',
     title: 'The awards',
     question:
-      'The trophy case moved to projects, so what treatment do the five awards get now?',
+      'The case treatment has moved to projects, so what do the five awards get now?',
     options: ['Reach', 'Clippings', 'Career line', 'something new'],
-    pick: 'Reach, for now',
+    pick: 'Reach, still',
     because:
-      'It is the only one that refuses to fake the four awards with no recorded figure, and the log scale makes the point that a lens used a million times does not belong on the same line as a hackathon prize. You said to hold Clippings for something else, so it is out of the running here.',
-    blocks:
-      'Reach is sitting on the close plate as a placeholder. The trophy case still needs porting to projects, and its dark mode is broken.'
-  },
-  {
-    href: '/v2/backdrops',
-    keys: '1-8',
-    title: 'Which world goes on which plate',
-    question:
-      'You asked what pages Techno, Topography and Celestial were for. My answers are live: confirm or move them.',
-    options: ['confirm', 'reassign'],
-    pick: 'models / practice / contact',
-    because:
-      'Techno is a live forward pass and models is about running models locally. Topography is marching-squares contours and practice is gritstone. Celestial is a navigator plate and contact is the last thing you read.',
-    blocks:
-      'Fluid is assigned to delivery and is still broken. Ink wash is unassigned and is next for the dither treatment.'
-  },
-  {
-    href: '/v2',
-    keys: '',
-    title: 'The scroll fix, or Lenis',
-    question:
-      'Take JS out of the scroll path for the bird only, or adopt virtual scroll for the whole site?',
-    options: ['document-flow bird', 'Lenis'],
-    pick: 'document-flow bird first',
-    because:
-      'It is free, adds no dependency, and his coordinates are already in document space so the maths is right already. Lenis is a decision about how the whole page should feel and deserves its own A/B rather than arriving as a side effect of a bird fix.',
-    blocks:
-      'This is the biggest defect on the page and you have reported it three times. It is fully specced in docs/plan.md.'
+      'It is the only one that refuses to fake the four awards with no recorded figure, and the log scale makes the point that a lens used a million times does not belong on the same line as a hackathon prize. You said to hold Clippings for something else, so it is out of the running here. The trophy case still works and is still on the bench — it is now the SECOND case on the site rather than the only one, which is the argument against keeping it here.',
+    blocks: 'Reach is on the close plate as a placeholder and has been for a week.'
   }
 ];
 
-const DECIDED = [
-  ['Narrative order', 'The constraint spine. Seven plates of DO NOT, then SO. Live.'],
-  ['Companion form', 'Pixel sparrow. 70 landable surfaces, five chat perches.'],
-  ['Direction', 'Synthesised from all four. No Japanese glyphs.'],
-  ['Dithering', 'Atkinson onto four page tokens. Shipped into the polaroids.']
+const DECIDED: Array<[string, string]> = [
+  ['Narrative order', 'The constraint spine. Eight plates of DO NOT, then SO. Live. (Yours.)'],
+  ['Companion form', 'Pixel sparrow. Five chat perches, nine transits, a peck that aims.'],
+  ['Direction', 'Synthesised from all four. No Japanese glyphs. (Yours.)'],
+  ['Dithering', 'Atkinson in the polaroids, ordered in the ink wash. Different jobs.'],
+  [
+    'The 100 technologies',
+    'Constellation, not the ledger. Live on the models plate. Bench still at /v2/skills, keys 1-2.'
+  ],
+  [
+    'The case treatment',
+    'Ported to projects: fifteen objects at the head of /v2/projects. Its dark mode is fixed.'
+  ],
+  [
+    'World assignments',
+    'Techno on models, Topography on practice and CV, Celestial on contact. Bench at /v2/backdrops.'
+  ],
+  [
+    'The scroll fix',
+    'Document-flow bird, not Lenis. Free, no dependency, and his coordinates were already in document space.'
+  ],
+  [
+    'When an ability fires',
+    'Only when he is off the screen. In the edge fifths he hops back into the middle 60%. (Yours.)'
+  ],
+  [
+    'The hitchhiking',
+    'RouteMap keeps the interactive line; Scrapbook keeps the album page and stands its own thread down.'
+  ]
 ];
 
 export default function BenchIndex() {
@@ -95,15 +98,17 @@ export default function BenchIndex() {
       <div className="v2-wrap">
         <p className="v2-eyebrow">DECISIONS / WAITING ON YOU</p>
         <hr className="v2-rule-hard" />
-        <h1 className="v2-h2">Four things I cannot decide for you</h1>
+        <h1 className="v2-h2">Two things I cannot decide for you</h1>
         <p className="v2-lede">
-          Each of these gates work that is otherwise finished. The recommendation
-          is mine and the reasoning is under it, so disagreeing is cheap.
+          It was five. You said to figure most of it out myself, so three of
+          them are decided and live, and every bench they were decided on is
+          still standing. The recommendation is mine and the reasoning is under
+          it, so disagreeing is cheap.
         </p>
 
         <ol className="v2-bi-list">
           {PENDING.map((p, i) => (
-            <li key={p.href}>
+            <li key={p.title}>
               <span className="v2-bi-num" aria-hidden="true">
                 {String(i + 1).padStart(2, '0')}
               </span>
@@ -141,7 +146,8 @@ export default function BenchIndex() {
 
         <p className="v2-bi-foot">
           Full reasoning and every verdict you have given, verbatim, is in
-          <code>docs/ab-log.md</code>. Outstanding work is in
+          <code>docs/ab-log.md</code>. What changed overnight is in
+          <code>docs/devlog.md</code>. Outstanding work is in
           <code>docs/plan.md</code>.
         </p>
       </div>
