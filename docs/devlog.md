@@ -75,7 +75,10 @@ from the top of the viewport now.
 
 A descent that begins above the top edge now begins AT it, so the slide plays
 where it can be watched. And he lands under himself: **median sideways travel
-over 36 forced descents went 291px to 16px, worst case 699px to 79px.**
+over 36 forced descents went 291px to 19px, worst case 699px to 112px, and
+nothing over 150.** (Re-measured on the final code: the transit pacing changes
+landed after the first reading of 16/79 and moved where he is when he arrives.
+Small stale figures are how this project keeps embarrassing itself.)
 
 That took three fixes, and the second and third were both hiding one level down
 from the first. Picking a perch under him was not enough, because `targetXOn`

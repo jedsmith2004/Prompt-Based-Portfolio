@@ -220,7 +220,9 @@ starting in mid-air above his head. It tiles from `y = 0` now.
 begins AT it, so the slide plays where it can be watched. This replaced the old
 rule, which downgraded an off-screen scripted descent to a plain glide.
 `[x]` **Same rule for every descent.** Median sideways travel over 36 forced
-descents: 291px to 16px. Worst case 699px to 79px. Nothing over 150px.
+descents: 291px to 19px. Worst case 699px to 112px. Nothing over 150px.
+Re-measured after the transit pacing changed, which moved where he is when he
+arrives; the first reading was 16/79.
 
 Three fixes, and two of them were hiding one level down from the first. Picking
 a perch under him was not enough because `targetXOn` aims at the CENTRE of a
