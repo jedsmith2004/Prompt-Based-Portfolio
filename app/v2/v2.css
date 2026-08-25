@@ -4821,3 +4821,182 @@ html[data-v2-palette] body { background: var(--paper); }
 @media (prefers-reduced-motion: reduce) {
   .v2-kin-i { transform: none; transition: none; }
 }
+
+/* ==========================================================================
+   THE TWO MODE DEVICES
+
+   The site changes its light three times on the way down, and each change is
+   an event with a cause rather than a crossfade. Both devices sit at z-index
+   38: above the worlds and the type, below the bird's own layer at 40, because
+   he has to be able to stand IN FRONT of the cord he is pulling.
+
+   Both are drawn only from palette tokens, so each one is legible in the form
+   it is leaving AND the form it is arriving in. That is not a nicety: the
+   whole animation straddles the commit, so half of it is painted in the old
+   light and half in the new.
+   ========================================================================== */
+
+/* ---- the light switch ---------------------------------------------------
+   Two nested motions. The container runs the whole object in and out of the
+   top edge; the cord and grip run the pull inside it. They have to be
+   separate, because the pull happens while the container is standing still
+   and a single transform cannot be two animations at once.
+   ------------------------------------------------------------------------ */
+.v2-switch {
+  position: fixed;
+  top: 0;
+  right: clamp(78px, 20vw, 300px);
+  z-index: 38;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  will-change: transform;
+  transform: translate3d(0, -102%, 0);
+  transition: transform var(--enter, 460ms) cubic-bezier(0.18, 0.92, 0.32, 1.14);
+}
+.v2-switch[data-phase='wait'],
+.v2-switch[data-phase='pull'] {
+  transform: translate3d(0, 0, 0);
+}
+.v2-switch[data-phase='out'] {
+  transform: translate3d(0, -102%, 0);
+  transition-duration: var(--exit, 340ms);
+  transition-timing-function: cubic-bezier(0.5, 0, 0.78, 0.1);
+}
+
+/* The ceiling rose. Flush to the top edge, so it reads as coming through the
+   screen rather than floating in front of it. */
+.v2-switch-rose {
+  width: 30px;
+  height: 14px;
+  border-radius: 0 0 15px 15px;
+  background: var(--ink);
+  box-shadow: 0 1px 0 var(--paper-hi);
+}
+.v2-switch-cord {
+  width: 2px;
+  height: 132px;
+  background: var(--ink-2);
+  transform-origin: top center;
+}
+.v2-switch-grip {
+  width: 54px;
+  height: 13px;
+  border-radius: 7px;
+  background: var(--ink);
+  /* The visible top edge and the box top are the same line, which is what
+     lets the grip carry data-perch with no inset. */
+}
+
+/*
+   The yank.
+
+   One animation on two elements so they cannot drift. Duration is the down
+   stroke times 4.65, which is PULL_MS + HOLD_MS from LightSwitch.tsx — 170 and
+   620. The peak therefore lands at 22%, and 22% is where the light changes,
+   because the component commits on a timer of exactly PULL_MS. If you retune
+   either constant, retune this multiplier and this keyframe together or the
+   room will change colour before the cord has finished moving.
+*/
+@keyframes v2-switch-yank-cord {
+  0%   { transform: scaleY(1); }
+  22%  { transform: scaleY(1.30); }
+  48%  { transform: scaleY(0.965); }
+  72%  { transform: scaleY(1.012); }
+  100% { transform: scaleY(1); }
+}
+@keyframes v2-switch-yank-grip {
+  0%   { transform: translate3d(0, 0, 0); }
+  22%  { transform: translate3d(0, 40px, 0); }
+  48%  { transform: translate3d(0, -4.6px, 0); }
+  72%  { transform: translate3d(0, 1.6px, 0); }
+  100% { transform: translate3d(0, 0, 0); }
+}
+.v2-switch[data-phase='pull'] .v2-switch-cord {
+  animation: v2-switch-yank-cord calc(var(--pull, 170ms) * 4.65) cubic-bezier(0.3, 0, 0.25, 1) both;
+}
+.v2-switch[data-phase='pull'] .v2-switch-grip {
+  animation: v2-switch-yank-grip calc(var(--pull, 170ms) * 4.65) cubic-bezier(0.3, 0, 0.25, 1) both;
+}
+
+@media (max-width: 620px) {
+  /* Clear of the nav and of the thumb. The bird still reaches it. */
+  .v2-switch { right: clamp(28px, 14vw, 90px); }
+  .v2-switch-cord { height: 104px; }
+}
+
+/* ---- the day dial -------------------------------------------------------
+   Top right, clear of the rail. Small and over in under a second, which is
+   the brief: "it popping up, really quickly rotating, and going away".
+   ------------------------------------------------------------------------ */
+.v2-dial {
+  position: fixed;
+  top: clamp(14px, 3.2vh, 32px);
+  right: clamp(14px, 3vw, 36px);
+  width: clamp(54px, 7vw, 82px);
+  height: clamp(54px, 7vw, 82px);
+  z-index: 38;
+  pointer-events: none;
+  will-change: transform, opacity;
+  animation: v2-dial-life
+    calc(var(--pop, 170ms) + var(--spin, 400ms) + var(--hold, 170ms) + var(--exit, 200ms))
+    both;
+}
+.v2-dial-svg { display: block; width: 100%; height: 100%; overflow: visible; }
+
+/*
+   18% and 79% are POP and POP+SPIN+HOLD as fractions of the 940ms total in
+   DayDial.tsx. Same warning as the switch: these four constants and these two
+   percentages are one number written in two files.
+*/
+@keyframes v2-dial-life {
+  0%   { opacity: 0; transform: scale(0.42) translateY(-15px); }
+  18%  { opacity: 1; transform: scale(1) translateY(0); }
+  79%  { opacity: 1; transform: scale(1) translateY(0); }
+  100% { opacity: 0; transform: scale(0.52) translateY(-13px); }
+}
+
+.v2-dial-orbit {
+  transform-box: view-box;
+  transform-origin: 50px 50px;
+  animation: v2-dial-spin var(--spin, 400ms) var(--pop, 170ms) cubic-bezier(0.5, 0, 0.18, 1) both;
+}
+@keyframes v2-dial-spin {
+  from { transform: rotate(var(--from, 0deg)); }
+  to   { transform: rotate(var(--until, -110deg)); }
+}
+
+.v2-dial-face   { fill: var(--paper-hi); }
+.v2-dial-ground { fill: var(--paper-3); }
+.v2-dial-horizon { stroke: var(--ink-3); stroke-width: 1.4; }
+.v2-dial-rim    { fill: none; stroke: var(--ink); stroke-width: 2.4; }
+.v2-dial-sun    { fill: var(--verm); }
+.v2-dial-rays   { stroke: var(--verm); stroke-width: 2.2; stroke-linecap: round; fill: none; }
+.v2-dial-moon   { fill: var(--ink-2); }
+
+@media (prefers-reduced-motion: reduce) {
+  /* useMode never mounts either device under reduced motion, so this is a
+     belt-and-braces rule rather than the mechanism. */
+  .v2-switch, .v2-dial, .v2-dial-orbit,
+  .v2-switch-cord, .v2-switch-grip { animation: none; transition: none; }
+}
+
+/* ==========================================================================
+   the ink field, dormant
+
+   Jack: "I like the particles but I don't think we should have them on every
+   page, I think the hero and the contact page only."
+
+   The canvas stays mounted and stops drawing. See the `dormant` prop in
+   InkField.tsx for why it is not unmounted, and note that the 760ms below is
+   the same number as FADE_OUT_MS in that file: the loop is parked when this
+   transition ends, so if the two disagree the field visibly freezes part way
+   through fading out.
+   ========================================================================== */
+.v2-field {
+  transition: opacity 760ms linear;
+}
+.v2-field[data-dormant='true'] {
+  opacity: 0;
+}

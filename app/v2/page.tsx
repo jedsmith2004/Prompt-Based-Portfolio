@@ -8,13 +8,16 @@
    an editorial spine: numbered plates, hard rules, real figures.
    ========================================================================== */
 
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import InkField, { type ShapePainter } from '@/components/v2/InkField';
 import Hero from '@/components/v2/Hero';
 import SpineSection from '@/components/v2/SpineSection';
 import { useSpine, scrollToSection } from '@/components/v2/useSpine';
-import Companion from '@/components/v2/Companion';
+import Companion, { type CompanionErrand } from '@/components/v2/Companion';
+import LightSwitch, { type LightSwitchHandle } from '@/components/v2/LightSwitch';
+import DayDial from '@/components/v2/DayDial';
+import { useMode } from '@/components/v2/useMode';
 import ClimbingWall from '@/components/v2/ClimbingWall';
 import Polaroids from '@/components/v2/Polaroids';
 import NeuralPlayground from '@/components/v2/NeuralPlayground';
@@ -24,7 +27,7 @@ import SkillConstellation from '@/components/v2/SkillConstellation';
 import SectionBackdrops from '@/components/v2/SectionBackdrops';
 import { usePalette } from '@/components/v2/usePalette';
 import CareerLine from '@/components/v2/CareerLine';
-import AwardsReach from '@/components/v2/AwardsReach';
+import AwardsClippings from '@/components/v2/AwardsClippings';
 import CurriculumVitae from '@/components/v2/CurriculumVitae';
 import { HERO, SECTIONS, SECTION_WORLDS, WHISPERS, type SectionShape } from '@/lib/v2/content';
 import {
@@ -120,16 +123,34 @@ function sectionExtra(id: string) {
     case 'practice':
       return <ClimbingWall height={420} seed={7} />;
     case 'cv':
-      return <CurriculumVitae />;
+      /*
+       * THE AWARDS MOVED HERE, and this is my call rather than Jack's.
+       *
+       * He said two things about the last two plates: "I don't like the react
+       * section, remove it" — the Reach chart, on contact — and of this plate,
+       * "otherwise, this is fine, a bit boring, can we make it more creative?"
+       *
+       * Deleting the chart outright would take the only awards on the site
+       * with it, including a lens a million strangers used. Read narrowly, he
+       * disliked THAT TREATMENT in THAT PLACE: a logarithmic reach axis is a
+       * cold object to close a page on, and closing on it while asking for
+       * work was the wrong note. The awards themselves are the least boring
+       * thing the CV plate could possibly carry.
+       *
+       * So the chart is gone and the clippings are here, next to the document
+       * they belong beside. Reversible in one line if he meant it literally:
+       * all three treatments are still standing at /v2/awards.
+       */
+      return (
+        <>
+          <CurriculumVitae />
+          <AwardsClippings />
+        </>
+      );
     case 'contact':
-      /* What other people made of the work, immediately before the email
-         address. This was the only plate on the page with nothing on it, and
-         the site had no award anywhere despite one of them being a lens a
-         million strangers used.
-
-         Three treatments exist and all three are on /v2/awards. Swapping this
-         line for AwardsCase or AwardsClippings is the whole change. */
-      return <AwardsReach />;
+      /* Nothing. The closing plate asks for one thing and should not be
+         competing with a figure while it does. See the note on `cv`. */
+      return null;
     default:
       return null;
   }
@@ -137,11 +158,52 @@ function sectionExtra(id: string) {
 
 export default function V2Page() {
   const sectionIds = useMemo(() => SECTIONS.map((s) => s.id), []);
-  const { active, progress, velocity, velocityRef } = useSpine(sectionIds);
+
+  /*
+   * THE HERO IS ITS OWN PLATE, and giving it one fixed the note Jack opened
+   * with: "The mathematics one should be removed from the hero page but put on
+   * the first page, these need to be separate."
+   *
+   * They were not separate. `useSpine` opened with `active` set to the first
+   * SECTION, so before the reader had scrolled a pixel the page was already
+   * dressed as plate 01 and already had plate 01's world running behind the
+   * title. The geometry backdrop was not bleeding onto the hero; the hero was
+   * never anything but plate 01 wearing the hero's type.
+   *
+   * `top` is the hero's id in the DOM and it now has a palette of its own in
+   * palettes.ts and deliberately NO entry in SECTION_WORLDS, so the opening
+   * screen is the particle field and nothing else. Plate 01 gets the
+   * mathematics, one scroll later, on its own.
+   */
+  const spineIds = useMemo(() => ['top', ...sectionIds], [sectionIds]);
+  const { active, progress, velocity, velocityRef } = useSpine(spineIds);
+
+  /* Light or dark, and the device narrating the change. See useMode.ts. */
+  const { mode, event, commit, finish } = useMode(active);
 
   /* The plate the reader is on sets the page's colour, and the tokens
      interpolate rather than switching. See components/v2/usePalette.ts. */
-  const palette = usePalette(active);
+  const palette = usePalette(active, mode);
+
+  /*
+   * PARTICLES ON TWO PLATES ONLY. Jack: "I like the particles but I don't
+   * think we should have them on every page, I think the hero and the contact
+   * page only."
+   *
+   * It was also most of the busyness he opened with. On the middle seven
+   * plates the field was a full-viewport particle simulation running
+   * UNDERNEATH the world that was supposed to be the thing you were looking
+   * at, so the page was paying twice to be harder to read. The opening screen
+   * and the closing one are the two that are mostly type and air, which is
+   * where a field has room to be the subject rather than the noise.
+   */
+  const particles = active === 'top' || active === 'contact';
+
+  /* --- the light switch, and the bird who works it ----------------------- */
+  const [errand, setErrand] = useState<CompanionErrand | null>(null);
+  const switchRef = useRef<LightSwitchHandle | null>(null);
+  const onErrandArrive = useCallback(() => switchRef.current?.arrive(), []);
+  const onErrandFail = useCallback(() => switchRef.current?.fail(), []);
 
   const route = useMemo(() => normalisedRoute(), []);
 
@@ -216,8 +278,8 @@ export default function V2Page() {
 
   return (
     <>
-      <div className="v2-field" aria-hidden="true">
-        <InkField shape={painter} shapeKey={shapeName} density="auto" />
+      <div className="v2-field" aria-hidden="true" data-dormant={!particles}>
+        <InkField shape={painter} shapeKey={shapeName} density="auto" dormant={!particles} />
       </div>
 
       {/* The section worlds, between the ink field and the type. One alive at
@@ -320,18 +382,38 @@ export default function V2Page() {
             </div>
             {/* border-top hairline: the box edge is the visible line */}
             <div className="v2-foot-colophon" data-perch>
-              <span>Sheffield, UK</span>
+              {/* He graduated from Sheffield. He does not live there. */}
+              <span>Hemel Hempstead, UK</span>
               <span>Drawn by one particle field and a hand-rolled rasterizer</span>
             </div>
           </div>
         </footer>
       </main>
 
+      {/* The mode devices. At most one is ever mounted, and only while a
+          change is actually happening: see useMode.ts. */}
+      {event?.device === 'switch' ? (
+        <LightSwitch
+          key={event.key}
+          ref={switchRef}
+          to={event.to}
+          onErrand={setErrand}
+          onCommit={commit}
+          onDone={finish}
+        />
+      ) : null}
+      {event?.device === 'dial' ? (
+        <DayDial key={event.key} to={event.to} onCommit={commit} onDone={finish} />
+      ) : null}
+
       <Companion
         whispers={WHISPERS}
         activeSection={active}
         velocityRef={velocityRef}
         onAsk={ask}
+        errand={errand}
+        onErrandArrive={onErrandArrive}
+        onErrandFail={onErrandFail}
       />
     </>
   );

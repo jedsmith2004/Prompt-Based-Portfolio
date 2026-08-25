@@ -56,7 +56,32 @@ export interface InkFieldProps {
   disturb?: number;
   /** Pigment laid per particle. Raise for a heavier wash. */
   deposit?: number;
+  /**
+   * Park the field.
+   *
+   * Jack, 2026-08-26: "I like the particles but I don't think we should have
+   * them on every page, I think the hero and the contact page only."
+   *
+   * The field is one GL context, one 512x512 particle simulation and one full
+   * viewport draw per frame, and for six of the nine plates it was running
+   * underneath a backdrop that was meant to be the thing you were looking at.
+   * Two problems in one: the page was too busy, and it was paying for the
+   * business twice.
+   *
+   * Dormant STOPS THE LOOP rather than hiding the canvas, and it does not
+   * unmount: rebuilding the pipeline on every return to the hero would cost
+   * more than idling, and cycling a GL context that way is how a page runs the
+   * browser out of contexts. The stop is deferred by FADE_OUT_MS so the last
+   * thing the reader sees is the field fading, not the field freezing.
+   */
+  dormant?: boolean;
 }
+
+/**
+ * How long the wrapper takes to fade out. Mirrored by `--v2-field-fade` in
+ * v2.css: if the two disagree the field freezes mid-fade, visibly.
+ */
+const FADE_OUT_MS = 760;
 
 /* -------------------------------------------------------------------------- */
 /* shader sources                                                              */
@@ -361,7 +386,8 @@ export default function InkField({
   cohesion = 0.9,
   breathe = true,
   disturb = 1,
-  deposit = 0.115
+  deposit = 0.115,
+  dormant = false
 }: InkFieldProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -374,6 +400,7 @@ export default function InkField({
   const breatheRef = useRef(breathe);
   const disturbRef = useRef(disturb);
   const depositRef = useRef(deposit);
+  const dormantRef = useRef(dormant);
 
   useEffect(() => {
     shapeRef.current = shape;
@@ -382,10 +409,41 @@ export default function InkField({
     breatheRef.current = breathe;
     disturbRef.current = disturb;
     depositRef.current = deposit;
+    dormantRef.current = dormant;
   });
 
   /** Set by the GL effect so the shapeKey effect can retarget without a rebuild. */
   const retargetRef = useRef<(() => void) | null>(null);
+
+  /** Set by the GL effect so `dormant` can park and wake the loop in place. */
+  const runRef = useRef<{ start: () => void; stop: () => void } | null>(null);
+
+  /*
+   * Park and wake.
+   *
+   * Waking is immediate, because the reader is already looking at an empty
+   * rectangle that is about to fade up. Parking waits out the fade, because
+   * stopping the loop on the same frame the opacity starts falling freezes the
+   * last image in place and the reader watches a still photograph dissolve
+   * rather than a field disperse.
+   *
+   * `dormantRef` is written by the sync effect above, but that effect runs on
+   * EVERY render and this one only when `dormant` changes, so the ref could
+   * still be stale on the frame this runs. It is written here too.
+   */
+  useEffect(() => {
+    dormantRef.current = dormant;
+    const run = runRef.current;
+    if (!run) return;
+    if (!dormant) {
+      run.start();
+      return;
+    }
+    const t = window.setTimeout(() => {
+      if (dormantRef.current) run.stop();
+    }, FADE_OUT_MS);
+    return () => window.clearTimeout(t);
+  }, [dormant]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -750,7 +808,7 @@ export default function InkField({
     }
 
     function start() {
-      if (running || !visible || lost) return;
+      if (running || !visible || lost || dormantRef.current) return;
       /* Motion reduced: paint one static frame and stay off the rAF treadmill
          entirely, rather than re-rendering an identical image forever. */
       if (reduced) { requestFrame(); return; }
@@ -816,6 +874,8 @@ export default function InkField({
     }
 
     resize();
+
+    runRef.current = { start, stop };
 
     /* only run while actually on screen */
     const io = new IntersectionObserver(

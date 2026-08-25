@@ -827,6 +827,31 @@ interface ChatMsg {
   text: string;
 }
 
+/**
+ * A job the page needs the bird to physically go and do.
+ *
+ * There is exactly one of these so far and it is the light switch. Jack asked
+ * for the change into dark to be "the bird flying up to the top of the screen
+ * and pulling a light switch", which means the palette transition cannot just
+ * be a transition: something has to actually happen, in the world, and the
+ * page has to wait for it.
+ *
+ * The contract is deliberately thin, because the alternative was the page
+ * reaching into the engine. The page names a target and gets told when he is
+ * standing on it. It does not learn where he was, how he got there, or how
+ * long it took, and the engine learns nothing about light switches.
+ */
+export interface CompanionErrand {
+  /** Fresh per errand. Changing it is what starts one. */
+  key: number;
+  /**
+   * CSS selector for the thing to stand on. It must carry `data-perch`, and
+   * it must already be in the DOM when the errand is handed over: the engine
+   * re-measures on receipt, once, and does not poll for it to appear.
+   */
+  selector: string;
+}
+
 export interface CompanionProps {
   /** Lines the bird may say, keyed by section id. */
   whispers?: Record<string, string[]>;
@@ -836,6 +861,21 @@ export interface CompanionProps {
   velocityRef?: React.MutableRefObject<number>;
   /** Answers questions about Jack. Falls back to a local table offline. */
   onAsk?: (q: string) => Promise<string>;
+  /**
+   * Send him somewhere. Set to null to release him: until then he will stay
+   * on the target rather than drifting back into the comfort band, which he
+   * otherwise would immediately, because the target is at the top of the
+   * screen and the top of the screen is exactly where he does not want to be.
+   */
+  errand?: CompanionErrand | null;
+  /** He is standing on it. */
+  onErrandArrive?: () => void;
+  /**
+   * He cannot get there, or is not going to: no such element, no perch on it,
+   * chat open, or he simply did not make it inside ERRAND_DEADLINE. The caller
+   * is expected to carry on without him rather than wait.
+   */
+  onErrandFail?: () => void;
 }
 
 /* Small record-shaped lookups, cast once so the call sites stay clean. */
@@ -1144,7 +1184,10 @@ export default function Companion({
   whispers,
   activeSection,
   velocityRef,
-  onAsk
+  onAsk,
+  errand = null,
+  onErrandArrive,
+  onErrandFail
 }: CompanionProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -1160,6 +1203,12 @@ export default function Companion({
   velRef.current = velocityRef;
   const onAskRef = useRef(onAsk);
   onAskRef.current = onAsk;
+  const errandRef = useRef(errand);
+  errandRef.current = errand;
+  const onErrandArriveRef = useRef(onErrandArrive);
+  onErrandArriveRef.current = onErrandArrive;
+  const onErrandFailRef = useRef(onErrandFail);
+  onErrandFailRef.current = onErrandFail;
 
   const chat = useRef({
     open: false,
@@ -2657,6 +2706,93 @@ export default function Companion({
       launchTo(PLAN[0], urgency);
     }
 
+    /* ====================================================================
+       ERRANDS
+
+       He is on one when `errandPerch` is set. Two things change while he is:
+
+       1. Nothing else may re-plan him. Three separate drives would otherwise
+          take him straight back off the target — the band drive, the
+          move-house timer, and the post-landing re-check — and all three
+          would fire, because the light switch hangs from the TOP EDGE of the
+          screen and the top edge is the single worst place he can stand by
+          every measure the band uses. Without these gates he touches the cord
+          and leaves in the same tenth of a second.
+
+       2. There is a deadline. The caller is waiting on him and a caller
+          waiting forever is a page stuck in the wrong colours, so if he has
+          not arrived by then the errand is abandoned and the caller is told
+          to get on without him.
+       ==================================================================== */
+
+    /** Longest he is given to reach a target before the caller gives up. */
+    const ERRAND_DEADLINE = 3400;
+
+    let errandKey = 0;
+    let errandPerch: Perch | null = null;
+    let errandDeadline = 0;
+    let errandArrived = false;
+
+    /** True while he is committed to a job and must not be re-planned. */
+    function onErrand(): boolean {
+      return errandPerch !== null;
+    }
+
+    function endErrand(fail: boolean) {
+      const wasRunning = errandPerch !== null && !errandArrived;
+      errandPerch = null;
+      errandArrived = false;
+      errandDeadline = 0;
+      /* Released at the top of the screen with nothing holding him there, so
+         give him a reason to move rather than waiting on the idle scheduler. */
+      bird.hopGate = 0;
+      bird.sinceMove = 99;
+      if (fail && wasRunning) onErrandFailRef.current?.();
+    }
+
+    function serviceErrand() {
+      const e = errandRef.current;
+      const key = e ? e.key : 0;
+
+      if (key !== errandKey) {
+        errandKey = key;
+        /* A new errand, or a release. Either way the old one is over, and it
+           is not a failure: the caller is the one who ended it. */
+        errandPerch = null;
+        errandArrived = false;
+        errandDeadline = 0;
+        if (!e) {
+          bird.hopGate = 0;
+          bird.sinceMove = 99;
+          return;
+        }
+        /* Not while he is mid-conversation. Flying off in the middle of
+           answering a question to go and operate a light is worse than the
+           light changing on its own. */
+        if (chat.current.open) {
+          onErrandFailRef.current?.();
+          return;
+        }
+        /* The target was almost certainly added to the DOM on the frame
+           before this one, so it is not in `byEl` yet. */
+        measure();
+        const el = document.querySelector(e.selector);
+        const p = el ? byEl.get(el) : null;
+        if (!p) {
+          onErrandFailRef.current?.();
+          return;
+        }
+        errandPerch = p;
+        errandDeadline = bird.clock + ERRAND_DEADLINE;
+        onCursor = false;
+        planTo(p, 1);
+        return;
+      }
+
+      if (!errandPerch || errandArrived) return;
+      if (bird.clock > errandDeadline) endErrand(true);
+    }
+
     function launchTo(wp: Waypoint, urgency: number) {
       const dx = wp.x - bird.x;
       const dy = wp.y - bird.y;
@@ -2724,6 +2860,15 @@ export default function Companion({
        */
       setMode('land');
       startAnim('land');
+
+      /* The one thing the errand machine needs out of the physics. Fired from
+         here rather than from the plan-complete branch because a plan can be
+         cut short by a re-measure or a fall, and what the caller actually
+         asked was "is he standing on it", not "did the plan finish". */
+      if (p !== null && p === errandPerch && !errandArrived) {
+        errandArrived = true;
+        onErrandArriveRef.current?.();
+      }
     }
 
     /**
@@ -3757,6 +3902,7 @@ export default function Companion({
         dt * 1000 * (bird.mode === 'transit' ? 1 / TRANSIT_TIME[transit.up ? 'up' : 'down'] : 1);
 
       trackScroll(dt);
+      serviceErrand();
       /* velocityRef is px/frame; scrollVel is px/sec. Compare like for like
          and take whichever is reporting the faster gesture. */
       const refVel = velRef.current?.current ?? 0;
@@ -3864,6 +4010,7 @@ export default function Companion({
          understands, so the drag outranks it. */
       const transitOk =
         !chat.current.open &&
+        !onErrand() &&
         bird.mode !== 'transit' &&
         bird.mode !== 'pvz' &&
         bird.mode !== 'drag';
@@ -3935,7 +4082,7 @@ export default function Companion({
           let u = bandUrgency();
           const psy = bird.perch.y - window.scrollY;
           if (psy < -30 || psy > H + 10) u = 1.4;
-          if (u > 0.06 && bird.clock > bird.hopGate) {
+          if (u > 0.06 && bird.clock > bird.hopGate && !onErrand()) {
             /*
              * Only move if there is somewhere BETTER to stand. Whole stretches
              * of this page have no perch inside the comfort band at all — and
@@ -3993,7 +4140,7 @@ export default function Companion({
 
           /* every so often, move house — roughly once every twelve seconds */
           bird.sinceMove += dt;
-          if (bird.sinceMove > 7 && Math.random() < dt * 0.12) {
+          if (bird.sinceMove > 7 && Math.random() < dt * 0.12 && !onErrand()) {
             const t = pickBandPerch(0);
             if (t && t !== bird.perch) {
               bird.sinceMove = 0;
@@ -4137,7 +4284,11 @@ export default function Companion({
               launchTo(PLAN[planIdx], Math.max(u, bird.hopUrgency));
               break;
             }
-            if (u > 0.22) {
+            /* `!onErrand()` here is the gate that matters most. The light
+               switch hangs from the top edge of the screen, so the moment he
+               lands on it `bandUrgency` reads about as bad as it can, and
+               without this he takes off again on the same frame he arrives. */
+            if (u > 0.22 && !onErrand()) {
               planTo(pickBandPerch(u), u);
               break;
             }

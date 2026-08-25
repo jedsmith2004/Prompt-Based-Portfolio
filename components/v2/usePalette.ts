@@ -26,21 +26,28 @@ import {
   BASE_PALETTE,
   PALETTE_VARS,
   paletteForSection,
+  plateFor,
+  type PaletteMode,
   type SectionPalette
 } from '@/lib/v2/palettes';
 
 const DRIVEN_CLASS = 'v2-palette-driven';
 
 /**
- * Applies the palette belonging to `activeId`.
+ * Applies the palette belonging to `activeId`, in the form `mode` asks for.
+ *
+ * MODE IS A SEPARATE ARGUMENT AND NOT READ OFF THE PLATE. During a light
+ * switch the page is deliberately rendering a plate in the form it does not
+ * settle in, for as long as the bird takes to reach the cord. See useMode.ts.
  *
  * Returns the palette actually applied, so a caller that needs the same
  * colours in canvas-space (the backdrops do) reads them from here rather than
  * from `getComputedStyle`, which during a transition would hand back a
  * half-interpolated value.
  */
-export function usePalette(activeId: string): SectionPalette {
-  const palette = paletteForSection(activeId);
+export function usePalette(activeId: string, mode: PaletteMode): SectionPalette {
+  const palette = paletteForSection(activeId, mode);
+  const plateId = plateFor(activeId).id;
 
   /* Write the tokens. Synchronous, every time the palette changes. */
   useEffect(() => {
@@ -48,9 +55,13 @@ export function usePalette(activeId: string): SectionPalette {
     for (const [key, prop] of PALETTE_VARS) {
       root.style.setProperty(prop, String(palette[key]));
     }
-    root.dataset.v2Palette = palette.id;
+    root.dataset.v2Palette = plateId;
+    root.dataset.v2Mode = palette.dark ? 'dark' : 'light';
+    /* Kept as well as data-v2-mode: several components and the whole of the
+       projects page already branch on this attribute, and renaming it would
+       be a silent visual regression in every one of them. */
     root.dataset.v2PaletteDark = palette.dark ? 'true' : 'false';
-  }, [palette]);
+  }, [palette, plateId]);
 
   /*
    * Arm the transition, once, and hand everything back on unmount.
@@ -82,6 +93,7 @@ export function usePalette(activeId: string): SectionPalette {
       root.classList.remove(DRIVEN_CLASS);
       for (const [, prop] of PALETTE_VARS) root.style.removeProperty(prop);
       delete root.dataset.v2Palette;
+      delete root.dataset.v2Mode;
       delete root.dataset.v2PaletteDark;
     };
   }, []);
