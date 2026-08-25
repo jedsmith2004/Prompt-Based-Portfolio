@@ -783,7 +783,7 @@ export default function NeuralPlayground({ height = 340, className }: NeuralPlay
       ctx.fillText('CLASS 10', L.outX + 22, L.labelY);
 
       /* ---- the input plate ---- */
-      ctx.strokeStyle = rgba(C.ink, 0.22);
+      ctx.strokeStyle = rgba(C.ink, 0.42);
       ctx.lineWidth = 1;
       ctx.strokeRect(
         Math.round(L.plateX) + 0.5,
@@ -810,8 +810,12 @@ export default function NeuralPlayground({ height = 340, className }: NeuralPlay
         const ax = L.plateX + ((i % 28) + 0.5) * L.cell;
         const ay = L.plateY + (Math.floor(i / 28) + 0.5) * L.cell;
         const by = hidY(j);
-        ctx.strokeStyle = rgba(neg ? C.blue : C.verm, 0.1 + 0.42 * s);
-        ctx.lineWidth = 0.5 + 1.1 * s;
+        /* 0.1 to 0.52 was the old range and it is why Jack asked where the
+           colours had gone. A vermilion wire at eight percent alpha is not a
+           faint vermilion wire, it is a grey one: the hue survives contact
+           with the paper for about a fifth of its stated strength. */
+        ctx.strokeStyle = rgba(neg ? C.blue : C.verm, 0.26 + 0.6 * s);
+        ctx.lineWidth = 0.6 + 1.35 * s;
         ctx.beginPath();
         ctx.moveTo(ax, ay);
         ctx.lineTo(L.hidX, by);
@@ -835,9 +839,19 @@ export default function NeuralPlayground({ height = 340, className }: NeuralPlay
         const ax = L.hidX + (resting ? 0 : clamp01(hShown[j] / hMax) * L.barMax);
         const ay = hidY(j);
         const by = outY(o);
-        const a = resting ? 0.05 + 0.1 * s : 0.1 + 0.45 * s;
+        /*
+         * THE RESTING STATE IS THE STATE ALMOST EVERYONE SEES.
+         *
+         * Jack: "The neural nets need to be more contrastive, especially when
+         * inactive." At 0.05 to 0.15 alpha the resting net was not a quiet
+         * net, it was an empty rectangle with a faint smudge in it, and a
+         * reader who never draws a digit never learns there is a network here
+         * at all. Resting is now roughly where active used to be, and active
+         * has moved up to meet it.
+         */
+        const a = resting ? 0.22 + 0.4 * s : 0.34 + 0.56 * s;
         ctx.strokeStyle = rgba(neg ? C.blue : C.verm, a);
-        ctx.lineWidth = resting ? 0.5 : 0.5 + 1.2 * s;
+        ctx.lineWidth = resting ? 0.7 + 0.5 * s : 0.6 + 1.4 * s;
         ctx.beginPath();
         ctx.moveTo(ax, ay);
         ctx.lineTo(L.outX - 4, by);
@@ -861,10 +875,18 @@ export default function NeuralPlayground({ height = 340, className }: NeuralPlay
       for (let j = 0; j < NH; j++) {
         const a = clamp01(hShown[j] / hMax);
         const y = hidY(j) - barH / 2;
-        ctx.fillStyle = rgba(C.ink, 0.16);
+        ctx.fillStyle = rgba(C.ink, 0.3);
         ctx.fillRect(L.hidX - 3, y, 3, barH);
         if (a > 0.01) {
-          ctx.fillStyle = rgba(a > 0.62 ? C.verm : C.ink, 0.32 + 0.6 * a);
+          /*
+           * The bank used to be ink until a unit passed 0.62 and then flip
+           * hard to vermilion, so sixty of the sixty-four bars were grey and
+           * the layer had no colour in it at all. A unit is a continuous
+           * quantity and it is drawn as one: cool where it is barely firing,
+           * warm where it is, crossing over in the middle. That reads as a
+           * bank of activations rather than as four highlighted rows.
+           */
+          ctx.fillStyle = rgba(a > 0.45 ? C.verm : C.blue, 0.42 + 0.55 * a);
           ctx.fillRect(L.hidX, y, Math.max(0.8, a * L.barMax), barH);
         }
       }
@@ -880,12 +902,15 @@ export default function NeuralPlayground({ height = 340, className }: NeuralPlay
         const y = outY(o);
         const p = pShown[o];
         const isTop = lit && o === top;
-        ctx.fillStyle = rgba(isTop ? C.verm : C.ink, 0.14 + 0.7 * p);
-        const r = 2 + 4.5 * p;
+        /* Runners-up carry the cool accent rather than plain ink, so the
+           column shows the whole distribution in colour instead of one warm
+           dot and nine grey ones. */
+        ctx.fillStyle = rgba(isTop ? C.verm : p > 0.02 ? C.blue : C.ink, 0.3 + 0.68 * p);
+        const r = 2.4 + 4.6 * p;
         ctx.beginPath();
         ctx.arc(L.outX, y, r, 0, TAU);
         ctx.fill();
-        ctx.fillStyle = isTop ? C.verm : rgba(C.ink3, 0.5 + 0.5 * p);
+        ctx.fillStyle = isTop ? C.verm : rgba(C.ink3, 0.72 + 0.28 * p);
         ctx.fillText(String(o), L.outX + 11, y + 0.5);
       }
     };

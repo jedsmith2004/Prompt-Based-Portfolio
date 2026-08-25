@@ -387,16 +387,68 @@ function buildScene(collage: readonly string[]): Solid[] {
 /* 3. component                                                                */
 /* -------------------------------------------------------------------------- */
 
-/*
- * Glyph ramp, sparse to dense. READ THE QUANTISE STEP BEFORE CHANGING IT: the
- * mapping is INVERTED, because this prints on paper. A brightly lit face has
- * to leave the paper showing and a face in shadow has to fill with ink, which
- * is the opposite of what a ramp does on a black terminal.
- */
 /* dev-only: capture one frame of shade values, see __reel.shades() */
 const SHADE_LOG: { on: boolean; v: number[] } = { on: false, v: [] };
 
-const RAMP = ' .:-=+*#%@';
+/* ==========================================================================
+   THE SCREEN, which used to be a glyph ramp.
+
+   Jack, 2026-08-26: "remove the ascii filter and maybe add dithering or
+   something."
+
+   The ASCII was the wrong instrument for this plate twice over. It rendered
+   the model into a 7x13 CHARACTER cell, so the object had to be pre-squashed
+   by the cell aspect and every silhouette arrived on a grid whose two axes
+   disagreed. And an ASCII face is a texture of letters: at any real size you
+   read the letters, not the form.
+
+   This is a HALFTONE instead. Square cells, one dot each, and the dot's AREA
+   carries the tone — which is why the radius goes as sqrt(coverage) and not as
+   coverage. Get that wrong and the midtones sag, because a dot of half the
+   radius is a quarter of the ink.
+
+   The Bayer matrix is there to break up the two places a pure halftone shows
+   its grid: the very light end, where identical tiny dots line up into rows,
+   and a large flat face, where identical dots read as wallpaper. It perturbs
+   the threshold, not the size, so the tone stays correct.
+
+   The mapping is INVERTED, because this prints on paper. A brightly lit face
+   leaves the paper showing; a face in shadow fills with ink.
+   ========================================================================== */
+
+/** Dot pitch in CSS px. Square, unlike the character cell it replaces. */
+const DOT = 3;
+
+/**
+ * 8x8 ordered dither, values in 0..1, MEAN 0.4921875.
+ *
+ * That figure is measured, not remembered. The centre of an 8x8 Bayer matrix
+ * built as (index + 0.5) / 64 is 0.4921875, and writing 0.46875 from memory —
+ * which happened on this project once already, in the ink wash — biases every
+ * threshold by a sixty-fourth and speckles empty paper.
+ */
+const BAYER = (() => {
+  const m = new Float32Array(64);
+  for (let y = 0; y < 8; y++) {
+    for (let x = 0; x < 8; x++) {
+      let v = 0;
+      let mask = 4;
+      let bit = 0;
+      /* the standard recursive interleave, unrolled over three levels */
+      for (let i = 0; i < 3; i++) {
+        const xb = (x & mask) ? 1 : 0;
+        const yb = (y & mask) ? 1 : 0;
+        v |= (yb ^ xb) << (2 * i + 1);
+        v |= yb << (2 * i);
+        mask >>= 1;
+        bit++;
+      }
+      void bit;
+      m[y * 8 + x] = (v + 0.5) / 64;
+    }
+  }
+  return m;
+})();
 
 /**
  * The object sits still. Jack, 2026-08-25: "the carousel should be the 3D
@@ -418,8 +470,10 @@ const LIGHT: readonly [number, number, number] = (() => {
   const l = Math.hypot(v[0], v[1], v[2]);
   return [v[0] / l, v[1] / l, v[2] / l];
 })();
-const CELL_W = 7;
-const CELL_H = 13;
+/* Square, so the projection no longer has to pre-squash the object to undo
+   the aspect of a character cell. See THE SCREEN above. */
+const CELL_W = DOT;
+const CELL_H = DOT;
 
 export interface HighlightReelProps {
   className?: string;
@@ -463,31 +517,12 @@ export default function HighlightReel({ className, height = 400 }: HighlightReel
 
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    /* glyph atlas, built once */
-    const atlas = document.createElement('canvas');
-    const AW = 16;
-    const AH = 28;
-    atlas.width = AW * RAMP.length;
-    atlas.height = AH;
-    const actx = atlas.getContext('2d');
-    if (!actx) return;
     /*
-     * TRANSPARENT background. This used to fill every cell with opaque black
-     * and then draw a white glyph on it, which meant each cell blitted as a
-     * solid black tile with a speck in it. On a paper page the result was a
-     * dark rectangle where a drawing should be, and it is the largest part of
-     * why the reel "didn't show anything".
-     *
-     * The glyphs are painted white and tinted at blit time instead, so the
-     * plate follows the live section palette without the atlas being rebuilt
-     * every time the colour moves. See the tint pass at the end of render().
+     * The glyph atlas used to be built here: a strip of ten characters, drawn
+     * white on transparent, blitted one per cell and recoloured afterwards.
+     * It is gone with the ASCII. A halftone dot is one arc call in the page's
+     * own ink, so there is nothing to cache and nothing to recolour.
      */
-    actx.clearRect(0, 0, atlas.width, atlas.height);
-    actx.fillStyle = '#fff';
-    actx.textAlign = 'center';
-    actx.textBaseline = 'middle';
-    actx.font = '700 20px "JetBrains Mono", ui-monospace, monospace';
-    for (let i = 0; i < RAMP.length; i++) actx.fillText(RAMP[i], i * AW + AW / 2, AH / 2 + 1);
 
     /* offscreen the 3D is shaded into, one cell per pixel */
     const shade = document.createElement('canvas');
@@ -572,7 +607,9 @@ export default function HighlightReel({ className, height = 400 }: HighlightReel
       }
       sctx!.fillStyle = "#000";
       sctx!.fillRect(0, 0, tCols, tRows);
-      const scale = Math.min(tCols, tRows * 1.9) * 0.30;
+      /* 1.9 used to be here, undoing the 7:13 character cell. The cells are
+         square now, so the object is drawn at its own proportions. */
+      const scale = Math.min(tCols, tRows) * 0.34;
       const cx = tCols / 2;
       const cy = tRows / 2;
       /* One projected, shaded face, ready to be depth-sorted and filled. */
@@ -676,36 +713,41 @@ export default function HighlightReel({ className, height = 400 }: HighlightReel
         sctx!.fill();
       }
       }
-      /* quantise to glyphs */ const img = sctx!.getImageData(0, 0, tCols, tRows);
+      /* --- screen it --------------------------------------------------
+         One dot per cell, area proportional to how much ink the cell wants,
+         with the Bayer matrix perturbing the THRESHOLD rather than the size so
+         the tone stays correct. See THE SCREEN at the top of this file.
+         ---------------------------------------------------------------- */
+      const img = sctx!.getImageData(0, 0, tCols, tRows);
       lum = img.data;
       tctx.clearRect(0, 0, tW, tH);
-      for(let r = 0; r < tRows; r++){
-        for(let c = 0; c < tCols; c++){
+      /* Drawn straight in the page's ink. The old glyph path painted white and
+         recoloured the whole plate afterwards with a source-in fill, which was
+         the right trade for an atlas and is pure cost for a circle. */
+      tctx.fillStyle = ink;
+      const rMax = DOT * 0.62;
+      for (let r = 0; r < tRows; r++) {
+        for (let c = 0; c < tCols; c++) {
           const v = lum[(r * tCols + c) * 4] / 255;
           /* Background first. The offscreen buffer is cleared to opaque black,
-          so v = 0 means "nothing drawn here" â and it has to be rejected
-          BEFORE the inversion, or empty paper would print as solid ink. */ if (v < 0.04) continue;
-          /* INVERTED. Lit prints faint, shadowed prints dense. */ const gi = Math.min(RAMP.length - 1, Math.max(1, Math.round((1 - v) * (RAMP.length - 1))));
-          tctx.drawImage(atlas, gi * AW, 0, AW, AH, c * CELL_W, r * CELL_H, CELL_W, CELL_H);
+             so v = 0 means "nothing drawn here", and it has to be rejected
+             BEFORE the inversion or empty paper would print as solid ink. */
+          if (v < 0.04) continue;
+          const cov = 1 - v;
+          const th = BAYER[(r & 7) * 8 + (c & 7)];
+          /* The light end. Without this, coverage below one dot's worth
+             quantises into rows of identical specks and the grid shows. */
+          if (cov < th * 0.16) continue;
+          /* AREA carries tone, so the radius goes as the square root. Linear
+             radius sags every midtone, because half the radius is a quarter
+             of the ink. */
+          const rad = rMax * Math.sqrt(Math.min(1, cov));
+          if (rad < 0.22) continue;
+          tctx.beginPath();
+          tctx.arc(c * CELL_W + CELL_W / 2, r * CELL_H + CELL_H / 2, rad, 0, Math.PI * 2);
+          tctx.fill();
         }
       }
-      /*
-      * Tint every glyph to the page's current ink in one pass.
-      *
-      * `source-in` keeps the alpha already on the canvas and replaces its
-      * colour, so one fill recolours the whole plate. That is what lets the
-      * atlas stay a single white-on-transparent sheet while the section
-      * palette moves underneath: no atlas rebuild, no per-cell fillStyle.
-      *
-      * The computed read is once per rendered frame, and this loop is gated
-      * to 30fps and already does a getImageData, so it is not the expensive
-      * thing here by some distance.
-      */ const inkNow = ink;
-      tctx.save();
-      tctx.globalCompositeOperation = "source-in";
-      tctx.fillStyle = inkNow;
-      tctx.fillRect(0, 0, tW, tH);
-      tctx.restore();
     }
 
     function render(now: number) {

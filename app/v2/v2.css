@@ -1954,11 +1954,12 @@ html[data-v2-theme='dark']  body { background: #15130E; }
   .v2-reel { grid-template-columns: 1fr; grid-template-areas: 'stage' 'panel' 'controls'; }
 }
 
+/* No plate and no border. Jack: "remove the background". The object is
+   screened onto the section's own world now, which is the whole reason the
+   halftone is a halftone: dots on the page rather than a picture in a box. */
 .v2-reel-stage {
   grid-area: stage;
   position: relative;
-  background: var(--paper-2);
-  border: 1px solid var(--rule);
   overflow: hidden;
 }
 .v2-reel-stage canvas {
@@ -1971,7 +1972,9 @@ html[data-v2-theme='dark']  body { background: #15130E; }
      section palette. It is not inherited by accident: the tint pass does
      getComputedStyle(canvas).color once a frame. */
   color: var(--ink);
-  image-rendering: pixelated;
+  /* The halftone draws round dots with real antialiasing. `pixelated` was
+     right for a glyph atlas being blitted at integer sizes and is wrong for an
+     arc: it put a staircase on every dot. */
 }
 
 .v2-reel-panel { grid-area: panel; }
@@ -4712,11 +4715,21 @@ html[data-v2-palette] body { background: var(--paper); }
    because the component reads it to pick its ink, the same trick the project
    reel uses to follow the section palette.
    ========================================================================== */
+/* ==========================================================================
+   the constellation
+
+   Jack: "remove the white background and make it fit into the middle of the
+   background where there is nothing."
+
+   So there is no plate here. The sky is transparent and what you see behind
+   the stars is the section's own world, which is the right answer twice over:
+   this was the one component on the page drawing its own paper over a backdrop
+   that was already a sky, and the world behind this plate has a clear middle
+   that the sphere now sits in.
+   ========================================================================== */
 .v2-const-sky {
   position: relative;
-  background: var(--paper-2);
-  border: 1px solid var(--rule);
-  overflow: hidden;
+  overflow: visible;
 }
 .v2-const-sky canvas {
   position: absolute;
@@ -4725,6 +4738,7 @@ html[data-v2-palette] body { background: var(--paper); }
   width: 100%;
   height: 100%;
   color: var(--ink);
+  touch-action: pan-y;   /* a vertical drag still scrolls the page */
 }
 .v2-const-key {
   position: absolute;
@@ -4734,61 +4748,76 @@ html[data-v2-palette] body { background: var(--paper); }
   margin: 0;
   font-family: var(--f-mono);
   font-size: 11.5px;
-  letter-spacing: 0.06em;
+  line-height: 1.5;
   color: var(--ink-3);
-  pointer-events: none;
 }
 
-.v2-const-list {
-  list-style: none;
+/* ---- the rail -----------------------------------------------------------
+   One list rendered twice and translated by the component's own loop. The
+   wrap happens at exactly one copy's width, so it is seamless and no node is
+   ever added or removed. The mask is what stops a card from appearing to be
+   sliced off by the edge of the column.
+   ------------------------------------------------------------------------ */
+.v2-const-rail {
   margin: clamp(14px, 2vw, 20px) 0 0;
-  padding: 0;
+  overflow: hidden;
   border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  padding: 12px 0;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 5%, #000 95%, transparent);
+  mask-image: linear-gradient(to right, transparent, #000 5%, #000 95%, transparent);
 }
-.v2-const-list li { border-bottom: 1px solid var(--rule); }
-.v2-const-list button {
-  display: grid;
-  grid-template-columns: minmax(0, 13rem) 3rem minmax(0, 1fr);
-  gap: 4px 14px;
+.v2-const-rail-in {
+  display: flex;
+  gap: 10px;
+  width: max-content;
+  will-change: transform;
+}
+.v2-const-card {
+  display: flex;
   align-items: baseline;
-  width: 100%;
-  padding: 10px 0;
-  text-align: left;
+  gap: 10px;
+  flex: 0 0 auto;
+  padding: 9px 14px;
+  border: 1px solid var(--rule-firm);
   background: transparent;
-  border: 0;
+  text-align: left;
   cursor: pointer;
-  color: inherit;
+  transition: border-color 200ms var(--ease), background 200ms var(--ease);
 }
-.v2-const-list button:focus-visible {
-  outline: 2px solid var(--verm-text);
-  outline-offset: -2px;
-}
-.v2-const-list b {
+.v2-const-card b {
   font-family: var(--f-read);
-  font-size: clamp(14.5px, 1.4vw, 16px);
+  font-size: clamp(13.5px, 1.3vw, 15px);
   font-weight: 600;
   color: var(--ink);
+  white-space: nowrap;
 }
-.v2-const-list i {
+.v2-const-card i {
   font-style: normal;
   font-family: var(--f-mono);
   font-size: 11.5px;
   letter-spacing: 0.1em;
-  color: var(--verm-text);
+  color: var(--ink-3);
   font-variant-numeric: tabular-nums;
 }
-.v2-const-list span {
-  font-family: var(--f-mono);
-  font-size: 11.5px;
-  line-height: 1.6;
-  color: var(--ink-3);
+.v2-const-card.is-on {
+  border-color: var(--verm-text);
+  background: var(--paper-2);
 }
-.v2-const-list li.is-on b { color: var(--verm-text); }
-.v2-const-list li.is-on span { color: var(--ink-2); }
+.v2-const-card.is-on b { color: var(--verm-text); }
+.v2-const-card.is-on i { color: var(--verm-text); }
+.v2-const-card:focus-visible {
+  outline: 2px solid var(--verm-text);
+  outline-offset: 2px;
+}
+/* The echo copy is decoration: same pixels, no pointer, no tab stop. */
+.v2-const-card.is-echo { pointer-events: none; }
 
-@media (max-width: 700px) {
-  .v2-const-list button { grid-template-columns: minmax(0, 1fr) 3rem; }
-  .v2-const-list span { grid-column: 1 / -1; }
+@media (prefers-reduced-motion: reduce) {
+  /* The loop never starts, so the rail never moves. Centre it instead of
+     leaving the reader looking at the left third of a list. */
+  .v2-const-rail-in { transform: none !important; flex-wrap: wrap; width: 100%; }
+  .v2-const-card.is-echo { display: none; }
 }
 
 /* ==========================================================================
@@ -4802,23 +4831,46 @@ html[data-v2-palette] body { background: var(--paper); }
    would be paid on every pass. They are inert — pointer-events off, aria
    hidden — and the arrows on top are the only things you can hit.
    ========================================================================== */
+/*
+   THE NEIGHBOURS, ACTUALLY ON EITHER SIDE.
+
+   Jack: "the project models are meant to be on either side." They were, and
+   you could not see them. Three things at once: they sat at left: -13% inside
+   an overflow: hidden stage, so a quarter of each was clipped away by the box;
+   they were at 30% opacity; and they carried a 2.5px blur. What reached the
+   reader was a smudge at the edge of the frame rather than the next project.
+
+   Inside the box now, legible, and only softened enough to stay behind the
+   centre plate rather than competing with it.
+*/
 .v2-reel-side {
   position: absolute;
   top: 50%;
-  width: 46%;
-  height: 74%;
-  transform: translateY(-50%) scale(0.86);
-  opacity: 0.3;
-  filter: blur(2.5px);
+  width: 31%;
+  height: 62%;
+  transform: translateY(-50%);
+  opacity: 0.5;
+  filter: blur(0.7px);
   pointer-events: none;
   color: var(--ink);
   z-index: 0;
 }
-.v2-reel-side.is-prev { left: -13%; transform-origin: right center; }
-.v2-reel-side.is-next { right: -13%; transform-origin: left center; }
+.v2-reel-side.is-prev { left: 0; }
+.v2-reel-side.is-next { right: 0; }
 
-/* The centre plate sits above them and is the only sharp thing on the stage. */
-.v2-reel-main { z-index: 1; }
+/* The centre plate sits above them and is the only sharp thing on the stage.
+   It is inset so the object cannot grow over its own neighbours: the model is
+   drawn to the short edge of its canvas, so a full-bleed canvas on a wide
+   stage put the centre object straight through both sides. */
+/* `.v2-reel-stage .v2-reel-main` rather than `.v2-reel-main`: the base rule
+   above is `.v2-reel-stage canvas`, which is one class and one type, so a
+   bare class here loses the specificity contest and `width: 100%` survives. */
+.v2-reel-stage .v2-reel-main {
+  z-index: 1;
+  left: 21%;
+  right: 21%;
+  width: auto;
+}
 
 @media (max-width: 700px) {
   /* Two blurred plates crowding a narrow stage read as smudges rather than as
