@@ -251,6 +251,15 @@ float vnoise(vec2 p){
              mix(hash21(i + vec2(0,1)), hash21(i + vec2(1,1)), f.x), f.y);
 }
 
+/* The 8x8 ordered matrix, built from three nested 2x2s rather than sampled
+   from a texture. 64 distinct values over 0 .. 63/64, mean 0.4921875 — all
+   three MEASURED rather than assumed, because the first version of this was
+   centred on 0.46875 from memory and that is the mean of a different matrix.
+   See the threshold below for why a sixteenth of a level matters here. */
+float bayer2(vec2 a){ a = floor(a); return fract(a.x * 0.5 + a.y * a.y * 0.75); }
+float bayer4(vec2 a){ return bayer2(a * 0.5) * 0.25 + bayer2(a); }
+float bayer8(vec2 a){ return bayer4(a * 0.5) * 0.25 + bayer2(a); }
+
 void main(){
   vec2 d0 = texture(uDye, vUv).rg;
 
@@ -293,7 +302,43 @@ void main(){
   float calm = ${CALM_FLOOR.toFixed(2)} + ${(1 - CALM_FLOOR).toFixed(2)} * (d2 * d2 * (3.0 - 2.0 * d2));
 
   float a = (1.0 - exp(-total * ${INK_GAIN.toFixed(2)})) * uCeiling * calm;
-  outColor = vec4(mix(paper, pig, a), uIntensity);
+
+  /* ------------------------------------------------------------------------
+     THE THIRD PASS: it is PRINTED now.
+
+     Jack, twice: "still kind of ugly, but closer". Both earlier passes were
+     attempts to make a smooth continuous wash look better, and a smooth grey
+     wash on paper has nowhere to go — it is either too faint to see or it is
+     mud. So this one changes the MATERIAL rather than the amount. The pigment
+     is quantised onto four levels through an ordered dither, which is what a
+     wash looks like when it has been reproduced rather than painted: bare
+     stock, two screens, and solid.
+
+     ORDERED, NOT ATKINSON, and that is not a compromise. Error diffusion is
+     the better quantiser for a still, which is why the polaroids use it; on
+     something that MOVES it is the worse one, because the error propagates
+     from a different starting point every frame and the whole pattern boils.
+     An ordered matrix is fixed in screen space, so the grain sits still while
+     the ink moves through it — which is also the honest thing, since the grain
+     belongs to the printing and not to the wash.
+
+     Anchored to uGrain, so the dot pitch is in CSS pixels and the screen is
+     the same screen on a retina display as on a cheap panel — the same rule
+     the washi fibre above follows.
+
+     THE CENTRE IS 0.4921875 AND IT IS LOAD-BEARING. The threshold must never
+     be able to lift bare paper off level zero, or every quiet part of the
+     frame — which is most of it, by design — speckles. Centred on the matrix's
+     true mean the excursion is +/-0.16406 against a first-level boundary of
+     0.16667, so paper stays paper and solid stays solid, with a sixteenth of a
+     level to spare. Centred on 0.46875, which is what this said before the
+     numbers were actually measured, the excursion is +0.1719 and one texel in
+     sixty-four of empty paper prints a dot.
+     ---------------------------------------------------------------------- */
+  const float LEVELS = 4.0;
+  float th = (bayer8(vUv * uGrain * 0.5) - 0.4921875) / (LEVELS - 1.0);
+  float aq = floor(clamp(a + th, 0.0, 1.0) * (LEVELS - 1.0) + 0.5) / (LEVELS - 1.0);
+  outColor = vec4(mix(paper, pig, aq), uIntensity);
 }`;
 
 /* -------------------------------------------------------------------------- */
