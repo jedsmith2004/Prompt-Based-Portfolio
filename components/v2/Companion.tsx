@@ -724,6 +724,34 @@ const BAND_MARGIN = 0.2;
  */
 const OFF_SCREEN_MARGIN = 60;
 const OFF_SCREEN_SUSTAIN = 260;
+
+/**
+ * How long a transit takes, as a multiple of what the animation asks for.
+ *
+ * > "The going down animations are too slow and the going up animations are
+ * > too fast."
+ *
+ * `down` shortens the scripted descents — skydive 2970ms to 1840, crash 1950
+ * to 1210, rope 1820 to 1130 — and the same figure speeds their playback so
+ * the frames still land with the travel. `up` is the other way: it stretches
+ * the looping flap and the balloon out, because an ascent's SPEED comes from
+ * the convergence below rather than from its animation.
+ */
+const TRANSIT_TIME = { up: 1.4, down: 0.62 };
+/** Ceiling on a transit's own vertical speed, px/s, per direction. */
+const TRANSIT_CAP_VY = { up: 1100, down: 1500 };
+/**
+ * How hard it converges on its comfortable screen height, per direction.
+ *
+ * Both were 7 against a 2200px/s cap, which spent the travel in the first
+ * quarter of the flight and left him hovering for the rest of it. The point of
+ * a flight is the travel, so the numbers are chosen to make the descent or the
+ * climb last roughly half the minimum flight time and the hover the other
+ * half — long enough to read as arriving rather than as stopping dead.
+ */
+const TRANSIT_CONVERGE = { up: 2.6, down: 4.5 };
+/** No looping transit lands sooner than this, whatever its cycle length. */
+const TRANSIT_MIN_MS = 900;
 /** How far in from the viewport edge a wall kick happens. */
 const WALL_INSET = 26;
 /** One body width, in document px. The pace every walk translates at. */
@@ -1722,6 +1750,8 @@ export default function Companion({
       held: 0,
       /* 0 for the looping ones: they run until the scroll settles. */
       dur: 0,
+      /* ...but never before this, so a looping animation gets to play. */
+      minMs: 0,
       sy0: 0,
       sy1: 0,
       props: EMPTY_PROPS
@@ -3520,13 +3550,32 @@ export default function Companion({
         /* The scripted descents carry a payoff. Give them exactly the travel
            time their own duration asks for or the punchline lands somewhere
            the reader is not looking. */
-        transit.dur = animDuration(anim);
+        transit.dur = animDuration(anim) * TRANSIT_TIME.down;
         /* Coming down: aim at something underneath him. Going up: the old
            picker, which wants whatever is nearest the middle of the screen. */
         const p = up ? pickBandPerch(0.9) : pickDescentPerch(0.9);
         transit.sy1 = p ? p.y - window.scrollY : H * 0.62;
         transit.sy1 = Math.max(H * 0.24, Math.min(H * 0.82, transit.sy1));
       }
+      /*
+       * A LOOPING TRANSIT MAY NOT LAND BEFORE IT HAS PLAYED.
+       *
+       * Measured, and it was the worst thing wrong with the transits: the loop
+       * branch exits at the first frame past 380ms where the scroll has
+       * settled, so on a static page EVERY looping transit lasted 383ms.
+       * `upBalloon` is two full seconds of authored animation and the reader
+       * saw a fifth of it. The rare transits are supposed to be the easter
+       * eggs and they were the ones being cut shortest, because the rarer ones
+       * are the slower ones.
+       *
+       * The floor is one whole cycle at the direction's own pace, or 900ms,
+       * whichever is longer — 900 because `upFlap` is a 270ms cycle and one
+       * flap is not a flight. He tracks the viewport throughout, so holding
+       * him up there costs the reader nothing.
+       */
+      transit.minMs = anim.loop
+        ? Math.max(TRANSIT_MIN_MS, animDuration(anim) * TRANSIT_TIME[up ? 'up' : 'down'])
+        : 0;
       bird.perch = null;
       bird.jumpAnim = null;
       setMode('transit');
@@ -3582,8 +3631,12 @@ export default function Companion({
         bird.y += scrollDelta;
         const sy = bird.y - scrollY;
         const wantSy = H * (transit.up ? 0.4 : 0.58);
-        const TRANSIT_MAX_VY = 2200;
-        const wanted = (wantSy - sy) * Math.min(1, dt * 7);
+        /* Per direction. Coming back up used to be capped at 2200px/s with a
+           dt*7 convergence, which crosses most of a viewport in four frames
+           and reads as a jump cut rather than as a bird. */
+        const dir = transit.up ? 'up' : 'down';
+        const TRANSIT_MAX_VY = TRANSIT_CAP_VY[dir];
+        const wanted = (wantSy - sy) * Math.min(1, dt * TRANSIT_CONVERGE[dir]);
         /* Ramp the cap in over the first 180ms so entering a transit is an
            acceleration rather than a step from 3px a frame to 36. */
         const ramp = Math.min(1, transit.t / 180);
@@ -3604,7 +3657,7 @@ export default function Companion({
            inside the band. Exiting on the scroll alone dropped him into a hop
            that the still-moving page immediately undid, which is how he ended
            up a thousand pixels above the viewport playing catch-up forever. */
-        if (transit.t > 380 && Math.abs(vel) < 12 && bandUrgency() < 0.25) {
+        if (transit.t > transit.minMs && Math.abs(vel) < 12 && bandUrgency() < 0.25) {
           /* Land only on something worth landing on. Handing him a perch that
              is already off the top of the screen just restarts the chase, and
              one stretch of this page has no perch in view at all — there, the
@@ -3612,7 +3665,8 @@ export default function Companion({
              to sit actually does. */
           const p = transit.up ? pickBandPerch(0.7) : pickDescentPerch(0.7);
           if (p && perchUrgency(p) < 0.3) planTo(p, 0.7, !transit.up);
-          else transit.t = 200; // hold the hover, re-check shortly
+          /* nothing worth landing on: hover a little longer and look again */
+          else transit.t = transit.minMs - 200;
         }
       }
       bird.x = Math.max(scrollX + 40, Math.min(scrollX + W - 40, bird.x));
@@ -3626,7 +3680,25 @@ export default function Companion({
       lastDt = dt;
       bird.clock += dt * 1000;
       bird.modeT += dt;
-      bird.animT += dt * 1000;
+      /*
+       * TRANSIT PACING. Jack, 2026-08-25: "The going down animations are too
+       * slow and the going up animations are too fast."
+       *
+       * He is right and the asymmetry was structural rather than a tuning
+       * slip. A descent is a SCRIPTED animation whose travel is stretched to
+       * fill its own authored length, so `downSkydive` spent 2.97 seconds
+       * covering about 260px of screen. An ascent is a LOOP, so its speed came
+       * entirely from the convergence below, which was capped at 2200px/s and
+       * crossed most of the viewport inside a handful of frames.
+       *
+       * Both ends are fixed where they are actually set: the loop cap and
+       * convergence rate are now per-direction (see updateTransit), and the
+       * scripted descents are shortened by TRANSIT_TIME.down. This line keeps
+       * the ANIMATION in step with the travel — shortening the flight without
+       * it would leave him finishing his parachute frames after he had landed.
+       */
+      bird.animT +=
+        dt * 1000 * (bird.mode === 'transit' ? 1 / TRANSIT_TIME[transit.up ? 'up' : 'down'] : 1);
 
       trackScroll(dt);
       /* velocityRef is px/frame; scrollVel is px/sec. Compare like for like
