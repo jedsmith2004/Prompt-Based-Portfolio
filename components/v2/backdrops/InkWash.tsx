@@ -443,6 +443,47 @@ function probeWebGL2(): boolean {
         ok = g.checkFramebufferStatus(g.FRAMEBUFFER) === g.FRAMEBUFFER_COMPLETE;
       }
     }
+
+    /*
+     * AND THE SHADERS, HERE, WHILE THE ANSWER IS STILL ACTIONABLE.
+     *
+     * A float-capable context is not the same as one that will compile this
+     * pipeline. If a program fails to link on the REAL canvas, that canvas has
+     * already been handed a GL context — and a canvas gets one context type for
+     * its whole life, so the 2D composition below can never be reached. What a
+     * reader gets is a blank rectangle, and nothing in the code can tell that
+     * apart from working. That is exactly what happened to the Fluid world, for
+     * days, and the only reason it was ever caught is that Jack said so.
+     *
+     * The same driver compiling the same GLSL will give the same answer, so ask
+     * it on the node that is about to be thrown away. Two programs are enough:
+     * the display pass, which is by far the largest, and the pressure pass,
+     * which is the one with the loop.
+     */
+    if (ok) {
+      const test = (fs: string): boolean => {
+        const v = g.createShader(g.VERTEX_SHADER);
+        const f = g.createShader(g.FRAGMENT_SHADER);
+        const p = g.createProgram();
+        let good = false;
+        if (v && f && p) {
+          g.shaderSource(v, BASE_VS);
+          g.compileShader(v);
+          g.shaderSource(f, fs);
+          g.compileShader(f);
+          g.attachShader(p, v);
+          g.attachShader(p, f);
+          g.linkProgram(p);
+          good = !!g.getProgramParameter(p, g.LINK_STATUS);
+        }
+        if (v) g.deleteShader(v);
+        if (f) g.deleteShader(f);
+        if (p) g.deleteProgram(p);
+        return good;
+      };
+      ok = test(DISPLAY_FS) && test(PRESSURE_FS);
+    }
+
     /* Safe here and nowhere else: this canvas is garbage the moment we return. */
     const lose = g.getExtension('WEBGL_lose_context');
     if (lose) lose.loseContext();
@@ -814,6 +855,22 @@ export default function InkWash({
     const uShAccent2 = loc(pShow, 'uAccent2');
 
     let ok = !!(pAdvect && pDiv && pPress && pGrad && pSplat && pShow && vao && quad);
+
+    /*
+     * The probe above should have caught this, so reaching here means something
+     * the probe cannot see went wrong — a resource limit, a lost context, a
+     * driver that links two programs and refuses the third. There is no 2D
+     * escape left at this point, because the canvas is GL-bound. The least we
+     * can do is refuse to be invisible about it: an attribute in the DOM, and
+     * one line in dev. A world that draws nothing and reports nothing is
+     * indistinguishable from a world that is broken.
+     */
+    if (!ok) {
+      cv.setAttribute('data-world-failed', 'inkwash');
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('[InkWash] pipeline unavailable after the probe passed; canvas left blank');
+      }
+    }
 
     if (ok) {
       gl.bindVertexArray(vao);

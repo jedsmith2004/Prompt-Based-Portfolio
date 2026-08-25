@@ -123,6 +123,20 @@
     };
   };
 
+  /*
+   * NEVER CALL getContext('webgl2') TO ASK WHETHER A CANVAS IS WebGL.
+   *
+   * It CREATES one on any canvas that has no context yet, so the question
+   * changes the answer — and worse, it burns a slot from the browser's 8-16
+   * live-context budget, which is the pool this project has already been bitten
+   * by. Counting "GL canvases" that way on /v2 reported three when the true
+   * answer is one.
+   *
+   * The non-destructive test is the other way round: getContext('2d') returns
+   * null on a GL-bound canvas, and creating a 2D context on an unused canvas
+   * costs nothing. That is what ctx2d above does.
+   */
+
   /** Every canvas on the page, with whichever dev handle it carries. */
   P.canvases = function () {
     return [].slice.call(document.querySelectorAll('canvas')).map(function (c, i) {

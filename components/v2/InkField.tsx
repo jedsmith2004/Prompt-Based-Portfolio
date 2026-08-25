@@ -296,7 +296,35 @@ function supportsFloatTargets(): boolean {
     probe.height = 2;
     const g = probe.getContext('webgl2');
     if (!g) return false;
-    const ok = !!g.getExtension('EXT_color_buffer_float');
+    let ok = !!g.getExtension('EXT_color_buffer_float');
+
+    /*
+     * AND THE SHADERS THEMSELVES, HERE, ON THE THROWAWAY.
+     *
+     * The extension check alone leaves one hole, and it is the hole the Fluid
+     * world fell through for days: if the context comes back but a program
+     * fails to LINK, the real canvas has already been handed a GL context — and
+     * a canvas gets one context type for its whole life, so the 2D fallback
+     * below can never be reached. What a reader sees is nothing at all, and
+     * nothing in the code can tell that apart from working correctly.
+     *
+     * A program that links here will link there: it is the same driver
+     * compiling the same GLSL. So the question is asked on a node we are about
+     * to throw away, where the answer is still actionable.
+     *
+     * The cost is three compile-and-links at startup, once, off the critical
+     * path. Against a blank hero on hardware nobody tested, that is nothing.
+     */
+    if (ok) {
+      const a = link(g, QUAD_VS, SIM_FS);
+      const b = link(g, DEPOSIT_VS, DEPOSIT_FS);
+      const c = link(g, QUAD_VS, DISPLAY_FS);
+      ok = !!(a && b && c);
+      if (a) g.deleteProgram(a);
+      if (b) g.deleteProgram(b);
+      if (c) g.deleteProgram(c);
+    }
+
     // the probe node is discarded, so losing its context is safe and frees a slot
     g.getExtension('WEBGL_lose_context')?.loseContext();
     return ok;
