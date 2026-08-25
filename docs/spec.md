@@ -27,29 +27,46 @@ Everything on the page should be evidence for one of those two halves. He wrote
 a software rasterizer before importing a renderer; he wrote the SVM before
 importing sklearn; he built a peer-review platform for AI agents and founded the
 company around it. And he hitchhiked Croatia to the Sahara, boulders in the Peak,
-trains judo, plays guitar to Grade 8, is eighteen months into Arabic.
+trains judo, plays guitar to Grade 8, is 677 days into Arabic and counting.
 
 The corollary that governs the build: **the page demonstrates rather than
 claims.** The backdrops are real simulations, the classifier is a real trained
 network, the route is the real coordinates. Nothing is a picture of the thing.
 
-> **Open question, raised by Jack 2026-08-25:** *"There is no clear story
-> throughout, think about the layout and what we are trying to say."* The six
-> sections below are ordered by subject, not by argument. Rework tracked as
-> **P0-STORY** in the plan.
+> **Raised by Jack 2026-08-25:** *"There is no clear story throughout, think
+> about the layout and what we are trying to say."* Resolved as **P0-STORY**:
+> the eight plates below are ordered as an argument, not as a subject index,
+> and each eyebrow is the instruction the plate is evidence for.
 
 ## 3. Structure
 
-| # | id | Plate | Interactive piece | World |
-|---|----|-------|-------------------|-------|
-| — | `top` | Hero | InkField (gritstone ridgeline) | — |
-| 01 | `from-scratch` | Write the pipeline, then import one | NeuralPlayground (real 784-64-10 MLP) | Geometry |
-| 02 | `models` | Models that run on the machine in front of you | SkillConstellation | Techno |
-| 03 | `delivery` | Shipped, handed over, still running | HighlightReel + CareerLine | Fluid |
-| 04 | `road` | Croatia to the Sahara, thumb out | RouteMap (films as a polaroid stack) + Polaroids | Scrapbook (thread stood down) |
-| 05 | `practice` | Falling is part of the method | ClimbingWall (ASCII) | Topography |
-| 07 | `cv` | Two pages, and a version that fits on one | CurriculumVitae | Topography |
-| 08 | `contact` | Bring me the hard part | AwardsReach | Celestial |
+| # | id | Plate | Interactive piece | World | Settles | Via |
+|---|----|-------|-------------------|-------|---------|-----|
+| — | `top` | Hero | InkField (gritstone ridgeline) | **none** | light | — |
+| 01 | `from-scratch` | Write the pipeline, then import one | NeuralPlayground (real 784-64-10 MLP) | Geometry | **dark** | switch |
+| 02 | `models` | Nothing leaves the machine | SkillConstellation (3D) | Techno | dark | — |
+| 03 | `recensorium` | An agent never picks what it reviews | HighlightReel (halftone) | Watercolour | **light** | switch |
+| 04 | `delivery` | Shipped, handed over, still running | CareerLine | **Braid** | light | — |
+| 05 | `road` | Croatia to the Sahara, thumb out | RouteMap + Polaroids | Scrapbook | light | — |
+| 06 | `practice` | Falling is part of the method | ClimbingWall | Topography | **dark** | dial |
+| 07 | `cv` | Two pages, and a version that fits on one | CurriculumVitae + AwardsClippings | Ink wash | dark | — |
+| 08 | `contact` | Bring me the hard part | none | Celestial | dark | — |
+
+**Nine palettes, eight worlds, no world used twice.** `top` deliberately has no
+world at all: the hero is the one place the ink field is the subject, and per
+Jack, *"the mathematics one should be removed from the hero page but put on the
+first page, these need to be separate."* Geometry sits on 01 and the hero stands
+alone.
+
+**Particles are on `top` and `contact` only.** *"I like the particles but I don't
+think we should have them on every page, I think the hero and the contact page
+only."* On the middle seven the field was a full-viewport particle simulation
+running underneath the world that was supposed to be the subject, so the page
+was paying twice to be harder to read.
+
+**World intensities are 0.82-0.95**, up from roughly half that, and that is a
+direct consequence of the line above: with the field gone there is room for the
+world to be the subject rather than a texture behind one.
 
 Plus `/v2/projects` — a fifteen-object **ProjectCase** over the filtered
 chronological index — and four benches: `/v2/backdrops` (keys 1-8), `/v2/awards`
@@ -62,7 +79,24 @@ one* and belongs on the spine. Same pipeline, same grain, opposite questions.
 
 Plate titles are **kinetic**: word by word, 55ms apart, from behind the line.
 
-The CV plate is **07 / DO NOT PAD IT** and the close moved to 08. Eight plates.
+The CV plate is **07 / DO NOT PAD IT** and the close is 08. Eight plates and a
+hero.
+
+### The light run
+
+The site starts light, goes dark at 01, comes back at 03, and goes dark again at
+06 for the rest of the page. Two of the three changes are **events with a device
+attached**, and which device is not arbitrary: 01 and 03 are plates about
+building things at a desk, so they get a switch on a wall; 06 is the plate about
+being outside on rock, so it gets the sun going down. **Indoors you flip a
+switch, outdoors you wait.** The other changes ride the ordinary 940ms palette
+move.
+
+`useMode` owns the run. A device is handed the wind-up, reports back, and the
+palette commits when the device says so — not on a timer. It abandons the event
+if the reader turns around mid-flight, commits immediately under reduced motion
+or on a hidden tab, and carries a 5.2s watchdog, because a page stuck in the
+form it does not settle in is worse than a hard cut.
 
 ## 4. The companion
 
@@ -75,8 +109,17 @@ legFront wing head hat eye beak`) each with a variant vocabulary, composited in
 `DRAW_ORDER`. Keyframes interpolate positions and **snap** variant swaps.
 
 - 55 perch surfaces, 5 chat perches, 11 transits, dozens of idles.
-- **He needs a name.** Seven candidates in [ab-log.md](ab-log.md) AB-12, `Pip`
-  recommended. Tracked as **P1-NAME**.
+- **His name is Pip**, decided by Jack on 2026-08-26 (AB-12). The sound a
+  sparrow makes, the seed a thing grows from, and the way every dependency on
+  this machine arrives. He is not introduced anywhere on the page yet.
+
+**Errands.** The page can ask him to go and stand on something: it names a
+selector and is told when he is on it, and that is the entire contract. The
+light switch is the only caller so far. Three of his own drives are gated while
+an errand runs, because the cord hangs from the top edge and the top edge is the
+worst place he can stand by every measure the comfort band uses — ungated, he
+touched the cord and left inside a tenth of a second. Every errand has a
+deadline and every caller has to survive him not coming.
 
 **He is drawn on TWO canvases, and the split is the whole point.**
 
@@ -120,25 +163,63 @@ correct static frame; pause on `document.hidden` and off-screen; DPR capped at 2
 palette colours handed in, never hardcode a colour, multiply final alpha by
 `intensity`, visibility flag starts TRUE.
 
-**Per-section palettes are live.** Seven, one per plate, in
-`lib/v2/palettes.ts`. Every token is registered with `@property` as a `<color>`
-so the browser interpolates it: a palette change is a 940ms move, not a cut.
-The last plate (`contact`) is fully inverted, light on dark.
+**Per-plate palettes are live, and every plate is authored TWICE.**
+`lib/v2/palettes.ts` holds nine `Plate`s, each carrying a full `light` and a
+full `dark` `SectionPalette`, the `mode` it settles in, and the `via` device
+that gets it there. This is not a theme toggle: for the length of a wind-up the
+page is deliberately rendering a plate in the form it does *not* settle in,
+which is the only way the switch and the dial can be events rather than fades.
+
+Every token is registered with `@property` as a `<color>` so the browser
+interpolates it: a palette change is a 940ms move, not a cut.
+
+**The rules are palette tokens, not constants.** `--rule`, `--rule-firm` and
+`--rule-hard` were fixed `rgba()` on `:root`, built once from the light ink and
+never part of the system — 47 uses, including the 2px line under every plate
+eyebrow. Five of the nine plates settle dark, and all five drew that line in
+near-black on near-black. Anything that is a line rather than text belongs in
+the palette for the same reason the text does.
 
 Every value is contrast-checked **by construction** — generated by a script
 that nudges any failing token along its own ramp until it clears the bar, so a
-palette cannot ship a token that fails. Verified live across all seven
-palettes: zero failures over 370 text-bearing elements each, inverted plate
-included.
+palette cannot ship a token that fails. Verified live: **zero failures across
+nine plates in both forms**, 387 text-bearing elements each.
+
+**There is exactly one colour parser: `lib/v2/colour.ts`.** It accepts every
+form the platform can hand back — `#rgb`, `#rrggbb`, `rgb()`, `rgba()` and
+`color(srgb r g b / a)` — and it returns `null` on failure rather than a colour,
+so a caller has to decide what to do about it. This exists because three
+components each carried a private hex reader that fell back to near-black, and
+the tokens stopped being hex the day the palette was registered with
+`@property`: a registered custom property has a **computed** value, so
+`getComputedStyle(root).getPropertyValue('--verm')` returns `rgb(181, 64, 47)`.
+Every accent on three plates silently became ink and stayed that way until Jack
+said so. **A `replace('#', '')` in a component is a regression of this.**
 
 ## 6. Performance budget
 
 - **At most two backdrop worlds mounted** — the live one plus the one fading
   out. Browsers cap live WebGL contexts at roughly 8-16, and six loops at once
   would also starve the ink field, the companion and the reel.
+- **The handover is sequential, not simultaneous.** Out fast, a beat of clear
+  paper, then in — 340ms each way. A simultaneous crossfade spends its whole
+  duration showing an average of two dense generative worlds, which is a third
+  image nobody designed; going sequential also halves the window in which two
+  full-viewport loops are both running.
+- **Nothing reads a layout-dependent property per frame.** `scrollHeight` and
+  `getBoundingClientRect()` both force the browser to flush pending style and
+  layout before they can answer. That is nearly free on a static page and it is
+  not free here, because the palette transition dirties style across the whole
+  tree for 940ms after every plate change — so the cost landed precisely while
+  the reader was scrolling between sections, which is exactly when it would be
+  felt. Both are observed with a `ResizeObserver` now instead of polled.
+- **`InkField` parks its loop rather than unmounting** when a plate does not
+  want particles, and parks it *after* the fade rather than during it, so the
+  last thing on screen is a field dispersing and not a still frame dissolving.
 - **One backdrop still owns a GL context**, down from three: InkWash. `InkField`
   owns the other. Fluid was moved to CPU after its GL path was found to fail
-  silently — see section 8, and P2-FALLBACK in the plan.
+  silently, and has since been retired entirely — Braid stands on `delivery` in
+  its place and is canvas-2D. See section 8, and P2-FALLBACK in the plan.
 - The reel and both cases **stop their loops at rest**, and the case gates to
   30fps. Objects past the case's depth of field are skipped, not drawn faint.
 - Crossfade is CSS opacity, never a per-frame React render.
@@ -216,10 +297,15 @@ a GL context returns `null` from `getContext('2d')`, and reading a GL canvas
 back after compositing returns garbage anyway.
 
 **A dev handle on every canvas.** `__bird`, `__reel`, `__case`, `__inkfield`,
-and now `__world.frames(n)` on all eight backdrops. Without one there is no way
-to drive a single frame in a pane that never fires rAF — which is exactly how
-the Fluid world came to be shipped completely invisible, for days, with nobody
-able to tell that apart from it working.
+and `__world.frames(n)` on all eight backdrops. Without one there is no way to
+drive a single frame in a pane that never fires rAF — which is exactly how the
+Fluid world came to be shipped completely invisible, for days, with nobody able
+to tell that apart from it working.
+
+**A world that draws nothing and a world that draws correctly are identical from
+here**, so every new world is read back as text off its own canvas before it is
+called done. Braid, the constellation sphere, the reel's halftone and the route
+map's coastline each were.
 
 **Write the contrast probe correctly, or it will invent failures.** Three
 separate audit bugs have now produced phantom results on this project, and each
@@ -237,14 +323,25 @@ one cost more than the bugs it was looking for. A probe must:
 A failure that appears identically in every palette or every state is almost
 always the probe, not the page. Check that before reporting it.
 
-**Disable CSS transitions before any contrast or computed-style audit.** Because
-the pane never composites, a transition never advances: `getComputedStyle`
+**Call `P.freeze()` before any contrast or computed-style audit.** Because the
+pane never composites, a transition **never advances**: `getComputedStyle`
 returns the frozen mid-flight value indefinitely, so an element reads as
-half-way between its old and new colour forever. This produced two invented
-contrast failures on `/v2/story` — a tab reading dark-on-dark at 2.8:1 and
-another light-on-light at 1.1:1, neither of which existed. Inject
-`*{transition:none!important;animation:none!important}` first, then sweep. Any
-audit run without that guard is suspect, including earlier ones.
+half-way between its old and new colour forever, and removing the class that
+armed the transition does not cancel one already in flight. This produced two
+invented failures on `/v2/story`, and then **135 more** across every dark form,
+all of them `--ink-3` reading as the previous plate's value while the inline
+style on `<html>` plainly said otherwise — which is not something CSS can do.
+There were no failures. There was one stuck transition.
+
+`P.freeze()` injects `*{transition:none!important;animation:none!important}` and
+is now the first line of any audit that reads a colour. Any audit run without it
+is suspect, including earlier ones.
+
+**Three instruments in three days: the `color(srgb)` byte read, the
+`display:none` ancestor, and the stuck transition. The pattern is not that the
+code was broken. The pattern is that the instrument was wrong and the instrument
+was believed.** A failure that appears identically in every palette or every
+state is the probe. Check that before reporting it.
 
 **The rule this produces: verify correctness here, verify appearance with Jack.**
 Offline harnesses that import the real modules and render to PNG are the way to

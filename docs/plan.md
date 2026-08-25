@@ -96,9 +96,26 @@ there. Losing a world's smaller elements to make room for text is fine.
 where the type sits and go quiet there. Losing a world's smaller elements to
 make room for text is explicitly fine.
 
-`[x]` **Transitions between worlds** — done, one alive plus one fading, CSS
-opacity, GL context released on drop. Needs Jack's eye on the fade itself; the
-pane cannot scroll so I could not watch one happen.
+`[x]` **Transitions between worlds** — done, and then re-done. It was a 620ms
+SIMULTANEOUS crossfade, which meant a third of a second of two dense generative
+worlds averaged together into a mixture nobody designed. It is sequential now:
+out fast, a beat of clear paper, then in. That also halves the window in which
+two full-viewport loops are both running.
+
+`[x]` **Every plate is now authored TWICE, light and dark** (2026-08-26), per
+Jack's mode-per-plate note. `Plate` carries `light`, `dark`, the `mode` it
+settles in, and the `via` device that gets it there. This is not a theme toggle:
+for the length of a wind-up the page is deliberately rendering a plate in the
+form it does *not* settle in, which is the only way the switch and the dial can
+be events rather than fades. `SectionPalette` grew `vermDeep`, `blueDeep`,
+`ruleFirm` and `ruleHard`; `PALETTE_VARS` is 16 entries.
+
+`[x]` **The three rules joined the palette.** `--rule`, `--rule-firm` and
+`--rule-hard` were fixed `rgba()` on `:root`, built once from the light ink and
+never part of the system at all — 47 uses, including the 2px line under every
+plate eyebrow. Five of the nine plates now settle dark, and all five would have
+drawn that line in near-black on near-black. This was Jack's *"the dark mode
+here is broken."*
 
 ---
 
@@ -286,14 +303,18 @@ Pacing across the five, fastest to slowest: typing 223ms/frame, incantation 333,
 branch 400, nest 533, meditate 867. That spread is the point — the perch should
 say how settled he is before the animation does.
 
-### P1-NAME — shortlist ready, needs Jack
-`[?]` **Seven candidates in [ab-log.md](ab-log.md) AB-12, `Pip` recommended.**
-The rule was that a name has to mean two things at once: one about a small brown
-bird, one about the work. Anything that only does the first is a pet name and
-anything that only does the second is a variable.
+### P1-NAME — DONE (2026-08-26)
+`[x]` **Pip.** Jack: *"Let's go with Pip."* Seven candidates were put up in
+[ab-log.md](ab-log.md) AB-12 against the rule that a name has to mean two things
+at once: one about a small brown bird, one about the work. Anything that only
+does the first is a pet name; anything that only does the second is a variable.
+`pip` is the sound a sparrow makes, the seed a thing grows from, and the way
+every dependency on this machine arrives.
 
-`[?]` Original note: bring Jack a shortlist with reasoning. He is a sparrow, he is an
-engineer's companion, and the site is an engineering journal.
+`[ ]` **The name is decided and is still not on the page.** He is introduced
+nowhere, so a reader cannot refer to the most memorable thing on the site. One
+line somewhere he can be met is the whole task, and it belongs with
+P2-VOCABULARY rather than on its own.
 
 ---
 
@@ -568,14 +589,29 @@ identical in silhouette, differ only in fill, hotspot ink preserved.
 |---|-------|---------|--------|
 | 1 | Ink wash | *"still kind of ugly, but closer"* | `[x]` **printed, not painted.** Quantised onto four levels through an ordered dither. |
 | 2 | Geometry | *"very cool"* | `[x]` **small elements have their own clock now.** 1.6-5.5% of pixels change per second in every quadrant. |
-| 3 | Fluid | *"can't see anything, it is broken I think"* | `[x]` **fixed twice over:** the GL path could fail silently, and the levels were an order of magnitude under every world he liked. |
+| 3 | ~~Fluid~~, now Braid | *"the meta balls look awful"* (third pass) | `[x]` **retired.** Fixed twice, then cut: it was the wrong *idea*, not a botched execution. Braid stands on `road` in its place. |
 | 4 | Watercolour | *"beautiful"* | `[x]` **ages continuously now**, tied to painting rather than to time, so it reaches an equilibrium. |
 | 5 | Techno | *"good, what page?"* | `[~]` live on `models` |
 | 6 | Scrapbook | *"good"* | `[~]` → P1-SCRAPBOOK, resolved |
-| 7 | Topography | *"good, what page?"* | `[~]` live on `practice` and `cv` |
+| 7 | Topography | *"good, what page?"* | `[~]` live on `practice` only. `cv` took the ink wash, so no world runs twice |
 | 8 | Celestial | *"good, what page?"* | `[~]` live on `contact` |
+| 9 | Braid | new, 2026-08-26 | `[x]` six strands woven by a painter's sort one column wide; replaces Fluid on `road` |
 
-### P2-FLUID — DONE (2026-08-26)
+### P2-FLUID — DONE, then SUPERSEDED (2026-08-26)
+
+`[x]` **Cut on Jack's third pass:** *"the meta balls look awful, either replace
+it with some other creative effect or go look up other people's
+implementations."* He is right, and the honest post-mortem is that everything
+below fixed the execution of an idea that should never have been on that plate.
+A metaball field is a good demo of an implicit surface and it said nothing about
+the four roles and a degree that the plate is *about*. **Braid** replaces it:
+strands that cross, pass over and under, and never merge, which is what a career
+made of overlapping things looks like and the exact opposite of what metaballs
+do.
+
+Everything below is kept because the two failures it took to find are general,
+and because "the instrumentation said it worked" is the recurring bug on this
+project.
 
 `[x]` **It was invisible, not broken, and in two independent ways.**
 
@@ -669,24 +705,55 @@ and Fluid proved the sharper version of that: a GL path that fails is not slower
 or uglier, it is *absent*, and nothing in the code can tell that apart from
 working.
 
-### P2-TRANSITIONS — our section changes are cuts
-`[~]` **Partly done.** The palette crossfade carries the type colours as well
-as the canvas, at 940ms against the world's 620ms, and the plate titles are
-kinetic rather than a block fade (see P2-KINETIC). What is still a cut is the
-section-to-section reveal itself.
+### P2-TRANSITIONS — DONE (2026-08-26)
+> Jack: *"The backdrops need clean transitions between them."*
 
-`[ ]` The clearest finding of the whole pass: cheap sites cut, award-winners
-move, and transition continuity is what separates the tiers. Our section reveal
-is a single CSS class flip, which is the cut pattern. This is the same problem
-as **P0-PALETTE** — six colour schemes with six abrupt changes would be six
-cuts. The crossfade must carry the type colours, not just the canvas.
+`[x]` **The handover is sequential.** Out fast, a beat of clear paper, then in:
+`FADE_MS` 620 to 340, and the incoming world is not raised until the outgoing
+one is down. The old simultaneous crossfade spent a third of a second showing an
+average of two dense generative worlds, which is a third image nobody designed,
+and a literal source of *"most of the time I can't tell what's going on."* It
+also halves the window in which two full-viewport loops are both running.
 
-### P2-VOCABULARY — we may have too many effects
-`[ ]` Award-winning sites are reported to use a *small* vocabulary of effects
-applied with taste. We have eight worlds, a companion, an ASCII wall, a neural
-playground, polaroids, a 3D reel, a route map and a skills cloud. Worth asking
-Jack which of these are the vocabulary and which are noise. Not a code task — a
-conversation, and probably the second-most valuable one after P0-STORY.
+`[x]` **The type moves with it.** The palette crossfade carries the type colours
+as well as the canvas, at 940ms against the world's 340ms: the backdrop is an
+object being replaced and wants to be quick, the palette is the room's lighting
+and should not move at the same speed. Plate titles arrive word by word rather
+than as a block fade (P2-KINETIC).
+
+`[x]` **And two of them are not transitions at all now, they are events** — the
+light switch on plates 01 and 03, the day dial on plate 06. See P1-DEVICES.
+
+`[x]` Original note: cheap sites cut, award-winners move, and transition
+continuity is what separates the tiers. Our section reveal was a single CSS
+class flip, which is the cut pattern.
+
+### P2-VOCABULARY — ANSWERED, and half acted on (2026-08-26)
+> *"This is good but extremely busy, most of the time I can't tell what's going
+> on... The backdrops should be prominent and the centrepiece, with everything
+> working around them."*
+
+`[x]` **He answered it without being asked, and the answer is that the backdrops
+are the vocabulary.** Everything else works around them. That is a sharper
+answer than the question deserved, because it is structural rather than a list
+of keeps and cuts.
+
+`[x]` **The layer that had to go was the ink field.** Nine plates were running
+four full layers — field, world, type, figure — two of them full-viewport
+canvases competing for the same attention. Particles are on `top` and `contact`
+only now, per *"I think the hero and the contact page only."* On the middle
+seven the page was paying twice to be harder to read.
+
+`[x]` **Opaque card backgrounds off the constellation and the reel**, worlds up
+to 0.82-0.95, ASCII out of the reel. A figure sitting in a white box on top of a
+world is a hole cut in the centrepiece.
+
+`[ ]` **Still open, and this is the real form of the item now: the eight
+interactive figures.** Neural playground, constellation, reel, career line,
+route map, climbing wall, CV, contact. Each is defensible on its own; the
+question is whether eight of them is a vocabulary or an inventory. Do not act on
+this without Jack. It is the one item where cutting something good is the likely
+right answer, and that is his call rather than mine.
 
 ### P2-KINETIC — DONE (2026-08-26)
 `[x]` Each plate title arrives word by word, in reading order, 55ms apart, from
@@ -721,19 +788,73 @@ rediscovered.
 
 ---
 
+## P1 — the mode run and its devices (new, 2026-08-26)
+
+### P1-DEVICES — the change of light is an event
+> *"The transition into dark mode on this page (and number 2) should be the bird
+> flying up to the top of the screen and pulling a light switch."* and, on the
+> climbing plate, *"a small and snappy animation, with it popping up, really
+> quickly rotating, and going away. When you scroll backwards, the opposite
+> animation plays."*
+
+`[x]` **`useMode` is a state machine, not a boolean.** A device is handed the
+wind-up, it reports back, and the palette commits at the moment the device says
+so. It abandons the event if the reader turns around mid-flight, commits
+immediately under reduced motion or on a hidden tab, and carries a 5.2s
+watchdog, because a page stuck in the form it does not settle in is worse than
+a hard cut.
+
+`[x]` **`LightSwitch`** drops a rose out of the top edge, `Companion` flies Pip
+to the grip, his weight takes the cord down, and he is released at the *bottom*
+of the stroke so he falls as it recoils. If he cannot come within 2.4s it pulls
+itself: a light switch that only works when a bird is available is a light
+switch that leaves the page the wrong colour.
+
+`[x]` **`DayDial`**, top corner, about 940ms end to end. Sun dips right, moon
+rises left, ground drawn OVER the orbit so the horizon actually occludes. The
+commit fires at the horizon crossing rather than at the end. Dawn is the same
+sweep with the sign flipped, so scrolling back really is the opposite animation
+and not a second one.
+
+`[x]` **`Companion` learned errands.** The page names a thing to stand on and is
+told when he is on it; that is the entire contract. Three of his drives had to
+be gated while one runs, because the cord hangs from the top edge and the top
+edge is the worst place he can stand by every measure the comfort band uses.
+Ungated, he touched the cord and left inside a tenth of a second.
+
+`[?]` **Not verifiable here, and it is the whole point of the feature:** whether
+the switch reads as *the bird pulling it* rather than as a bird near a rope, and
+whether the dial is snappy or fussy. Both are judgements about timing on a
+composited page. This pane never composites and scroll is a no-op.
+
+### P1-COLOUR — one parser, and only one
+`[x]` **`lib/v2/colour.ts` exists and is the only colour parser in the
+codebase.** Three components each carried a private hex reader whose failure
+path returned near-black; the tokens stopped being hex the day the palette was
+registered with `@property`, because a registered custom property has a
+*computed* value. Every accent on three plates silently became ink. This was
+both *"the orange highlight is no longer orange, it's black"* and *"where have
+the colours gone from it?"*
+
+`[ ]` **The standing rule:** a `replace('#', '')` anywhere in a component is a
+regression of this. Worth a lint rule if it ever happens a third time.
+
+---
+
 ## Immediate next three (2026-08-26)
 
 Everything above that was mine to do is done. What is left needs Jack, or needs
 a decision he has not made yet.
 
-1. **Read the site.** The scroll fix, the descents and the transit pacing are
-   all things that can only be judged by feel, and none of them can be checked
-   in this environment. If the bird still lags, the band is not doing its job
-   and I want to know before anything else is built on top of it.
-2. **AB-12, the name.** Seven candidates, `Pip` recommended. He is the most
-   memorable thing on the site and nobody can talk about him.
-3. **P2-VOCABULARY.** Eight worlds, a companion, an ASCII wall, a neural
-   playground, polaroids, a 3D reel, two cases, a route map and a constellation.
-   The research is blunt that award-winning sites use a SMALL vocabulary applied
-   with taste. Which of these are the vocabulary and which are noise? Not a code
-   task, and probably the most valuable conversation left.
+1. **Read the site, and the two devices and the lag before anything else.**
+   Whether the switch reads as Pip pulling it, whether the dial is snappy,
+   whether the worlds now feel like the centrepiece rather than louder
+   wallpaper, and whether the page still feels laggy now the two forced layouts
+   are out. None of the four can be checked from here, and between them they are
+   most of what this pass was.
+2. **P2-VOCABULARY, in its new form.** The backdrops are the vocabulary; he
+   settled that. The open question is the eight interactive figures on top of
+   them. This is the one place where cutting something good is probably right,
+   which makes it his call.
+3. **Introduce Pip.** He has a name now and there is no line on the page that
+   gives it to a reader.

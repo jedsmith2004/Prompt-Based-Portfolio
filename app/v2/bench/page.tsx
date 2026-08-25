@@ -10,10 +10,16 @@
 
    Deliberately plain. It is a working document for one reader, not a plate.
 
-   UPDATED 2026-08-26, after a night's work. Four of the five things that were
-   here are now DECIDED — by me, provisionally, because Jack said "try and
-   figure most of it out yourself". Every one of those is reversible and the
-   bench it was decided on is still standing, so disagreeing costs a sentence.
+   UPDATED 2026-08-26, second pass. Jack has been through the whole site plate
+   by plate, so nothing here is a question any more: he answered the name (Pip)
+   and everything else on the old list.
+
+   What is left is the opposite shape. These are the two places where I went
+   past what he literally said — once because taking him literally would have
+   deleted his awards, once because he specified six plates out of nine and
+   somebody had to fill in the other three. Both are live. Both are listed here
+   rather than buried in a commit, because a decision made on someone's behalf
+   should be easy to find and cheap to reverse.
    ========================================================================== */
 
 import Link from 'next/link';
@@ -37,27 +43,36 @@ const PENDING: Pending[] = [
   {
     href: '/v2',
     keys: '',
-    title: 'What to call him',
+    title: 'Where the awards went',
     question:
-      'The sparrow needs a name. Seven candidates, each of which means two things at once.',
-    options: ['Pip', 'Crumb', 'Nibble', 'Passer', 'Nib', 'Dunnock', 'Chip'],
-    pick: 'Pip',
+      'You said "I don’t like the react section, remove it". I read that as the Reach chart on the closing plate, and moved the awards rather than deleting them.',
+    options: [
+      'Clippings on the CV plate (live)',
+      'Nothing: cut the awards entirely',
+      'The trophy case on the CV plate',
+      'Back to Reach, somewhere else'
+    ],
+    pick: 'Clippings on the CV plate',
     because:
-      'It is the smallest possible name for the smallest thing on the page, and it is true four times over. A sparrow eats pips. A pip is a printed mark, which is the material this whole site is made of. The pips are a time signal — a small regular interruption, which is exactly what he is. And pip is the command every Python engineer types daily, which is what the MotionGen backend is written in. Crumb and Nibble are the runners-up and are better jokes: a crumb is two bits and a nibble is four, and a sparrow does both. Passer is the sparrow genus and also a compiler pass. Dunnock is the real English name of a hedge sparrow and the only one nobody else has taken.',
-    blocks:
-      'Nothing technically. But he is the most memorable thing on the site and he currently has no name, which means nobody can talk about him.'
+      'Read narrowly you disliked that TREATMENT in that PLACE, and I think that is right: a logarithmic reach axis is a cold object to close a page on, and closing on it while asking for work was the wrong note. But deleting it outright takes the only awards on the site with it, including a lens a million strangers used, and the CV plate is the one you called boring. Awards next to the document they belong beside fixes both notes with one move. If you meant it literally and want them gone, it is one line in sectionExtra.',
+    blocks: 'Nothing. It is live, and reversible in a line either way.'
   },
   {
-    href: '/v2/awards',
-    keys: '1-4',
-    title: 'The awards',
+    href: '/v2',
+    keys: '',
+    title: 'The light run',
     question:
-      'The case treatment has moved to projects, so what do the five awards get now?',
-    options: ['Reach', 'Clippings', 'Career line', 'something new'],
-    pick: 'Reach, still',
+      'You gave a mode per plate for six of the nine. I filled in the other three and picked where the two devices fire.',
+    options: [
+      'top light, 01-02 dark, 03-05 light, 06-08 dark (live)',
+      'fewer changes',
+      'more changes',
+      'a reader-controlled toggle as well'
+    ],
+    pick: 'Three changes, narrated',
     because:
-      'It is the only one that refuses to fake the four awards with no recorded figure, and the log scale makes the point that a lens used a million times does not belong on the same line as a hackathon prize. You said to hold Clippings for something else, so it is out of the running here. The trophy case still works and is still on the bench — it is now the SECOND case on the site rather than the only one, which is the argument against keeping it here.',
-    blocks: 'Reach is on the close plate as a placeholder and has been for a week.'
+      'You named dark for 01, 02, 06 and 08 and light for 03, 04 and 05. That leaves the hero and plate 07. The hero is light because the site should open on paper, and 07 is dark because it sits between 06 and 08 and a one-plate flicker back to light would be a third change for nothing. The switch fires on the two indoor changes and the sun does the outdoor one, which is why there are two devices rather than one being reused. Every plate is authored in BOTH forms, so any of this moves by editing one field.',
+    blocks: 'Nothing. But it is the largest thing I decided rather than was told.'
   }
 ];
 
@@ -89,6 +104,23 @@ const DECIDED: Array<[string, string]> = [
   [
     'The hitchhiking',
     'RouteMap keeps the interactive line; Scrapbook keeps the album page and stands its own thread down.'
+  ],
+  ['His name', 'Pip. (Yours.)'],
+  [
+    'The particles',
+    'Hero and contact only. They were most of the busyness: a full-viewport simulation under a world that was meant to be the subject. (Yours.)'
+  ],
+  [
+    'Eight plates, eight worlds',
+    'No repeats. cv and practice were both running Topography; cv takes the ink wash. Braid replaces the metaballs on the career plate.'
+  ],
+  [
+    'The world handover',
+    'Sequential, not a cross-dissolve. Out fast, a beat of clear paper, then in. You never see two worlds averaged together.'
+  ],
+  [
+    'The reel',
+    'Halftone, not ASCII. Square cells, dot area carries tone. Neighbours are inside the frame now instead of clipped by it.'
   ]
 ];
 
@@ -98,12 +130,12 @@ export default function BenchIndex() {
       <div className="v2-wrap">
         <p className="v2-eyebrow">DECISIONS / WAITING ON YOU</p>
         <hr className="v2-rule-hard" />
-        <h1 className="v2-h2">Two things I cannot decide for you</h1>
+        <h1 className="v2-h2">Two calls I made for you</h1>
         <p className="v2-lede">
-          It was five. You said to figure most of it out myself, so three of
-          them are decided and live, and every bench they were decided on is
-          still standing. The recommendation is mine and the reasoning is under
-          it, so disagreeing is cheap.
+          Not questions this time. Both of these are live, and both are places
+          where I read past what you actually said rather than stopping to ask.
+          The reasoning is under each one so disagreeing is cheap, and each is
+          one field or one line away from being something else.
         </p>
 
         <ol className="v2-bi-list">

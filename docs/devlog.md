@@ -8,7 +8,263 @@ See also: [spec.md](spec.md) · [plan.md](plan.md) · [ab-log.md](ab-log.md) · 
 
 ---
 
-## 2026-08-26 (latest) — the overnight pass
+## 2026-08-26 (latest) — the plate-by-plate pass
+
+Jack read the whole site and came back with a global note and eight numbered
+ones. The global note is the important one:
+
+> *"This is good but extremely busy, most of the time I can't tell what's going
+> on. I think there was a bit of a miscommunication: when I said each page
+> should have a different style I didn't mean it's the same with a different
+> backdrop, I meant a fully different style. The backdrops should be prominent
+> and the centrepiece, with everything working around them."*
+
+He is describing a real structural fact, not a taste. Every plate was: the ink
+field, plus a world, plus the type, plus an interactive figure — four layers,
+always, and two of them full-viewport canvases fighting each other. And two of
+the eight plates were running **literally the same world**.
+
+### The single largest finding: one colour parser, three plates, black instead of orange
+
+Two of his notes were the same bug, and it was not a colour choice.
+
+> *"The orange highlight is no longer orange, it's black."*
+> *"Where have the colours gone from it?"*
+
+`RouteMap`, `NeuralPlayground` and `ClimbingWall` each carried a private helper
+of this shape:
+
+```js
+const h = hex.trim().replace('#', '');
+const n = parseInt(h.slice(0, 6), 16);
+if (!Number.isFinite(n)) return `rgba(23,20,15,${alpha})`;   // <- ink
+```
+
+Correct for `#B5402F`. Catastrophic for anything else, because the fallback is
+near-black. And the tokens **stopped being `#B5402F`** the day the palette was
+registered with `@property`: a registered custom property has a *computed*
+value, so `getComputedStyle(root).getPropertyValue('--verm')` hands back
+`rgb(181, 64, 47)`. `parseInt('rgb(18', 16)` is NaN, the guard fires, and every
+accent on those three plates silently became ink.
+
+Verified in the live page rather than reasoned about — the token really does
+come back as `rgb(181, 64, 47)`, and the old parser really does turn it into
+`rgba(23,20,15,1)`.
+
+Nothing threw. Nothing logged. Three plates lost their accent and stayed that
+way until Jack said so. **That is the Fluid failure mode again**, and it is the
+third time this project has been bitten by colour parsing — after the probe's
+`color(srgb …)` byte read, and then the *same trap re-introduced* an hour later
+in a different probe function. There is now exactly one parser, `lib/v2/colour.ts`,
+and any `replace('#', '')` in a component is a regression of this.
+
+### Busy, and laggy, and both were the same layer
+
+**Particles on two plates only**, per *"I think the hero and the contact page
+only."* On the middle seven the field was a 512² particle simulation running
+underneath the world that was supposed to be the subject, so the page was paying
+twice to be harder to read. `InkField` parks its loop rather than unmounting,
+and parks it *after* the fade rather than during it, so the last thing you see
+is a field dispersing and not a still frame dissolving.
+
+**Two forced layouts per frame, removed.** `useSpine` read
+`document.documentElement.scrollHeight` and `SectionBackdrops` read
+`getBoundingClientRect()` on every single frame. Both are layout-dependent:
+reading them makes the browser flush pending style and layout before it can
+answer. Normally that is nearly free, because nothing has invalidated layout
+since the last flush. On **this** page it is not, because the palette transition
+dirties style across the whole tree for 940ms after every plate change — so the
+cost landed precisely while the reader was scrolling between sections, which is
+exactly when it would be noticed. Both are observed now instead of polled.
+
+I checked the four backdrops that looked like they rendered at raw device pixel
+ratio before touching anything. They were all already capped at 2. Worth
+recording: that was a plausible diagnosis that would have produced a confident,
+useless commit.
+
+### The light run, and two devices
+
+Jack gave a mode per plate for six of the nine and asked for the *change* to be
+an event rather than a fade: the bird flying up to pull a light switch, and over
+the climbing plate a sun dipping under the horizon on the right while a moon
+comes up on the left.
+
+`palettes.ts` now authors every plate **twice**, light and dark, and each
+declares which form it settles in. That is not a theme toggle, and it is the
+thing the devices need in order to exist: for the length of the wind-up the page
+is deliberately rendering plate 01 in the light form it does not settle in.
+
+Which device fires where is not arbitrary. The first two changes are on plates
+about building things at a desk, so they get a switch on a wall. The third is on
+the plate about being outside on rock, so it gets the sun going down. **Indoors
+you flip a switch; outdoors you wait.**
+
+The switch drops a rose out of the top edge, the bird flies up and lands on the
+grip, and his weight takes the cord down. He is released at the bottom of the
+stroke so he *falls* as it recoils, which is what pulling a cord looks like and
+costs nothing — letting go of a perch is the most ordinary thing the engine
+knows. If he cannot come, it pulls itself after 2.4s: a light switch that only
+works when a bird is available is a light switch that leaves the page the wrong
+colour.
+
+The `Companion` learned **errands** for this. The page names a thing to stand on
+and gets told when he is on it; that is the whole contract. Three drives had to
+be gated while one runs, because the cord hangs from the **top edge** and the
+top edge is the worst place he can stand by every measure the comfort band uses.
+Without the gates he touched the cord and left inside a tenth of a second.
+
+### The three rules were the broken dark mode
+
+> *"The dark mode here is broken."*
+
+One token doing it forty-seven times. `--rule`, `--rule-firm` and `--rule-hard`
+were fixed `rgba()` values on `:root`, built once from the light palette's ink,
+and never part of the palette system at all. `--rule-hard` is the 2px line under
+every plate eyebrow on the site. At 86% of near-black on near-black paper that
+is not a faint line, it is **no line**: five of the nine plates now settle dark
+and all five would have lost the rule the whole editorial grid is built on.
+
+### Eight plates, eight worlds
+
+`cv` and `practice` were both running Topography. Two of the eight plates were
+literally the same page with the same backdrop, which is the thing he was
+describing. `cv` takes the ink wash, which had no home.
+
+**Braid replaces the metaballs** on the career plate. *"The meta balls look
+awful."* He is right, and the honest post-mortem is that Fluid was the wrong
+*idea* rather than a botched execution: a good demo of an implicit surface that
+said nothing about the plate it stood behind. That plate is four roles and a
+degree that overlap instead of queueing, so it gets strands that cross, pass over
+and under, and never merge.
+
+The weave is a **painter's sort one column wide**. Drawing strand A then strand B
+gives crossing lines, not a braid; a braid needs each strand in front at some
+crossings and behind at others. Solving that with paths means finding every
+intersection and sorting the fragments. Rasterising in columns makes it fall out
+for free *and exactly*, with no intersection ever computed.
+
+**The handover is sequential now.** It was a 620ms simultaneous crossfade, which
+means that for a third of a second the reader was looking at two dense
+generative worlds averaged together — a mixture nobody designed. Out fast, a
+beat of clear paper, then in. It also halves the window where two full-viewport
+loops are both running.
+
+### Plate by plate
+
+**01, the neural net.** The wires were at 0.05–0.15 alpha at rest. Resting is the
+state almost everyone sees, and a reader who never draws a digit was never
+learning there was a network there. Plus the parser bug above.
+
+**02, the constellation → a sphere.** Not decoration: on a plane, a technology
+shared by two projects on *opposite* sides has nowhere to sit — the vector sum
+cancels and it lands in the middle with every other cancelled star, in a pile. On
+a sphere there is no opposite side to be caught between. Projects sit on a
+Fibonacci lattice, because N directions taken round a circle are a plane, and a
+plane on a sphere is a belt. Turning it is then the only way to read it. The
+project list is a perpetual rail of title cards; the idle cycle lights a card and
+its constellation together and only picks from cards actually on screen, because
+lighting one that has scrolled off flares the globe with nothing to connect it to.
+
+**03, the reel.** The neighbours were there and invisible for three separate
+reasons at once: `left: -13%` inside an `overflow: hidden` stage so a quarter of
+each was cut off by the box, 30% opacity, and a 2.5px blur. ASCII out, **halftone**
+in — the glyph ramp rendered into a 7×13 *character* cell, so the model had to be
+pre-squashed by the cell aspect and every silhouette landed on a grid whose two
+axes disagreed. Square cells now, dot **area** carries tone, so the radius goes as
+`sqrt(coverage)`: half the radius is a quarter of the ink, and a linear radius
+sags every midtone.
+
+The Bayer centre is 0.4921875, **computed rather than remembered**. Writing
+0.46875 from memory is exactly what happened in the ink wash a day earlier.
+
+**04, the career line.** UCD closed in 2025 and was drawn running to present —
+a studio that closed, drawn as a studio still taking clients, is a false claim
+about what he is doing now. Recensorium is on the plate. The lede counts the
+roles from the array rather than saying "three", which adding a fourth would
+have made false.
+
+**05, the map.** Country lines, from the same Natural Earth data the old
+component shipped d3-geo and topojson to the browser for — but extracted and
+simplified at *build* time, so 34 rings of plain `[lon, lat]` reach the page and
+no map library does. Two bugs found by looking rather than reasoning: RDP
+collapsed every ring to two points (it measures against the chord from first to
+last, and on a closed ring those are the same point, so the chord has zero
+length and the distance formula degenerates to a constant), and then every
+longitude squashed toward zero because `fit.x` applies the degree conversion
+itself and I handed it radians.
+
+Photographs are his pick — days 3, 7, 18, 21, 24, 25 — and the reason is
+mechanical as well as aesthetic: the snap **isolates a subject**, so a frame with
+nobody in it has nothing to isolate and the effect looks broken. Days 1, 9 and 17
+were a terminal, an empty ridgeline and an empty street.
+
+**06, the climbing wall.** The cell was 8×16, so on a 420px plate the figure was
+four rows out of twenty-six: sixty pixels of climber built from ten-pixel glyphs
+on a wall textured at eleven percent. 11×21 on a 520px plate at 600 weight, and
+the tone table moves the wall down and everything on it up. *Hard to see* is a
+statement about the gap between a subject and its background, not about the
+subject.
+
+677 days of Arabic, and counting.
+
+**07, the CV.** Links at the top, read from `CV_EDITIONS` so the two places the
+CV is offered cannot disagree about how many there are. The plate gets the
+awards clippings — see below.
+
+**08, contact.** The Reach chart is gone.
+
+### The one place I went past what he said
+
+*"I don't like the react section, remove it."* I read that as the **Reach**
+chart on the closing plate. Deleting it outright takes the only awards on the
+site with it, including a lens a million strangers used — and plate 07 is the
+one he called boring. So the awards moved there as clippings rather than being
+cut. It is on `/v2/bench` rather than buried in a commit, because a decision made
+on someone's behalf should be easy to find and cheap to reverse.
+
+### The measurement that lied, again
+
+The first run of the dark-mode contrast audit reported **135 failures at 2.83:1**
+across every dark form. Every one traced to `--ink-3` reading as the base
+sheet's colour while the inline style on `<html>` plainly said otherwise — which
+is not something CSS can do.
+
+It was a **CSS transition in flight**. The pane has no viewport, so nothing
+composites, so a running transition never advances and `getComputedStyle` keeps
+handing back the colour it started from, forever. Removing the class that armed
+it does not cancel one already going.
+
+There were no failures. There was one stuck transition. `P.freeze()` exists now
+and is the first line of any audit that reads a colour.
+
+That is three instruments in three days: the `color(srgb)` byte read, the
+`display:none` ancestor, and now this. The pattern is not that the code was
+broken. **The pattern is that the instrument was wrong and the instrument was
+believed.**
+
+### Verified
+
+`next build` passes: 13 routes, all static, `/v2` at 80.3 kB / 228 kB first
+load. `tsc --noEmit` clean. ESLint clean except two pre-existing
+`no-img-element` warnings in Polaroids. Zero contrast failures across `/v2` at
+**nine plates × two forms × 387 elements**, and across `/v2/projects` (310),
+`/v2/bench` (54), `/v2/awards` (41), `/v2/skills` (68), `/v2/story` (51) and
+`/v2/backdrops` (27) in both forms. No horizontal overflow anywhere.
+
+Braid, the constellation sphere, the reel's halftone and the route's coastline
+were each read back as text off their own canvas, because on this project a
+world that draws nothing and a world that draws correctly look identical from
+here.
+
+**Not verifiable in this environment, and it is the half that matters:** whether
+the light switch reads as the bird pulling it, whether the dial is snappy enough,
+whether the worlds now feel like the centrepiece rather than louder wallpaper,
+and whether the page still feels laggy. Scroll is a no-op here and the pane never
+composites.
+
+---
+
+## 2026-08-26 — the overnight pass
 
 Jack: *"Branch and commit. Then finish off everything on your list, iterate, and
 verify... There is a LOT that needs improving, try and figure most of it out

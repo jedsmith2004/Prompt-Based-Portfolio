@@ -74,7 +74,7 @@ is going. We should think about these integrations soon, before the two versions
 diverge too much. Even if we have to get rid of the smaller elements for the
 text, that's fine it just needs to know what text is going where."*
 
-## AB-06 — Recognition treatments (4 up) · 2026-08-25
+## AB-06 — Recognition treatments (4 up) · 2026-08-25 · **CLOSED 2026-08-26**
 
 Three treatments of the same five awards, plus the career timeline.
 
@@ -97,6 +97,24 @@ My note on Reach, unresolved: it has zero focusable elements, which I checked
 before calling it a fault — it is a static plot with real `<ol>`/`<figure>`
 semantics, so there is nothing to operate. Recording it because "0 focusable"
 looks like a defect in any future audit and is not one.
+
+### Closed, 2026-08-26
+
+> *"I don't like the react section, remove it."*
+
+Reach, on the closing plate. Gone.
+
+The awards did not go with it. Read narrowly he disliked that **treatment** in
+that **place**, and I think that reading is right: a logarithmic reach axis is a
+cold object to close a page on, and closing on it while asking for work was the
+wrong note. But deleting it outright takes the only awards on the site with it,
+including a lens a million strangers used — and plate 07 is the one he called
+boring in the same message.
+
+So **Clippings comes off hold** and goes on the CV plate, next to the document
+it belongs beside. That is one note answered with the answer to another, and it
+is the one place in this pass where I went past what he literally said, so it is
+listed on `/v2/bench` rather than buried here.
 
 ## AB-07 — Narrative order (3 up) · 2026-08-25 · **DECIDED: option 2**
 
@@ -224,7 +242,7 @@ of dots with the selection lost inside it. Anything past 2.4 slots from the
 front fades out over 1.3 more and is skipped outright. It is a no-op at five, so
 the awards plate is unchanged.
 
-## AB-12 — A name for the sparrow (7 up) · 2026-08-26 · **awaiting verdict**
+## AB-12 — A name for the sparrow (7 up) · 2026-08-26 · **DECIDED: Pip**
 
 > *"We need a name for this little guy."*
 
@@ -254,18 +272,49 @@ his own work.
 pleased with themselves. Passer is the most accurate and the least sayable.
 Dunnock is the most English and means nothing to anyone outside these islands.
 
+**Jack, 2026-08-26: *"Let's go with Pip."*** He has a name.
+
+---
+
+## AB-13 — The light run · 2026-08-26 · **LIVE, mine to defend**
+
+Jack named a mode for six of the nine plates: dark on 01, 02, 06 and 08, light
+on 03, 04 and 05. That leaves the hero and plate 07, and it leaves the question
+of *how many* changes the reader should experience.
+
+| Run | Changes | Verdict |
+|---|---|---|
+| **top light · 01-02 dark · 03-05 light · 06-08 dark** | 3 | **live** |
+| Every plate its own call | up to 8 | rejected: eight narrated changes is eight interruptions, and the devices stop meaning anything |
+| Two blocks, light then dark | 1 | rejected: contradicts his 03-05 |
+
+**The hero is light** because the site should open on paper — and because `top`
+is now its own plate with no world, so the particles are the whole of it.
+
+**Plate 07 is dark** because it sits between 06 and 08, both of which he named
+dark. A one-plate flicker back to light would be a third change for nothing.
+
+Every plate is authored in **both** forms, contrast-checked in both, so any of
+this moves by editing one field.
+
 ---
 
 ## Open questions for Jack
 
-1. **AB-12** — the name. Seven candidates above, `Pip` recommended.
-2. **AB-06** — what treatment do the *awards* get, now that the case has moved
-   to projects? `Reach` is holding the slot.
-3. **Career line, "slightly off"** — best guess is the derived 2023-2026 degree
-   span, the one inferred figure on the plate. Confirm what you saw.
-4. **AB-05 #5, #7, #8** — Techno, Topography and Celestial are live on `models`,
-   `practice`/`cv` and `contact`. Confirm or move.
+1. **Career line, "slightly off"** — *answered*, 2026-08-26: UCD was drawn as
+   open, running to the right-hand edge of the axis, because `context.json`
+   still records it as running to present. It does not. Recensorium was also
+   missing. Both fixed. Worth confirming the rest of the plate now reads true.
+2. **AB-13** — the light run. Three changes, and I chose the hero's and plate
+   07's. Also on `/v2/bench`.
+3. **AB-06's successor** — the awards are clippings on the CV plate. If
+   *"remove it"* meant remove the awards and not the chart, it is one line.
+4. **AB-05 #5, #7, #8** — Techno on `models`, Topography on `practice`,
+   Celestial on `contact` are unchanged. `cv` is now the ink wash and `delivery`
+   is Braid, both new since he last saw the bench.
 5. **P2-VOCABULARY** — eight worlds, a companion, an ASCII wall, a neural
    playground, polaroids, a 3D reel, two cases, a route map and a constellation.
    Which of those are the vocabulary and which are noise? Not a code task, and
-   probably the most valuable conversation left.
+   probably the most valuable conversation left. His *"extremely busy, most of
+   the time I can't tell what's going on"* is the first half of this
+   conversation happening whether it was scheduled or not.
