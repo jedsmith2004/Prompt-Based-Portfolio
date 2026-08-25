@@ -547,6 +547,44 @@
   .v2-above, .v2-hero { padding-left: 0; }
 }
 
+/* ---- the CV, offered at the top ----------------------------------------
+   Small, mono, and sitting with the metadata rather than with the title: it
+   is a utility for somebody who came here to download one thing, and it must
+   not compete with the plate. See the note in Hero.tsx.
+   ------------------------------------------------------------------------ */
+.v2-hero-cv {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  margin: 14px 0 0;
+}
+.v2-hero-cv a {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  padding: 5px 11px;
+  border: 1px solid var(--rule-firm);
+  font-family: var(--f-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  text-decoration: none;
+  transition: color 180ms var(--ease), border-color 180ms var(--ease);
+}
+.v2-hero-cv a.is-lead { color: var(--ink); border-color: var(--ink-3); }
+.v2-hero-cv a:hover { color: var(--verm-text); border-color: var(--verm-text); }
+.v2-hero-cv a:focus-visible {
+  outline: 2px solid var(--verm-text);
+  outline-offset: 2px;
+}
+.v2-hero-cv i {
+  font-style: normal;
+  font-size: 10.5px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ==========================================================================
    the ink field
    Fixed behind everything. It is decoration, so it never takes a pointer.

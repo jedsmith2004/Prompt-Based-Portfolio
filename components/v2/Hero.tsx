@@ -11,6 +11,7 @@
 
 import { useEffect, useState } from 'react';
 import type { Stat } from './SpineSection';
+import { CV_EDITIONS } from './CurriculumVitae';
 
 export interface HeroProps {
   eyebrowLeft: string;
@@ -46,6 +47,35 @@ export default function Hero({
           <span>{eyebrowLeft}</span>
           <span>{eyebrowRight}</span>
         </div>
+
+        {/*
+          THE CV, AT THE TOP. Jack, 2026-08-26: "There should probably be links
+          to my CV at the top as well."
+
+          The plate at the bottom of the page is where the CV is EXPLAINED —
+          which edition is which, how long each one is, who each is for. This
+          is not that, and it deliberately does not try to be: it is the two
+          files, reachable in one click by somebody who opened the page already
+          knowing what they wanted. A reader who has scrolled to plate 07 has
+          asked the question; a reader at the top has not.
+
+          Read from CV_EDITIONS rather than written out, so the two places the
+          CV is offered cannot disagree about how many editions there are.
+        */}
+        <p className="v2-hero-cv">
+          {CV_EDITIONS.map((cv, i) => (
+            <a
+              key={cv.href}
+              href={cv.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={cv.primary ? 'is-lead' : undefined}
+            >
+              {i === 0 ? 'CV' : cv.label}
+              <i aria-hidden="true">{cv.pages}pp</i>
+            </a>
+          ))}
+        </p>
         {/* data-perch: see THE PERCH CONTRACT in components/v2/Companion.tsx.
             The title is measured as text, so he lands on the first line's ink
             rather than on the full column: "JACK" and the column it is set in
