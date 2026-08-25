@@ -56,9 +56,10 @@
    wetness — a lower threshold at mid-section swells every surface at once, so
    pairs that were merely near find each other.
 
-   Legibility: the physics keeps drops out of a wide elliptical exclusion in
-   the middle of the frame, the shader attenuates what is left there to ~17%,
-   and body alpha is 7%. The rim carries the drawing.
+   Legibility: the physics keeps drops out of an elliptical exclusion in the
+   middle of the frame and what is left there is attenuated to 40%. The RIM
+   carries the drawing — a tide mark is what ink leaves when it dries — and the
+   body stays light enough to set type over.
    ========================================================================== */
 
 import { useEffect, useRef } from 'react';
@@ -121,200 +122,36 @@ const FUSE_LOCK = 380;
 const MAX_ACTIVE = 10;
 
 /* -------------------------------------------------------------------------- */
-/* shaders                                                                     */
+/* why there is no shader here                                                 */
 /* -------------------------------------------------------------------------- */
 
-/* No attributes: three vertices synthesised from gl_VertexID cover the screen. */
-const VS = `#version 300 es
-void main(){
-  vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
-  gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
-}`;
-
-const FS = `#version 300 es
-precision highp float;
-
-out vec4 outColor;
-
-uniform vec2  uRes;
-uniform float uAspect;
-uniform float uDpr;
-uniform float uIntensity;
-uniform float uThreshold;
-uniform float uTime;
-uniform vec3  uInk;
-uniform vec3  uSurface;
-uniform vec4  uB0[${N}];   // xy centre, z nominal radius, w weight
-uniform vec4  uB1[${N}];   // xy stretch axis (unit), z stretch, w unused
-uniform vec3  uCol[${N}];
-
-/* The body is deliberately the weakest of the three. A wash that is uniform
-   across its interior reads as a vector shape; pigment thin in the middle and
-   gathered at the edge reads as something that dried there. */
-const float BODY_A = 0.068;
-const float RIM_A  = 0.190;
-const float HALO_A = 0.024;
-
-float hash21(vec2 p){
-  vec3 q = fract(vec3(p.x, p.y, p.x) * 0.1031);
-  q += dot(q, q.yzx + 33.33);
-  return fract((q.x + q.y) * q.z);
-}
-
-float vnoise(vec2 p){
-  vec2 i = floor(p);
-  vec2 f = fract(p);
-  f = f * f * (3.0 - 2.0 * f);
-  float a = hash21(i);
-  float b = hash21(i + vec2(1.0, 0.0));
-  float c = hash21(i + vec2(0.0, 1.0));
-  float d = hash21(i + vec2(1.0, 1.0));
-  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
-}
-
-void main(){
-  vec2 uv = gl_FragCoord.xy / uRes;
-  uv.y = 1.0 - uv.y;                    // world y runs down the page, like CSS
-  vec2 p = vec2(uv.x * uAspect, uv.y);
-
-  float field = 0.0;   // Σ of every drop's kernel
-  float lead  = 0.0;   // the largest single contribution
-  vec3  pig   = vec3(0.0);
-
-  for (int i = 0; i < ${N}; i++){
-    vec4 b0 = uB0[i];
-    vec4 b1 = uB1[i];
-    vec2 dd = p - b0.xy;
-
-    // into the drop's own frame, then squash: elongating along the axis means
-    // distance along it must COUNT FOR LESS and the perpendicular more, which
-    // holds the area of the isoline roughly fixed as the drop stretches.
-    vec2  ax = b1.xy;
-    float s  = 1.0 + b1.z;
-    float u  = dot(dd, ax) / s;
-    float v  = (dd.x * -ax.y + dd.y * ax.x) * s;
-
-    float d2 = u * u + v * v;
-    float r2 = b0.z * b0.z;
-
-    // inverse square, softened at the core so the centre is finite
-    float core = r2 / (d2 + 0.05 * r2);
-    // C1 window: value AND slope reach zero at 3r, so no ring at the cutoff
-    float win  = max(0.0, 1.0 - d2 / (9.0 * r2));
-
-    float w = b0.w * core * win * win;
-
-    field += w;
-    lead   = max(lead, w);
-    pig   += w * uCol[i];               // field weighted, so necks blend pigment
-  }
-
-  vec3 pigment = pig / max(field, 1e-5);
-
-  // Grain is anchored to CSS pixels, not device pixels: paper tooth must not
-  // get finer on a retina screen, or it stops reading as paper.
-  vec2 fp = gl_FragCoord.xy / uDpr;
-
-  /* Paper is not smooth and neither is the edge of a wash. Wobbling the
-     THRESHOLD rather than the field is the cheap, safe way to say that: every
-     drop's interior is left exactly as it was and only the boundary wanders,
-     which is how a wet edge behaves. It is also what stops the whole thing
-     reading as a 3D render of some blobs — the silhouettes stop being perfect
-     conic sections. Kept low frequency so the edge is still smooth per pixel. */
-  float wob = vnoise(fp * 0.020 + vec2(uTime * 0.004, uTime * 0.003)) - 0.5;
-  wob += (vnoise(fp * 0.040 - vec2(uTime * 0.005, uTime * 0.002)) - 0.5) * 0.5;
-  float T = uThreshold * (1.0 + 0.17 * wob);
-
-  // fwidth turns the arbitrary units of the field into pixels, so every width
-  // below is a real distance on screen no matter how big the drop is. The floor
-  // matters: at a neck the field is a saddle, the gradient collapses, and
-  // without it the most interesting edge on the screen would alias.
-  float g     = max(fwidth(field), 0.0035);
-  float depth = (field - T) / g / uDpr;            // signed, in CSS pixels
-
-  float inside = clamp(depth * 0.85 + 0.5, 0.0, 1.0);
-
-  // Two lengths, because a drying edge has two: a hard stop line a couple of
-  // pixels wide where the water finally held, and a broad bank of pigment that
-  // drifted out behind it. One exponential alone gives a bevel, not an edge.
-  float line = exp(-max(depth, 0.0) * 0.55);
-  float bank = exp(-max(depth, 0.0) * 0.150);
-  float halo = exp( min(depth, 0.0) * 0.130);
-
-  // How much of the field here is NOT from the nearest drop. 1.0 deep inside a
-  // lone drop, ~2.0 in the bridge between two equals. This is the merge itself,
-  // measured — so the join can be drawn wetter than either drop that made it.
-  float blend = field / max(lead, 1e-5);
-  float neck  = smoothstep(1.10, 1.80, blend) * inside;
-
-  float grain = vnoise(fp * 0.75);
-  float mott  = vnoise(fp * 0.011 + vec2(uTime * 0.005, uTime * -0.0035));
-
-  float body = (0.60 + 0.62 * mott) * (0.86 + 0.28 * grain) * (1.0 + 0.80 * neck);
-
-  // an even rim is a stroked path; a wandering one is a tide mark
-  float rim = (0.78 * line + 0.44 * bank) * (0.74 + 0.52 * vnoise(fp * 0.028));
-
-  float a = inside * (BODY_A * body + RIM_A * rim)
-          + (1.0 - inside) * halo * HALO_A * (0.5 + 0.8 * mott);
-
-  // the bridge carries pigment from both drops, so it is the densest thing in
-  // the picture; outside the surface it is water, which carries less
-  vec3 col = mix(pigment, uInk, 0.28 * neck);
-  col = mix(mix(pigment, uSurface, 0.40), col, inside);
-
-  // text lives in the middle of the frame; a wide flat ellipse of quiet there
-  vec2  c     = vec2((uv.x - 0.5) * uAspect, (uv.y - 0.5) * 1.45);
-  float quiet = smoothstep(0.13, 0.52, length(c));
-  a *= mix(0.17, 1.0, quiet);
-
-  // the halo is a very long, very shallow ramp and will band without this
-  a += (hash21(gl_FragCoord.xy) - 0.5) * 0.006 * smoothstep(0.0, 0.02, a);
-
-  a *= uIntensity;
-
-  outColor = vec4(col, clamp(a, 0.0, 1.0));
-}`;
-
-/* -------------------------------------------------------------------------- */
-/* gl helpers                                                                  */
-/* -------------------------------------------------------------------------- */
-
-function compile(gl: WebGL2RenderingContext, type: number, src: string) {
-  const s = gl.createShader(type);
-  if (!s) return null;
-  gl.shaderSource(s, src);
-  gl.compileShader(s);
-  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
-    console.error('[Fluid] shader:', gl.getShaderInfoLog(s));
-    gl.deleteShader(s);
-    return null;
-  }
-  return s;
-}
-
-function link(gl: WebGL2RenderingContext, vsSrc: string, fsSrc: string) {
-  const vs = compile(gl, gl.VERTEX_SHADER, vsSrc);
-  const fs = compile(gl, gl.FRAGMENT_SHADER, fsSrc);
-  if (!vs || !fs) {
-    if (vs) gl.deleteShader(vs);
-    if (fs) gl.deleteShader(fs);
-    return null;
-  }
-  const p = gl.createProgram();
-  if (!p) return null;
-  gl.attachShader(p, vs);
-  gl.attachShader(p, fs);
-  gl.linkProgram(p);
-  gl.deleteShader(vs);
-  gl.deleteShader(fs);
-  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
-    console.error('[Fluid] link:', gl.getProgramInfoLog(p));
-    gl.deleteProgram(p);
-    return null;
-  }
-  return p;
-}
+/*
+ * This world used to evaluate the field in a WebGL2 fragment shader, with the
+ * CPU path below as a fallback. Jack, on the bench: "you can't see anything, it
+ * is broken I think." The GL path is gone, for three reasons that all point the
+ * same way.
+ *
+ * ONE: IT COULD FAIL SILENTLY AND OFTEN DID. If the context came back but the
+ * program did not link, `drawGL` returned early — and by then the canvas had a
+ * GL context, so the 2D fallback could never be reached: a canvas gets one
+ * context type for its whole life. A world that draws nothing and reports
+ * nothing is indistinguishable from a world that is broken, which is exactly
+ * what was reported.
+ *
+ * TWO: THE CONTEXT BUDGET. Browsers keep somewhere between eight and sixteen
+ * live WebGL contexts and drop the oldest without asking. Three of the eight
+ * worlds owned one, and the backdrop bench cycles through all eight — so by the
+ * time anyone reached Fluid the pool could already have been recycled out from
+ * under it. Nothing in the code could tell that apart from working correctly.
+ *
+ * THREE: IT WAS NEVER THE EXPENSIVE PART. The field is fourteen drops over a
+ * grid of at most 200 by 125 — 350k inner iterations a frame, which JavaScript
+ * does comfortably — and it is then bilinearly upscaled by drawImage. On ink
+ * bleeding into wet paper that upscale is not a loss; it is the wetness.
+ *
+ * See P2-FALLBACK in docs/plan.md: the same argument applies to the two worlds
+ * that still hold a context.
+ */
 
 /* -------------------------------------------------------------------------- */
 /* component                                                                   */
@@ -893,14 +730,6 @@ export default function Fluid({
 
     /* ----------------------------------------------------------- rendering */
 
-    const gl = canvas.getContext('webgl2', {
-      alpha: true,
-      antialias: false,
-      depth: false,
-      stencil: false,
-      premultipliedAlpha: false, // the shader writes straight alpha
-      powerPreference: 'low-power',
-    });
 
     let raf = 0;
     let running = false;
@@ -908,52 +737,13 @@ export default function Fluid({
     let last = 0;
     let lastDraw = 0;
 
-    /* --- WebGL2 path --- */
-    let prog: WebGLProgram | null = null;
-    let vao: WebGLVertexArrayObject | null = null;
-    let uRes: WebGLUniformLocation | null = null;
-    let uAspect: WebGLUniformLocation | null = null;
-    let uDpr: WebGLUniformLocation | null = null;
-    let uIntensity: WebGLUniformLocation | null = null;
-    let uThreshold: WebGLUniformLocation | null = null;
-    let uTime: WebGLUniformLocation | null = null;
-    let uInk: WebGLUniformLocation | null = null;
-    let uSurface: WebGLUniformLocation | null = null;
-    let uB0: WebGLUniformLocation | null = null;
-    let uB1: WebGLUniformLocation | null = null;
-    let uCol: WebGLUniformLocation | null = null;
-
-    /* --- 2D fallback path --- */
-    let ctx2d: CanvasRenderingContext2D | null = null;
+    /* 2D only. See "why there is no shader here" at the top of this file. */
+    let ctx2d: CanvasRenderingContext2D | null = canvas.getContext('2d', { alpha: true });
     let fieldCanvas: HTMLCanvasElement | null = null;
     let fieldCtx: CanvasRenderingContext2D | null = null;
     let fieldImg: ImageData | null = null;
     let fw = 0;
     let fh = 0;
-
-    if (gl) {
-      prog = link(gl, VS, FS);
-      if (prog) {
-        vao = gl.createVertexArray();
-        gl.useProgram(prog);
-        uRes = gl.getUniformLocation(prog, 'uRes');
-        uAspect = gl.getUniformLocation(prog, 'uAspect');
-        uDpr = gl.getUniformLocation(prog, 'uDpr');
-        uIntensity = gl.getUniformLocation(prog, 'uIntensity');
-        uThreshold = gl.getUniformLocation(prog, 'uThreshold');
-        uTime = gl.getUniformLocation(prog, 'uTime');
-        uInk = gl.getUniformLocation(prog, 'uInk');
-        uSurface = gl.getUniformLocation(prog, 'uSurface');
-        uB0 = gl.getUniformLocation(prog, 'uB0');
-        uB1 = gl.getUniformLocation(prog, 'uB1');
-        uCol = gl.getUniformLocation(prog, 'uCol');
-        gl.disable(gl.BLEND);
-        gl.disable(gl.DEPTH_TEST);
-        gl.clearColor(0, 0, 0, 0);
-      }
-    } else {
-      ctx2d = canvas.getContext('2d');
-    }
 
     function stage() {
       for (let i = 0; i < N; i++) {
@@ -970,34 +760,6 @@ export default function Fluid({
       }
     }
 
-    function drawGL(inten: number) {
-      if (!gl || !prog) return;
-      gl.viewport(0, 0, canvas!.width, canvas!.height);
-      gl.clear(gl.COLOR_BUFFER_BIT);
-      if (inten <= 0.002) return;
-
-      if (colourDirty.current) {
-        syncColours();
-        colourDirty.current = false;
-      }
-      stage();
-
-      gl.useProgram(prog);
-      gl.uniform2f(uRes, canvas!.width, canvas!.height);
-      gl.uniform1f(uAspect, aspect);
-      gl.uniform1f(uDpr, pixelRatio);
-      gl.uniform1f(uIntensity, inten);
-      gl.uniform1f(uThreshold, threshold);
-      gl.uniform1f(uTime, time);
-      gl.uniform3fv(uInk, inkRgb);
-      gl.uniform3fv(uSurface, surfRgb);
-      gl.uniform4fv(uB0, u0);
-      gl.uniform4fv(uB1, u1);
-      gl.uniform3fv(uCol, ucol);
-      gl.bindVertexArray(vao);
-      gl.drawArrays(gl.TRIANGLES, 0, 3);
-      gl.bindVertexArray(null);
-    }
 
     /* The same field, evaluated on the CPU at roughly a seventh of the linear
        resolution and then bilinearly upscaled by drawImage. Without fwidth
@@ -1080,15 +842,33 @@ export default function Fluid({
           nk = nk < 0 ? 0 : nk > 1 ? 1 : nk;
           nk *= ins;
 
+          /*
+           * THE NUMBERS THAT MADE THIS INVISIBLE.
+           *
+           * Body was 0.07 and rim 0.185, then multiplied by a 0.17 floor over
+           * a wide central ellipse, then by the section intensity of 0.58. In
+           * the middle of the frame that is a body alpha of SIX THOUSANDTHS.
+           * Measured against the worlds Jack liked — Geometry peaks around
+           * 0.36 effective, Scrapbook 0.27 — this was an order of magnitude
+           * under all of them, which is the whole of "you can't see anything".
+           *
+           * The shape is unchanged and deliberate: the RIM carries the
+           * drawing, because a tide mark is what ink leaves when it dries, and
+           * the body stays light so type can sit over it. It is the level that
+           * was wrong, not the design.
+           */
           let a =
-            ins * (0.07 * (1 + 0.8 * nk) + 0.185 * (0.55 * line + 0.62 * bank)) +
-            (1 - ins) * halo * 0.026;
+            ins * (0.22 * (1 + 0.8 * nk) + 0.55 * (0.55 * line + 0.62 * bank)) +
+            (1 - ins) * halo * 0.075;
 
           const ex = (ux - 0.5) * aspect;
           const q = Math.sqrt(ex * ex + ey * ey);
-          let qt = (q - 0.13) / 0.39;
+          /* The physics already pushes drops out of the middle (CENTRE_F), so
+             attenuating what little reaches it to 17% was charging twice for
+             the same legibility. 0.40 over a slightly tighter ellipse. */
+          let qt = (q - 0.10) / 0.34;
           qt = qt < 0 ? 0 : qt > 1 ? 1 : qt;
-          a *= 0.17 + 0.83 * (qt * qt * (3 - 2 * qt));
+          a *= 0.4 + 0.6 * (qt * qt * (3 - 2 * qt));
           a *= inten;
 
           const inv = 1 / f;
@@ -1117,8 +897,7 @@ export default function Fluid({
     }
 
     function draw(inten: number) {
-      if (gl) drawGL(inten);
-      else draw2D(inten);
+      draw2D(inten);
     }
 
     /* --------------------------------------------------------------- sizing */
@@ -1165,7 +944,7 @@ export default function Fluid({
         placed = true;
       }
 
-      if (!gl) {
+      {
         const nw = Math.max(48, Math.min(200, Math.round(cssW / 7)));
         const nh = Math.max(32, Math.round(nw / Math.max(aspect, 0.05)));
         if (nw !== fw || nh !== fh) {
@@ -1206,10 +985,8 @@ export default function Fluid({
       step(dt);
 
       // the CPU field is far too expensive at 60Hz; it looks the same at 30
-      if (!gl) {
-        if (now - lastDraw < 30) return;
-        lastDraw = now;
-      }
+      if (now - lastDraw < 30) return;
+      lastDraw = now;
       draw(live.current.intensity);
     }
 
@@ -1229,6 +1006,30 @@ export default function Fluid({
 
     resize();
     settle(reduced ? 1400 : 320);
+
+    /*
+     * Dev-only handle. A pane that never composites never fires rAF and always
+     * reports the canvas as non-intersecting, so without this there is no way
+     * to drive a frame and find out what a world actually draws — which is how
+     * this one came to be shipped invisible in the first place.
+     */
+    if (process.env.NODE_ENV !== 'production') {
+      (canvas as unknown as Record<string, unknown>).__world = {
+        name: 'fluid',
+        frames: (n = 1, inten?: number) => {
+          for (let i = 0; i < n; i++) {
+            time += 1 / 60;
+            step(1);
+          }
+          draw(inten ?? live.current.intensity);
+        },
+        info: () => {
+          let live_ = 0;
+          for (let i = 0; i < N; i++) if (alive[i] === 1) live_++;
+          return { drops: live_, field: fw + 'x' + fh, aspect, threshold };
+        }
+      };
+    }
 
     if (reduced) {
       // no resize() here: this runs on every intensity change, and a
@@ -1264,13 +1065,9 @@ export default function Fluid({
     const ro = new ResizeObserver(onResize);
     ro.observe(canvas);
 
-    /* A lost context cannot be rebuilt without redoing all of the above, and a
-       backdrop is not worth that; just stop cleanly instead of spewing errors. */
-    function onLost(e: Event) {
-      e.preventDefault();
-      stop();
-    }
-    canvas.addEventListener('webglcontextlost', onLost);
+    /* There is no `webglcontextlost` handler any more, because there is no
+       context to lose. That is the point: a 2D canvas cannot be recycled out
+       from under the page when some other world asks for a GPU context. */
 
     if (!reduced) start();
 
@@ -1280,16 +1077,7 @@ export default function Fluid({
       io.disconnect();
       ro.disconnect();
       document.removeEventListener('visibilitychange', onVis);
-      canvas.removeEventListener('webglcontextlost', onLost);
       redrawStatic.current = null;
-
-      /* Deliberately no loseContext(): React reuses this same canvas node on a
-         StrictMode remount and a lost context never comes back. Deleting the
-         resources already frees the GPU memory. */
-      if (gl) {
-        if (prog) gl.deleteProgram(prog);
-        if (vao) gl.deleteVertexArray(vao);
-      }
       fieldCanvas = null;
       fieldCtx = null;
       fieldImg = null;

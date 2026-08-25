@@ -249,6 +249,26 @@ export default function Geometry({
     let tickFont = '8px monospace';
 
     let psi = 0;
+    /*
+     * A SECOND CLOCK, IN REAL SECONDS, FOR THE SMALL CONSTRUCTIONS.
+     *
+     * Jack, twice: the smaller elements should perpetually animate. They were
+     * not animating, and the reason is arithmetic rather than oversight. Every
+     * phase on the plate is derived from `psi`, which advances at BASE_SPIN =
+     * 0.30 rad/s when nobody is scrolling — and the corner constructions then
+     * scale that down again by 0.035 to 0.107, because those factors were
+     * chosen to keep them from spinning under a fast scroll. The result at
+     * rest: the gasket inset took ten minutes to turn once, the Lissajous
+     * phase seven, and the Fibonacci cycle one. Frozen, correctly.
+     *
+     * `psi` cannot simply be sped up. The alignment term, the hidden figure and
+     * every concurrency claim in the header depend on the exact sweep, and the
+     * whole argument of the plate is that those things are TRUE rather than
+     * staged. So the small elements get their own clock and the psi terms stay
+     * exactly where they are, added to rather than replaced — scrolling still
+     * hurries them and reading upward still runs them backwards.
+     */
+    let tt = 0;
     let last = 0;
     let raf = 0;
     let running = false;
@@ -879,7 +899,7 @@ export default function Geometry({
          the same sweep as the plate, so scrolling hurries these constructions
          and reading upward runs them backwards. The offset puts the static
          reduced-motion frame partway through rather than on an empty beat. */
-      const cyc = 0.42 + psi * 0.055 + prog * 0.5;
+      const cyc = 0.42 + psi * 0.055 + prog * 0.5 + tt * 0.07;
 
       /* --- golden section: Fibonacci squares carrying their spiral -------- */
       if (spiralOn) {
@@ -984,7 +1004,7 @@ export default function Geometry({
         /* The raw drift is a plain sine over 1..3. The map below compresses it
            near each simple ratio, so the figure slows as it approaches one,
            closes on it, holds for a beat, and then moves on. */
-        const raw = 2 + Math.sin(psi * 0.107 + prog * 1.6);
+        const raw = 2 + Math.sin(psi * 0.107 + prog * 1.6 + tt * 0.16);
         let li = Math.round((raw - 1) / (LOCK_HALF * 2));
         if (li < 0) li = 0;
         else if (li >= LOCKS.length) li = LOCKS.length - 1;
@@ -995,7 +1015,7 @@ export default function Geometry({
         const lock = 1 - (eased < 0 ? -eased : eased);
         const l3 = lock * lock * lock;
         /* Wrapped, so the phase stays useful however far psi has run. */
-        const dphi = (psi * 0.05) % TAU;
+        const dphi = (psi * 0.05 + tt * 0.55) % TAU;
 
         ctx.save();
         ctx.translate(lissX, lissY);
@@ -1238,11 +1258,11 @@ export default function Geometry({
         const depthF =
           1 +
           (GASKET_DEPTH - 1) *
-            (0.36 + 0.32 * prog + 0.32 * (0.5 + 0.5 * Math.sin(psi * 0.21)));
-        const wave = psi * 0.55;
+            (0.36 + 0.32 * prog + 0.32 * (0.5 + 0.5 * Math.sin(psi * 0.21 + tt * 0.5)));
+        const wave = psi * 0.55 + tt * 1.1;
 
         ctx.save();
-        ctx.rotate(psi * 0.035 + prog * 0.55);
+        ctx.rotate(psi * 0.035 + prog * 0.55 + tt * 0.06);
         for (let d = 0; d <= GASKET_DEPTH; d++) {
           let gate = depthF - d;
           if (gate <= 0) break;
@@ -1295,6 +1315,11 @@ export default function Geometry({
       else if (drive < -2.4) drive = -2.4;
       psi += dt * drive;
       if (psi > 1e6 || psi < -1e6) psi = 0; // keep float precision honest
+      /* Real seconds, forward only. The small constructions are meant to be
+         alive whether or not anyone is scrolling, which is the whole point of
+         separating them from the sweep. */
+      tt += dt;
+      if (tt > 1e6) tt = 0;
       render();
     };
 
@@ -1317,6 +1342,7 @@ export default function Geometry({
         /* One good static frame: parked just off full alignment, where the
            reveal is legible but the construction still reads as in motion. */
         psi = 0.55;
+        tt = 3.1; // land the static frame partway through the small cycles too
         render();
       } else {
         start();
@@ -1354,6 +1380,26 @@ export default function Geometry({
       } else if (typeof mq.addListener === 'function') {
         mq.addListener(applyMotionPref);
       }
+    }
+
+    /*
+     * Dev-only handle, identical across every world.
+     *
+     * The Browser pane reports `document.hidden` and never composites, so rAF
+     * never fires and the IntersectionObserver reports the canvas as never on
+     * screen. Without a way to drive a frame by hand there is no way to find
+     * out what a world actually draws — which is exactly how Fluid came to be
+     * shipped invisible. See docs/spec.md section 8.
+     */
+    if (process.env.NODE_ENV !== 'production') {
+      (canvas as unknown as Record<string, unknown>).__world = {
+        name: 'geometry',
+        frames: (n = 1) => {
+          for (let i = 0; i < n; i++) frame(i * 16.667);
+          cancelAnimationFrame(raf);
+          raf = 0;
+        }
+      };
     }
 
     return () => {

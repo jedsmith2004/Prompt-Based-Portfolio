@@ -1252,6 +1252,26 @@ export default function InkWash({
     /* No loseContext() here: React may hand this same canvas node to a
        remounted component, and a deliberately lost context never comes back.
        Deleting the resources already frees the GPU memory. */
+    /*
+     * Dev-only handle, identical across every world.
+     *
+     * The Browser pane reports `document.hidden` and never composites, so rAF
+     * never fires and the IntersectionObserver reports the canvas as never on
+     * screen. Without a way to drive a frame by hand there is no way to find
+     * out what a world actually draws — which is exactly how Fluid came to be
+     * shipped invisible. See docs/spec.md section 8.
+     */
+    if (process.env.NODE_ENV !== 'production') {
+      (canvasEl as unknown as Record<string, unknown>).__world = {
+        name: 'inkwash',
+        frames: (n = 1) => {
+          for (let i = 0; i < n; i++) frame(i * 16.667);
+          cancelAnimationFrame(raf);
+          raf = 0;
+        }
+      };
+    }
+
     return () => {
       stop();
       cancelAnimationFrame(pending);

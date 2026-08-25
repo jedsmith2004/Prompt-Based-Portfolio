@@ -1034,7 +1034,9 @@ export default function Watercolour({ intensity, progress, velocity, palette, cl
             buildPass();
             // Scrolling back never erases; a new pass simply works over the top,
             // and the sheet pales a little so it can keep taking pigment.
-            veilFrames = 30;
+            // Jack: "This is beautiful. Maybe they should fade faster?" — so
+            // the pass boundary lifts about 38% rather than 24%.
+            veilFrames = 34;
           }
         }
       }
@@ -1209,7 +1211,7 @@ export default function Watercolour({ intensity, progress, velocity, palette, cl
 
       if (veilFrames > 0) {
         veilFrames--;
-        veilOnce(0.009);
+        veilOnce(0.0135);
       }
 
       if (p.intensity > 0.02) {
@@ -1220,6 +1222,22 @@ export default function Watercolour({ intensity, progress, velocity, palette, cl
         // A fling must not burn through several compositions in one frame.
         if (units > 0.45) units = 0.45;
         advance(units);
+        /*
+         * AMBIENT AGEING. Jack: "This is beautiful. Maybe they should fade
+         * faster?"
+         *
+         * Before this, the sheet only paled at a pass BOUNDARY, so a mark laid
+         * early in a pass sat at full strength until the whole composition
+         * finished — on a slow read, minutes. Now it ages continuously.
+         *
+         * Tied to `units` rather than to dt on purpose. It makes the fade
+         * self-balancing: pigment and time are then spent in the same currency,
+         * so the sheet reaches an equilibrium density instead of either
+         * silting up under a fast scroll or bleaching out while a reader sits
+         * still on one section. It also means a page nobody is reading cannot
+         * quietly erase itself.
+         */
+        veilOnce(units * 0.012);
         bctx!.globalAlpha = 1;
         bctx!.globalCompositeOperation = 'source-over';
       }
@@ -1280,6 +1298,26 @@ export default function Watercolour({ intensity, progress, velocity, palette, cl
     // resize() has already laid the sheet down, and start() refuses to run under
     // reduced motion, so this only ever starts the live loop.
     sync();
+
+    /*
+     * Dev-only handle, identical across every world.
+     *
+     * The Browser pane reports `document.hidden` and never composites, so rAF
+     * never fires and the IntersectionObserver reports the canvas as never on
+     * screen. Without a way to drive a frame by hand there is no way to find
+     * out what a world actually draws — which is exactly how Fluid came to be
+     * shipped invisible. See docs/spec.md section 8.
+     */
+    if (process.env.NODE_ENV !== 'production') {
+      (canvas as unknown as Record<string, unknown>).__world = {
+        name: 'watercolour',
+        frames: (n = 1) => {
+          for (let i = 0; i < n; i++) frame(i * 16.667);
+          cancelAnimationFrame(raf);
+          raf = 0;
+        }
+      };
+    }
 
     return () => {
       stop();
