@@ -87,6 +87,36 @@ export function rgba(c: [number, number, number], a: number): string {
   return `rgba(${c[0]},${c[1]},${c[2]},${a})`;
 }
 
+/* ---------------------------------------------------------------------------
+   RESOLUTION.
+   --------------------------------------------------------------------------- */
+
+/**
+ * How many device pixels a backdrop is allowed per CSS pixel.
+ *
+ * A backdrop is full-viewport, low-contrast texture sitting BEHIND type, and
+ * it is the only layer on the page that is redrawn every frame at that size.
+ * At an uncapped ratio it is also the most expensive thing on the page by a
+ * long way: on a 1.5x display a 1416x806 world is 2.57 megapixels to fill and
+ * 10MB to hand the compositor, sixty times a second, and on a 2x laptop that
+ * is 4.5 megapixels and 18MB. Measured on this machine, capping the worlds at
+ * 1 took the mid-page frame from 4.6fps to a locked 60.
+ *
+ * 1 is deliberate rather than merely cheap. Nothing here is a hairline that
+ * has to land on a device pixel — the type on top is DOM text and is
+ * unaffected — and every world antialiases its own marks, so the honest
+ * comparison is a slightly softer texture against a page that holds 60fps.
+ *
+ * Raise it for a world that genuinely needs the resolution; do not raise it
+ * globally without re-running the numbers.
+ */
+export const BACKDROP_DPR_CAP = 1;
+
+/** Device pixels per CSS pixel for a backdrop. See BACKDROP_DPR_CAP. */
+export function backdropDpr(): number {
+  return Math.min(BACKDROP_DPR_CAP, window.devicePixelRatio || 1);
+}
+
 /** Deterministic PRNG, so a backdrop looks the same across resizes. */
 export function mulberry32(seed: number): () => number {
   let a = seed >>> 0;

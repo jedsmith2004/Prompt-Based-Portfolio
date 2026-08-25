@@ -24,7 +24,7 @@
                    sanctioned exceptions, both of which are screen-space and
                    both of which are commented at the site:
                      - a transit rides the VIEWPORT, so its document y tracks
-                       window.scrollY (on screen it does not move at all);
+                       scrollYNow (on screen it does not move at all);
                      - reduced-motion reseats without animating, because
                        animating is the thing being avoided.
                    Everything else — recovery from a fall, arriving at a perch,
@@ -1284,12 +1284,48 @@ export default function Companion({
     const pageCtx: CanvasRenderingContext2D = pageCtx0;
 
     /* ====================================================================
+       SCROLL IS READ ONCE A FRAME
+
+       `window.scrollY` is cheap only while layout is clean. If anything has
+       dirtied it, reading it forces the browser to lay out the whole document
+       before it can answer, and this document is fifteen thousand pixels
+       tall. Measured here with style deliberately dirtied: 1.3us for a clean
+       read against 1352us for a dirty one.
+
+       BE HONEST ABOUT WHAT THAT IS WORTH. Measured inside this page's real
+       frame at a settled scroll position, a read costs 2us — nothing has
+       dirtied layout by the time the engine runs, so the eight-hundred-fold
+       cliff is a hazard rather than a bill currently being paid. A sampling
+       profiler attributed 1.6s of a 17s run to this function, which is what
+       sent me here; driving it directly showed that attribution was the
+       frame's idle wait and not the read.
+
+       So this is a small win taken cheaply — sixty-odd reads a frame became
+       one, across trackScroll, syncAnchored, projectedScreenY, bandUrgency
+       and draw — and its real value is that the engine can no longer wander
+       onto the expensive side of that cliff as the page grows.
+
+       Every drive reads the copy. A frame of staleness costs nothing here: this canvas is
+       already a frame behind the compositor by design (see THE SCROLL FIX
+       below), which is precisely why the bird is drawn in document flow.
+       Pointer handlers refresh it themselves, because they run outside the
+       frame and their arithmetic is against a live cursor.
+       ==================================================================== */
+    let scrollXNow = 0;
+    let scrollYNow = 0;
+    function readScroll(): void {
+      scrollXNow = window.scrollX;
+      scrollYNow = window.scrollY;
+    }
+    readScroll();
+
+    /* ====================================================================
        THE SCROLL FIX — a second canvas that lives in the document
 
        Browsers scroll on the compositor thread without waiting for the main
-       thread. A rAF callback reading `window.scrollY` gets the last COMMITTED
+       thread. A rAF callback reading `scrollYNow` gets the last COMMITTED
        offset, which during a fling is behind what the compositor has already
-       painted. Drawing the bird at `bird.y - window.scrollY` on a fixed canvas
+       painted. Drawing the bird at `bird.y - scrollYNow` on a fixed canvas
        therefore puts him at a position derived from an older scroll offset
        every single frame, and he corrects on the next one. That is the lag
        Jack reported three times, and it cannot be fixed by reading scroll
@@ -1656,6 +1692,17 @@ export default function Companion({
     }
 
     function measure() {
+      /*
+       * Harvesting converts every VIEWPORT rect it reads into document
+       * coordinates, so it needs the scroll offset to be true right now, not
+       * as of the last frame. Usually it is — measure runs behind a rAF, in
+       * the same batch as the loop — but it can also be reached while the
+       * loop is parked (a hidden tab, a resize before the first frame), and a
+       * stale offset there would place every perch on the page at the wrong
+       * height. It costs one read, on an event that happens a handful of
+       * times a session.
+       */
+      readScroll();
       const found: Perch[] = [];
       const kept = new Set<Element>();
       const visited = new Set<Element>();
@@ -1670,9 +1717,9 @@ export default function Companion({
         visited.add(el);
         if (!measureEdge(el, declared)) return;
 
-        const x0 = edge.x0 + window.scrollX;
-        const x1 = edge.x1 + window.scrollX;
-        const y = edge.y + window.scrollY;
+        const x0 = edge.x0 + scrollXNow;
+        const x1 = edge.x1 + scrollXNow;
+        const y = edge.y + scrollYNow;
         let p = byEl.get(el);
         if (p) {
           if (bird.perch === p) {
@@ -1728,8 +1775,8 @@ export default function Companion({
      */
     function syncAnchored() {
       if (!anchored.length) return;
-      const sx = window.scrollX;
-      const sy = window.scrollY;
+      const sx = scrollXNow;
+      const sy = scrollYNow;
       for (let i = 0; i < anchored.length; i++) {
         const a = anchored[i];
         const x0 = a.x0v + sx;
@@ -2159,8 +2206,8 @@ export default function Companion({
       const h = Math.min(214, Math.max(150, H - 150));
       chatUi.w = w;
       chatUi.h = h;
-      const sx = bird.x - window.scrollX;
-      const sy = bird.y - window.scrollY;
+      const sx = bird.x - scrollXNow;
+      const sy = bird.y - scrollYNow;
       if (freeze) {
         chatUi.x = Math.max(12, Math.min(W - w - 12, sx - w * 0.5));
         chatUi.y = Math.max(64, Math.min(H - h - 12, sy + 2));
@@ -2309,6 +2356,8 @@ export default function Companion({
       uiCheckAt: 0
     };
     function onMove(e: PointerEvent) {
+      /* outside the frame: the cursor is live, so the scroll must be too */
+      readScroll();
       pointer.x = e.clientX;
       pointer.y = e.clientY;
       pointer.seen = true;
@@ -2330,10 +2379,10 @@ export default function Companion({
       if (drag.pressed) onDragMove();
     }
     function pointerDocX() {
-      return pointer.x + window.scrollX;
+      return pointer.x + scrollXNow;
     }
     function pointerDocY() {
-      return pointer.y + window.scrollY;
+      return pointer.y + scrollYNow;
     }
     function pointerOnScreen() {
       return pointer.seen && pointer.x > 0 && pointer.x < W && pointer.y > 0 && pointer.y < H;
@@ -2477,7 +2526,7 @@ export default function Companion({
     /** How far the page moved since the last frame. A transit rides this. */
     let scrollDelta = 0;
     function trackScroll(dt: number) {
-      const y = window.scrollY;
+      const y = scrollYNow;
       scrollDelta = y - lastScrollY;
       const raw = dt > 0 ? scrollDelta / dt : 0;
       lastScrollY = y;
@@ -2499,7 +2548,7 @@ export default function Companion({
 
     /** Where a document point will appear once the current scroll plays out. */
     function projectedScreenY(docY: number, lookahead: number): number {
-      return docY - window.scrollY - scrollVel * lookahead;
+      return docY - scrollYNow - scrollVel * lookahead;
     }
 
     /** How comfortable a perch will be by the time he could get there. */
@@ -2518,7 +2567,7 @@ export default function Companion({
      * is still comfortable, which is what being prompt actually requires.
      */
     function bandUrgency(): number {
-      const now = urgencyAt(bird.y - window.scrollY);
+      const now = urgencyAt(bird.y - scrollYNow);
       const soon = urgencyAt(projectedScreenY(bird.y, 0.5));
       return Math.max(now, soon);
     }
@@ -2546,7 +2595,7 @@ export default function Companion({
      * he stops browsing and just goes.
      */
     function pickBandPerch(urgency: number): Perch | null {
-      const scrollY = window.scrollY;
+      const scrollY = scrollYNow;
       let best: Perch | null = null;
       let bs = -Infinity;
       const jitter = 90 * Math.max(0, 1 - urgency);
@@ -2598,7 +2647,7 @@ export default function Companion({
      * him across the room.
      */
     function pickDescentPerch(urgency: number): Perch | null {
-      const scrollY = window.scrollY;
+      const scrollY = scrollYNow;
       const jitter = 24 * Math.max(0, 1 - urgency);
       /**
        * @param below require the perch to be at or under him
@@ -2738,7 +2787,7 @@ export default function Companion({
            kicks off it, which is what parkour actually looks like; going to
            the wall he is already heading for would just be a longer hop. */
         const side: 1 | -1 = dx >= 0 ? -1 : 1;
-        const wallX = side === 1 ? window.scrollX + W - WALL_INSET : window.scrollX + WALL_INSET;
+        const wallX = side === 1 ? scrollXNow + W - WALL_INSET : scrollXNow + WALL_INSET;
         const wallY = bird.y + dy * 0.28;
         pushWp('wall', wallX, wallY, null, side);
       }
@@ -3149,10 +3198,10 @@ export default function Companion({
      * ---------------------------------------------------------------------- */
     /** Somewhere else on screen, away from where the reader's hand is. */
     function theftAwayX(): number {
-      return window.scrollX + (pointer.x < W * 0.5 ? W * 0.78 : W * 0.22);
+      return scrollXNow + (pointer.x < W * 0.5 ? W * 0.78 : W * 0.22);
     }
     function theftAwayY(): number {
-      return window.scrollY + H * (0.22 + Math.random() * 0.34);
+      return scrollYNow + H * (0.22 + Math.random() * 0.34);
     }
 
     /**
@@ -3536,8 +3585,8 @@ export default function Companion({
 
     /* ---- hover / click --------------------------------------------------- */
     function hitTest(cx: number, cy: number) {
-      const sx = bird.x - window.scrollX;
-      const sy = bird.y - window.scrollY;
+      const sx = bird.x - scrollXNow;
+      const sy = bird.y - scrollYNow;
       const halfW = (SPRITE_WIDTH * PIXEL_SCALE) / 2;
       const hgt = SPRITE_HEIGHT * PIXEL_SCALE;
       return cx > sx - halfW && cx < sx + halfW && cy > sy - hgt && cy < sy + 12;
@@ -3604,8 +3653,8 @@ export default function Companion({
       chatUi.lastVersion = -1;
       chatUi.inX = -1;
       chatUi.glide = 0;
-      chatUi.fromX = bird.x - window.scrollX;
-      chatUi.fromY = bird.y - window.scrollY;
+      chatUi.fromX = bird.x - scrollXNow;
+      chatUi.fromY = bird.y - scrollYNow;
       layoutChat(true);
       bubble.until = 0;
       setMode('chat');
@@ -3614,6 +3663,8 @@ export default function Companion({
     }
 
     function onDown(e: PointerEvent) {
+      /* outside the frame: the cursor is live, so the scroll must be too */
+      readScroll();
       /* Any click at all hands the cursor back. He is annoying, not a denial
          of service: the moment the reader tries to USE the pointer they get
          it, wherever the bird had got to with it. */
@@ -3632,8 +3683,8 @@ export default function Companion({
         drag.pressX = e.clientX;
         drag.pressY = e.clientY;
         drag.pressAt = bird.clock;
-        drag.grabX = bird.x - (e.clientX + window.scrollX);
-        drag.grabY = bird.y - (e.clientY + window.scrollY);
+        drag.grabX = bird.x - (e.clientX + scrollXNow);
+        drag.grabY = bird.y - (e.clientY + scrollYNow);
         drag.hauled = 0;
         return;
       }
@@ -3653,11 +3704,11 @@ export default function Companion({
         !reduced &&
         bird.mode === 'idle' &&
         bird.clock > gate.recoil &&
-        Math.abs(e.clientX - (bird.x - window.scrollX)) < 110 &&
-        Math.abs(e.clientY - (bird.y - window.scrollY)) < 90
+        Math.abs(e.clientX - (bird.x - scrollXNow)) < 110 &&
+        Math.abs(e.clientY - (bird.y - scrollYNow)) < 90
       ) {
         gate.recoil = bird.clock + 5200;
-        bird.facing = (e.clientX + window.scrollX >= bird.x ? 1 : -1) as 1 | -1;
+        bird.facing = (e.clientX + scrollXNow >= bird.x ? 1 : -1) as 1 | -1;
         startAct('recoilHop');
       }
     }
@@ -3816,7 +3867,7 @@ export default function Companion({
         }
       }
       let anim = ANIMATIONS[name];
-      const startSy = bird.y - window.scrollY;
+      const startSy = bird.y - scrollYNow;
       /*
        * The three scripted descents carry a payoff and take their own sweet
        * time delivering it. Starting one from off the top of the screen means
@@ -3855,7 +3906,7 @@ export default function Companion({
       transit.t = 0;
       transit.held = 0;
       transit.props = TRANSIT_PROP_MAP[name] ?? EMPTY_PROPS;
-      transit.sy0 = bird.y - window.scrollY;
+      transit.sy0 = bird.y - scrollYNow;
       /*
        * A descent that begins above the top edge begins AT the top edge
        * instead. He is off-screen either way, so nothing a reader can see
@@ -3865,7 +3916,7 @@ export default function Companion({
        */
       if (!up && transit.sy0 < -26) {
         transit.sy0 = -26;
-        bird.y = window.scrollY + transit.sy0;
+        bird.y = scrollYNow + transit.sy0;
       }
       if (anim.loop) {
         /* Loops cover any distance: hold for the flight, hand over to `land`. */
@@ -3879,7 +3930,7 @@ export default function Companion({
         /* Coming down: aim at something underneath him. Going up: the old
            picker, which wants whatever is nearest the middle of the screen. */
         const p = up ? pickBandPerch(0.9) : pickDescentPerch(0.9);
-        transit.sy1 = p ? p.y - window.scrollY : H * 0.62;
+        transit.sy1 = p ? p.y - scrollYNow : H * 0.62;
         transit.sy1 = Math.max(H * 0.24, Math.min(H * 0.82, transit.sy1));
       }
       /*
@@ -3909,8 +3960,8 @@ export default function Companion({
 
     function updateTransit(dt: number, vel: number) {
       transit.t += dt * 1000;
-      const scrollY = window.scrollY;
-      const scrollX = window.scrollX;
+      const scrollY = scrollYNow;
+      const scrollX = scrollXNow;
 
       if (transit.dur > 0) {
         const u = transit.t / transit.dur;
@@ -4139,7 +4190,7 @@ export default function Companion({
         bird.mode !== 'pvz' &&
         bird.mode !== 'drag';
       {
-        const sy = bird.y - window.scrollY;
+        const sy = bird.y - scrollYNow;
         const gone = sy < -OFF_SCREEN_MARGIN || sy > H + OFF_SCREEN_MARGIN;
         if (gone) bird.strandedMs += dt * 1000;
         else bird.strandedMs = 0;
@@ -4166,11 +4217,11 @@ export default function Companion({
           if (chatUi.glide < 1) {
             chatUi.glide = Math.min(1, chatUi.glide + dt / 0.26);
             const u = smoothstep(chatUi.glide);
-            bird.x = window.scrollX + chatUi.fromX + (chatUi.seatX - chatUi.fromX) * u;
-            bird.y = window.scrollY + chatUi.fromY + (chatUi.seatY - chatUi.fromY) * u;
+            bird.x = scrollXNow + chatUi.fromX + (chatUi.seatX - chatUi.fromX) * u;
+            bird.y = scrollYNow + chatUi.fromY + (chatUi.seatY - chatUi.fromY) * u;
           } else {
-            bird.x = window.scrollX + chatUi.seatX;
-            bird.y = window.scrollY + chatUi.seatY;
+            bird.x = scrollXNow + chatUi.seatX;
+            bird.y = scrollYNow + chatUi.seatY;
           }
           bird.facing = 1;
           const wantAnim = chat.current.busy ? CHAT_RESPONDING : chat.current.perch;
@@ -4204,7 +4255,7 @@ export default function Companion({
            * was the complaint.
            */
           let u = bandUrgency();
-          const psy = bird.perch.y - window.scrollY;
+          const psy = bird.perch.y - scrollYNow;
           if (psy < -30 || psy > H + 10) u = 1.4;
           if (u > 0.06 && bird.clock > bird.hopGate && !onErrand()) {
             /*
@@ -4371,7 +4422,7 @@ export default function Companion({
             const span = bird.y - py;
             const f = span > 1e-6 ? (wp.y - py) / span : 1;
             land(wp.perch, wp.y, dt * (1 - f));
-          } else if (bird.modeT > 3.2 || bird.y > window.scrollY + H + 400) {
+          } else if (bird.modeT > 3.2 || bird.y > scrollYNow + H + 400) {
             /* hand the live arc over: a hop that has timed out is already a
                fall, and zeroing its velocity here would be the jolt */
             enterFall(true);
@@ -4524,7 +4575,7 @@ export default function Companion({
             startAnim('downGlide', 0);
           }
 
-          if (bird.y > window.scrollY + H + 200) {
+          if (bird.y > scrollYNow + H + 200) {
             /*
              * BUG 1, cause (a): recovery used to reposition him 420px above a
              * perch in a single assignment. He now FLIES back, which is both
@@ -4535,7 +4586,7 @@ export default function Companion({
                climb back from below the fold took long enough that a reader
                who kept scrolling never saw him arrive. */
             if (t) enterFly(targetXOn(t), t.y, t, 1200);
-            else enterFly(window.scrollX + W * 0.5, window.scrollY + H * 0.5, null, 1200);
+            else enterFly(scrollXNow + W * 0.5, scrollYNow + H * 0.5, null, 1200);
           }
           break;
         }
@@ -4873,15 +4924,15 @@ export default function Companion({
           setMode('chat');
           chatUi.glide = 1;
         }
-        bird.x = window.scrollX + chatUi.seatX;
-        bird.y = window.scrollY + chatUi.seatY;
+        bird.x = scrollXNow + chatUi.seatX;
+        bird.y = scrollYNow + chatUi.seatY;
         bird.facing = 1;
         const wantAnim = chat.current.busy ? CHAT_RESPONDING : chat.current.perch;
         if (bird.anim !== wantAnim) startAnim(wantAnim, 0);
       } else {
         if (bird.mode !== 'idle') setMode('idle');
         if (bird.anim !== 'breathe') startAnim('breathe', 0);
-        const sy = bird.perch ? bird.perch.y - window.scrollY : -9999;
+        const sy = bird.perch ? bird.perch.y - scrollYNow : -9999;
         if (!bird.perch || sy < H * 0.1 || sy > H * 0.9) {
           const p = pickBandPerch(1);
           if (p) {
@@ -5029,8 +5080,8 @@ export default function Companion({
         let ty: number;
         if (swap.hold === 1) {
           /* In the beak. The beak sits high and forward on the puppet. */
-          tx = bird.x - window.scrollX + bird.facing * 13;
-          ty = bird.y - window.scrollY - 30;
+          tx = bird.x - scrollXNow + bird.facing * 13;
+          ty = bird.y - scrollYNow - 30;
         } else {
           tx = pointer.x;
           ty = pointer.y;
@@ -5138,7 +5189,7 @@ export default function Companion({
        * It never decides WHERE he is drawn — see THE SCROLL FIX above.
        */
       const onScreen =
-        bird.y - window.scrollY > -260 && bird.y - window.scrollY < H + 260;
+        bird.y - scrollYNow > -260 && bird.y - scrollYNow < H + 260;
 
       /* ---- pick the surface, and the space that comes with it ---- */
       /*
@@ -5195,8 +5246,8 @@ export default function Companion({
         docOffY = bandTop;
         ctx = bandCtx;
       } else {
-        docOffX = window.scrollX;
-        docOffY = window.scrollY;
+        docOffX = scrollXNow;
+        docOffY = scrollYNow;
       }
       const sx = bird.x - docOffX;
       const sy = bird.y - docOffY;
@@ -5346,8 +5397,8 @@ export default function Companion({
           ctx = pageCtx;
           const rw = rope.width * PIXEL_SCALE;
           const rh = rope.height * PIXEL_SCALE;
-          const vx = bird.x - window.scrollX;
-          const vy = bird.y - window.scrollY;
+          const vx = bird.x - scrollXNow;
+          const vy = bird.y - scrollYNow;
           /* Where the sprite-space copy's top edge lands, in viewport space:
              puppet origin is vy - BASELINE_Y*scale, and the prop sits at
              oy -20 above that. */
@@ -5415,7 +5466,7 @@ export default function Companion({
            * stale during a fling, which for a placement decision is invisible:
            * the worst case is one late flip.
            */
-          const vy = bird.y - window.scrollY;
+          const vy = bird.y - scrollYNow;
           const roomAbove = vy - SPRITE_HEIGHT * PIXEL_SCALE + 10 - bubble.h - tailPx;
           let bx: number;
           let by: number;
@@ -5481,7 +5532,7 @@ export default function Companion({
     resize();
     readTheme();
     measure();
-    lastScrollY = window.scrollY;
+    lastScrollY = scrollYNow;
     (function seat() {
       /* never open on viewport-anchored furniture: that is a screen position,
          not a place on the page, and on narrow screens the rail is the
@@ -5625,6 +5676,8 @@ export default function Companion({
     let last = performance.now();
     function frame(now: number) {
       if (!running) return;
+      /* the one read the whole frame runs on */
+      readScroll();
       const dt = Math.min((now - last) / 1000, FRAME_MS_MAX / 1000);
       last = now;
       if (reduced) updateReduced(dt);
@@ -5829,8 +5882,8 @@ export default function Companion({
         /** Fly somewhere, so sustained flight can be driven without a fall. */
         forceFly: (tx?: number, ty?: number, speed = 700) =>
           enterFly(
-            tx ?? window.scrollX + W * 0.5,
-            ty ?? window.scrollY + H * 0.3,
+            tx ?? scrollXNow + W * 0.5,
+            ty ?? scrollYNow + H * 0.3,
             null,
             speed
           ),

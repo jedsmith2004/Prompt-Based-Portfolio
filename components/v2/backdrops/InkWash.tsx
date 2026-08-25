@@ -44,6 +44,7 @@
 
 import { useEffect, useRef } from 'react';
 import type { BackdropProps } from './types';
+import { backdropDpr } from './types';
 
 /* ---- solver -------------------------------------------------------------- */
 
@@ -736,7 +737,7 @@ export default function InkWash({
         const w = rect.width || cv.clientWidth;
         const h = rect.height || cv.clientHeight;
         if (w < 1 || h < 1) return;
-        const dpr = Math.min(window.devicePixelRatio || 1, dprCap);
+        const dpr = Math.min(backdropDpr(), dprCap);
         const pw = Math.max(1, Math.round(w * dpr));
         const ph = Math.max(1, Math.round(h * dpr));
         cssW = w;
@@ -1185,7 +1186,7 @@ export default function InkWash({
       const w = rect.width || cv.clientWidth;
       const h = rect.height || cv.clientHeight;
       if (w < 1 || h < 1) return;
-      const dpr = Math.min(window.devicePixelRatio || 1, dprCap);
+      const dpr = Math.min(backdropDpr(), dprCap);
       const pw = Math.max(1, Math.round(w * dpr));
       const ph = Math.max(1, Math.round(h * dpr));
       if (pw !== cv.width || ph !== cv.height) {

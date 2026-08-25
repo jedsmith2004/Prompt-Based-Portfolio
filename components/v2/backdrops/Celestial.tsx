@@ -59,7 +59,7 @@
 import { useEffect, useRef } from 'react';
 import type { CSSProperties } from 'react';
 import type { BackdropProps } from './types';
-import { toRgb, rgba, mulberry32 } from './types';
+import { toRgb, rgba, mulberry32, backdropDpr } from './types';
 
 /* -------------------------------------------------------------------------- */
 /* constants                                                                   */
@@ -452,7 +452,7 @@ export default function Celestial({
       const rect = canvas.getBoundingClientRect();
       W = Math.max(1, Math.round(rect.width));
       H = Math.max(1, Math.round(rect.height));
-      dpr = Math.min(MAX_DPR, window.devicePixelRatio || 1);
+      dpr = Math.min(MAX_DPR, backdropDpr());
       canvas.width = Math.round(W * dpr);
       canvas.height = Math.round(H * dpr);
 

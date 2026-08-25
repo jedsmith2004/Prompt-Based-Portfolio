@@ -436,6 +436,11 @@ export default function InkField({
     const run = runRef.current;
     if (!run) return;
     if (!dormant) {
+      /* it changed shape while nobody was looking; catch up before waking */
+      if (retargetPending.current) {
+        retargetPending.current = false;
+        retargetRef.current?.();
+      }
       run.start();
       return;
     }
@@ -501,7 +506,28 @@ export default function InkField({
 
     const SIDE = pickSide(density);
     const COUNT = SIDE * SIDE;
-    const DPR_CAP = 1.75;
+    /*
+     * RESOLUTION.
+     *
+     * The field is full-viewport and redrawn every frame, so its device-pixel
+     * count is the single number that decides what it costs: at 1.75 on a 1.5x
+     * display that is 2.6 megapixels of point sprites plus a pigment pass,
+     * sixty times a second, and it held both the plates that run it — the
+     * opening screen and the closing one — at 30fps.
+     *
+     * 1, and it was measured rather than chosen. This is the one layer on the
+     * page that had a real argument for keeping its resolution — it is not
+     * texture behind type, it IS the subject on the two plates that run it —
+     * so it was tried at 1.25 first. That still held the closing plate at
+     * 30fps: 1770x1008 was over budget and 1416x806 was not. At 1 the closing
+     * plate runs at 60 and the opening plate's dropped-frame rate goes from
+     * 10% to 1%.
+     *
+     * The particle COUNT is untouched, which is the half that carries the
+     * look: the field is as dense as it ever was, drawn one device pixel per
+     * CSS pixel instead of one and a quarter.
+     */
+    const DPR_CAP = 1;
     const PIGMENT_SCALE = 0.72;
 
     const maxPoint = (gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE) as Float32Array)?.[1] ?? 64;
@@ -798,13 +824,47 @@ export default function InkField({
       renderOnce((performance.now() - t0) / 1000, 0);
     }
 
+    /*
+     * THE FIELD SIMULATES AT 30Hz, AND THE PAGE STILL RUNS AT 60.
+     *
+     * This is not a compromise on smoothness, because there is nothing here
+     * whose motion the eye can track. The field is a diffuse cloud of a
+     * quarter of a million particles under a spring; what it does between one
+     * frame and the next is below the threshold of being seen, which is
+     * exactly why it can be sampled at half rate when a moving edge could not.
+     *
+     * On a frame that is skipped, NOTHING is drawn — the canvas simply keeps
+     * the pigment it already has, and the compositor keeps showing it for
+     * free. So this halves the field's GPU work outright rather than spreading
+     * it, and it does that without giving up a single particle or a single
+     * device pixel of resolution.
+     *
+     * It is here because of the closing plate. That is the one place on the
+     * site where two full-viewport animated layers run at once — the field and
+     * the celestial world — and the pair came to about 20ms a frame when the
+     * budget is 16.7, so the plate sat at exactly half rate. Either one alone
+     * fitted. Rather than take a world off a plate or the particles off the
+     * closing screen, both of which Jack asked for by name, the field now asks
+     * for half as much and they both fit.
+     *
+     * `dt` is accumulated rather than dropped, so the simulation advances by
+     * real elapsed time and looks identical; the existing 1/30 clamp on dt is
+     * exactly this interval, so the integrator is still inside its designed
+     * range.
+     */
+    const FIELD_STEP = 1 / 30;
+    let acc = 0;
+
     function frame(now: number) {
       if (!running || lost) return;
       const dt = Math.min((now - last) / 1000, 1 / 30);
       last = now;
-      ptr.strength += (ptr.target - ptr.strength) * Math.min(1, dt * 6);
-      renderOnce((now - t0) / 1000, dt);
       raf = requestAnimationFrame(frame);
+      acc += dt;
+      if (acc < FIELD_STEP) return;
+      ptr.strength += (ptr.target - ptr.strength) * Math.min(1, acc * 6);
+      renderOnce((now - t0) / 1000, acc);
+      acc = 0;
     }
 
     function start() {
@@ -935,8 +995,28 @@ export default function InkField({
     };
   }, [density]);
 
-  /* Morph to a new silhouette without rebuilding the GL context. */
+  /*
+   * Morph to a new silhouette without rebuilding the GL context.
+   *
+   * NOT WHILE DORMANT. Retargeting rasterises the painter's mask and then
+   * fills a 512x512 RGBA32F buffer — a quarter of a million particle
+   * destinations, about 50ms of main thread. `shapeKey` changes on every one
+   * of the nine plates and the field is only VISIBLE on two of them, so seven
+   * of those rebuilds were paid for a canvas nobody could see.
+   *
+   * Worse than wasted: each one landed at the exact moment the reader crossed
+   * into a new plate, which is the one moment on this page when the main
+   * thread is already busy and the one moment a dropped frame is most
+   * obvious. Deferred, and settled on the way back up — the field is behind a
+   * fade when it wakes, so the work is hidden by the same transition that was
+   * always there.
+   */
+  const retargetPending = useRef(false);
   useEffect(() => {
+    if (dormantRef.current) {
+      retargetPending.current = true;
+      return;
+    }
     retargetRef.current?.();
   }, [shapeKey]);
 

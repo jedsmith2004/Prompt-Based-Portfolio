@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import type { BackdropProps } from './types';
+import { backdropDpr } from './types';
 
 /* --------------------------------------------------------------------------
  * Watercolour — loose botanical studies, already on the sheet.
@@ -1149,7 +1150,7 @@ export default function Watercolour({ intensity, progress, velocity, palette, cl
       const r = host!.getBoundingClientRect();
       const cw = Math.max(1, Math.round(r.width));
       const ch = Math.max(1, Math.round(r.height));
-      let s = Math.min(window.devicePixelRatio || 1, 2);
+      let s = backdropDpr();
       const overBudget = cw * ch * s * s;
       if (overBudget > MAX_BUFFER_PX) s = Math.max(1, s * Math.sqrt(MAX_BUFFER_PX / overBudget));
       const nw = Math.max(1, Math.round(cw * s));

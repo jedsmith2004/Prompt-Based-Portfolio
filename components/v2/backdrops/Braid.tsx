@@ -55,15 +55,43 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { BackdropProps } from './types';
-import { toRgb, rgba, mulberry32 } from './types';
+import { toRgb, mulberry32, backdropDpr } from './types';
 
 /* --- the weave ----------------------------------------------------------- */
 
 /** Strands. Six reads as a braid; more reads as static. */
 const STRANDS = 6;
 
-/** Column width in CSS px. The unit of the painter's sort. */
-const STEP = 3;
+/**
+ * Column width in CSS px. The unit of the painter's sort, and the spacing at
+ * which every strand is sampled.
+ *
+ * This was 3 while a column was painted as a stack of rectangles, where it
+ * also set how badly a sloping edge staircased. A column is now a vertex on a
+ * path and the edge between two of them is interpolated, so the only thing
+ * STEP still controls is how faithfully a slow sine is sampled — and at 6px a
+ * curve that turns over roughly once across the viewport is oversampled by an
+ * order of magnitude. Doubling it halved the vertex count for free.
+ */
+const STEP = 6;
+
+/**
+ * Longest path, in columns, before it is broken and re-coloured.
+ *
+ * A path carries one colour, and a strand's alpha follows its depth, so this
+ * is the knob that trades the smoothness of the haze against the number of
+ * draw calls. It matters more than it looks, because CANVAS STROKE COST IS PER
+ * CALL, NOT PER VERTEX — measured here, 60 strokes of 240 points cost 1.6ms
+ * and 3,663 strokes of 4 points cost 4.3ms for a quarter of the geometry.
+ *
+ * The first version of this split the weave wherever depth crossed one of 20
+ * buckets, which is the obvious way to keep the gradient smooth and produced
+ * 3,663 stroke calls a frame. It was slower than the 28,000 rectangles it
+ * replaced. Long paths, coloured from the depth at their midpoint, are both
+ * cheaper and — because a run ends where two strands cross, which is a
+ * discontinuity the eye already expects — indistinguishable.
+ */
+const MAX_SEG = 32;
 
 /** Fibres per strand. Odd, so one runs down the centre. */
 const FIBRES = 7;
@@ -132,10 +160,30 @@ export default function Braid({
     const drift = new Float32Array(STRANDS);     // rad/s the strand travels at
     const tint = new Int32Array(STRANDS);        // 0 ink, 1 ink2, 2 accent, 3 accent2
 
-    /* Per column, rebuilt each frame. */
+    /* Scratch for one column while it is being sorted. */
     const cy = new Float32Array(STRANDS);
     const cd = new Float32Array(STRANDS);
     const order = new Int32Array(STRANDS);
+
+    /*
+     * THE WHOLE FRAME'S GEOMETRY, RESOLVED BEFORE ANYTHING IS DRAWN.
+     *
+     * The weave used to be drawn one column at a time: sample six strands,
+     * sort them, paint ten slices each, move on. That is the obvious shape and
+     * it cost ~28,000 canvas calls a frame, which measured at 3,020ms of
+     * script per 3,000ms of wall-clock — one world, on its own, saturating the
+     * main thread and holding the page at 8fps.
+     *
+     * Nothing about the picture needed that. A strand is a continuous ribbon,
+     * so it wants to be a path; it was only being chopped into columns because
+     * the painter's sort works column by column. Resolving every column first
+     * means the runs where the sort does NOT change are visible, and a run is
+     * one path per mark instead of one per column.
+     */
+    const colTop = new Float32Array(MAX_COLS * STRANDS);
+    const colThick = new Float32Array(MAX_COLS * STRANDS);
+    const colDepth = new Float32Array(MAX_COLS * STRANDS);
+    const colOrder = new Int32Array(MAX_COLS * STRANDS);
 
     const rnd = mulberry32(0x9e37);
     for (let i = 0; i < STRANDS; i++) {
@@ -172,12 +220,16 @@ export default function Braid({
       const r = canvas!.getBoundingClientRect();
       const w = Math.max(1, Math.round(r.width));
       const h = Math.max(1, Math.round(r.height));
-      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      const dpr = backdropDpr();
       cssW = w;
       cssH = h;
       canvas!.width = Math.round(w * dpr);
       canvas!.height = Math.round(h * dpr);
       ctx!.setTransform(dpr, 0, 0, dpr, 0, 0);
+      /* Strands are polylines now. A mitre join on a near-straight turn can
+         throw a spike; round costs nothing at these widths. */
+      ctx!.lineJoin = 'round';
+      ctx!.lineCap = 'butt';
       cols = Math.min(MAX_COLS, Math.ceil(w / STEP) + 1);
       /* Lane pitch: how much room each strand has before it is another
          strand's problem. The swing is a fraction of this, so six strands on
@@ -186,14 +238,163 @@ export default function Braid({
       clearedAtZero = false;
     }
 
-    /** rgb for a strand's tint. Returns into the shared triple, never allocates. */
-    const tintScratch: [number, number, number] = [0, 0, 0];
-    function tintOf(k: number): [number, number, number] {
-      const src = k === 0 ? cInk : k === 1 ? cInk2 : k === 2 ? cAcc : cAcc2;
-      tintScratch[0] = src[0];
-      tintScratch[1] = src[1];
-      tintScratch[2] = src[2];
-      return tintScratch;
+    /** The four strand tints, indexed by `tint[i]`. */
+    const tintRgb: Array<[number, number, number]> = [cInk, cInk2, cAcc, cAcc2];
+
+    /*
+     * COLOUR STRINGS ARE CACHED, AND THIS IS THE HOT PATH OF THE WHOLE WORLD.
+     *
+     * At STEP 3 a 1400px viewport is ~470 columns, and every column draws six
+     * strands of ten slices each. That is ~28,000 slices a frame, and building
+     * `rgba(...)` for each one allocated 28,000 strings a frame and handed the
+     * canvas 28,000 colours to re-parse — most of them a colour it had just
+     * been given. Measured, that was 3,020ms of script per 3,000ms of
+     * wall-clock: the weave alone saturated the main thread and the page ran
+     * at 8fps.
+     *
+     * Alpha is quantised to 1/255. The compositor is 8-bit, so this is not a
+     * visible approximation, and it makes the cache small enough to be an
+     * array: five colours by 256 steps, built once, reused for the life of the
+     * component.
+     */
+    const ALPHA_STEPS = 255;
+    const cacheSurf: string[] = new Array(ALPHA_STEPS + 1);
+    const cacheTint: string[][] = [
+      new Array(ALPHA_STEPS + 1),
+      new Array(ALPHA_STEPS + 1),
+      new Array(ALPHA_STEPS + 1),
+      new Array(ALPHA_STEPS + 1)
+    ];
+    function colour(cache: string[], rgb: [number, number, number], a: number): string {
+      let q = (a * ALPHA_STEPS + 0.5) | 0;
+      if (q < 0) q = 0;
+      else if (q > ALPHA_STEPS) q = ALPHA_STEPS;
+      let str = cache[q];
+      if (str === undefined) {
+        str = `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${(q / ALPHA_STEPS).toFixed(3)})`;
+        cache[q] = str;
+      }
+      return str;
+    }
+
+    /*
+     * Per-fibre shading, hoisted out of the column loop.
+     *
+     * `s` is the fibre's position across the bundle and depends only on the
+     * fibre index, so the light along it is the same for every strand in every
+     * column. Computed in place, it was ~20,000 Math.cos calls a frame for
+     * seven distinct values.
+     */
+    const fibreAt = new Float32Array(FIBRES);
+    const fibreShade = new Float32Array(FIBRES);
+    for (let f = 0; f < FIBRES; f++) {
+      const s = FIBRES > 1 ? f / (FIBRES - 1) : 0.5; // 0 top, 1 bottom
+      fibreAt[f] = s;
+      /*
+       * Bright along the upper third and heavy under the lower edge: one light
+       * source, above and behind the reader, consistent for every strand on
+       * the screen. Without this the bundle is a stack of parallel lines and
+       * reads flat.
+       */
+      const lit = Math.cos((s - 0.34) * Math.PI * 1.35);
+      fibreShade[f] = 0.2 + 0.72 * Math.max(0, 1 - lit * lit * 1.05);
+    }
+
+    /**
+     * One strand across a run of columns, at a single depth.
+     *
+     * Columns `s..e` inclusive. The caller guarantees the painter's order and
+     * the depth bucket are constant across them, which is what makes a single
+     * path legal: everything drawn here is one colour.
+     */
+    function drawSeg(i: number, s0: number, e0: number, A: number): void {
+      /* One colour for the whole path, taken from the middle of it: 0 at the
+         back, 1 at the front. */
+      const depth = colDepth[(((s0 + e0) / 2) | 0) * STRANDS + i];
+
+      /*
+       * The occluder. Paper, at full alpha for the frontmost strands and
+       * easing off for the ones at the back, so depth reads as air in front of
+       * a thing rather than as a thing being drawn faint.
+       *
+       * Down the top edge and back along the bottom: the ribbon is a closed
+       * band, not a run of rectangles, so its edge is now interpolated rather
+       * than stepped.
+       */
+      ctx!.beginPath();
+      for (let c = s0; c <= e0; c++) {
+        const k = c * STRANDS + i;
+        if (c === s0) ctx!.moveTo(c * STEP, colTop[k]);
+        else ctx!.lineTo(c * STEP, colTop[k]);
+      }
+      for (let c = e0; c >= s0; c--) {
+        const k = c * STRANDS + i;
+        ctx!.lineTo(c * STEP, colTop[k] + colThick[k]);
+      }
+      ctx!.closePath();
+      ctx!.fillStyle = colour(cacheSurf, cSurf, (0.72 + 0.28 * depth) * A);
+      ctx!.fill();
+
+      const ti = tint[i];
+      const rgb = tintRgb[ti];
+      const cache = cacheTint[ti];
+      /* Depth also buys contrast: something behind is further away and hazier,
+         which is the cheapest depth cue there is. */
+      const nearA = (0.55 + 0.45 * depth) * A;
+
+      for (let f = 0; f < FIBRES; f++) {
+        const off = fibreAt[f];
+        ctx!.beginPath();
+        for (let c = s0; c <= e0; c++) {
+          const k = c * STRANDS + i;
+          const y = colTop[k] + off * colThick[k];
+          if (c === s0) ctx!.moveTo(c * STEP, y);
+          else ctx!.lineTo(c * STEP, y);
+        }
+        ctx!.strokeStyle = colour(cache, rgb, fibreShade[f] * nearA);
+        ctx!.lineWidth = 1.4;
+        ctx!.stroke();
+      }
+
+      /* Both edges, so a strand has a silhouette even where it crosses another
+         of the same tint. */
+      ctx!.beginPath();
+      for (let c = s0; c <= e0; c++) {
+        const k = c * STRANDS + i;
+        if (c === s0) ctx!.moveTo(c * STEP, colTop[k]);
+        else ctx!.lineTo(c * STEP, colTop[k]);
+      }
+      ctx!.strokeStyle = colour(cache, rgb, 0.62 * nearA);
+      ctx!.lineWidth = 1.1;
+      ctx!.stroke();
+
+      ctx!.beginPath();
+      for (let c = s0; c <= e0; c++) {
+        const k = c * STRANDS + i;
+        if (c === s0) ctx!.moveTo(c * STEP, colTop[k] + colThick[k]);
+        else ctx!.lineTo(c * STEP, colTop[k] + colThick[k]);
+      }
+      ctx!.strokeStyle = colour(cache, rgb, 0.86 * nearA);
+      ctx!.lineWidth = 1.2;
+      ctx!.stroke();
+    }
+
+    /** Every strand across one run of columns, back to front. */
+    function drawRun(a: number, b: number, A: number): void {
+      if (b - a < 1) return;
+      const ob = a * STRANDS;
+      for (let o = 0; o < STRANDS; o++) {
+        const i = colOrder[ob + o];
+        /* Only break a run that is long enough for the haze to have drifted.
+           Each piece ends on the column the next one starts from, so the
+           ribbon is continuous across the join. */
+        let s0 = a;
+        while (s0 < b) {
+          const e0 = Math.min(b, s0 + MAX_SEG);
+          drawSeg(i, s0, e0, A);
+          s0 = e0;
+        }
+      }
     }
 
     function render(time: number, prog: number, a0: number): void {
@@ -216,13 +417,14 @@ export default function Braid({
          bottom. `shear` adds the scroll gesture on top and springs back. */
       const slide = prog * 0.9 + time * 0.05;
 
+      /* --- pass one: where every strand is, in every column --- */
       for (let c = 0; c < cols; c++) {
         const x = c * STEP;
         const u = cssW > 0 ? x / cssW : 0;
+        const p = (u + slide + shear * 0.0006) * Math.PI * 2;
+        const base = c * STRANDS;
 
-        /* --- where every strand is, in this column --- */
         for (let i = 0; i < STRANDS; i++) {
-          const p = (u + slide + shear * 0.0006) * Math.PI * 2;
           cy[i] =
             lane[i] * cssH +
             Math.sin(p * vFreq[i] + vPhase[i] + time * drift[i] * 6) *
@@ -230,8 +432,14 @@ export default function Braid({
               pitch *
               SWING *
               0.5;
-          cd[i] = Math.sin(p * dFreq[i] + dPhase[i] + time * drift[i] * 4.2);
+          const d = Math.sin(p * dFreq[i] + dPhase[i] + time * drift[i] * 4.2);
+          cd[i] = d;
           order[i] = i;
+
+          const half = HALF * (1 + d * DEPTH_SWELL);
+          colTop[base + i] = cy[i] - half;
+          colThick[base + i] = half * 2;
+          colDepth[base + i] = d * 0.5 + 0.5;
         }
 
         /* --- painter's sort, back to front. Insertion: six items. --- */
@@ -245,52 +453,28 @@ export default function Braid({
           }
           order[j + 1] = k;
         }
-
-        /* --- draw --- */
-        for (let o = 0; o < STRANDS; o++) {
-          const i = order[o];
-          const d = cd[i];
-          const half = HALF * (1 + d * DEPTH_SWELL);
-          const y = cy[i];
-          const top = y - half;
-
-          /*
-           * The occluder. Paper, at full alpha for the frontmost strands and
-           * easing off for the ones at the back, so depth reads as air in
-           * front of a thing rather than as a thing being drawn faint.
-           */
-          const solid = 0.72 + 0.28 * (d * 0.5 + 0.5);
-          ctx!.fillStyle = rgba(cSurf, solid * A);
-          ctx!.fillRect(x, top, STEP + 0.6, half * 2);
-
-          const rgb = tintOf(tint[i]);
-          /* Depth also buys contrast: something behind is further away and
-             hazier, which is the cheapest depth cue there is. */
-          const near = 0.55 + 0.45 * (d * 0.5 + 0.5);
-
-          for (let f = 0; f < FIBRES; f++) {
-            const s = FIBRES > 1 ? f / (FIBRES - 1) : 0.5; // 0 top, 1 bottom
-            const fy = top + s * half * 2;
-            /*
-             * Shading across the bundle. Bright along the upper third and
-             * heavy under the lower edge: one light source, above and behind
-             * the reader, consistent for every strand on the screen. Without
-             * this the bundle is a stack of parallel lines and reads flat.
-             */
-            const lit = Math.cos((s - 0.34) * Math.PI * 1.35);
-            const shade = 0.2 + 0.72 * Math.max(0, 1 - lit * lit * 1.05);
-            ctx!.fillStyle = rgba(rgb, shade * near * A);
-            ctx!.fillRect(x, fy - 0.7, STEP + 0.6, 1.4);
-          }
-
-          /* Both edges, so a strand has a silhouette even where it crosses
-             another of the same tint. */
-          ctx!.fillStyle = rgba(rgb, 0.62 * near * A);
-          ctx!.fillRect(x, top - 0.5, STEP + 0.6, 1.1);
-          ctx!.fillStyle = rgba(rgb, 0.86 * near * A);
-          ctx!.fillRect(x, top + half * 2 - 0.6, STEP + 0.6, 1.2);
-        }
+        for (let i = 0; i < STRANDS; i++) colOrder[base + i] = order[i];
       }
+
+      /* --- pass two: draw the runs where the sort does not change --- */
+      let runStart = 0;
+      for (let c = 1; c < cols; c++) {
+        const a = (c - 1) * STRANDS;
+        const b = c * STRANDS;
+        let changed = false;
+        for (let o = 0; o < STRANDS; o++) {
+          if (colOrder[a + o] !== colOrder[b + o]) {
+            changed = true;
+            break;
+          }
+        }
+        if (!changed) continue;
+        /* The run ends ON column c - 1 and the next begins there, so the two
+           share a vertex and the weave does not part at a crossing. */
+        drawRun(runStart, c - 1, A);
+        runStart = c - 1;
+      }
+      drawRun(runStart, cols - 1, A);
     }
 
     function frame(now: number): void {

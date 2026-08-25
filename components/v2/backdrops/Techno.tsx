@@ -47,7 +47,7 @@
 
 import { useEffect, useRef } from 'react';
 import type { BackdropProps } from './types';
-import { mulberry32 } from './types';
+import { mulberry32, backdropDpr } from './types';
 
 /* -------------------------------------------------------------------------
    Glyph set. Index 0 is the blank, indices 1..9 are a density ramp, so a
@@ -464,7 +464,7 @@ export default function Techno({
       const rect = canvas.getBoundingClientRect();
       const cssW = Math.max(1, Math.round(rect.width));
       const cssH = Math.max(1, Math.round(rect.height));
-      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      const dpr = backdropDpr();
 
       W = Math.max(1, Math.round(cssW * dpr));
       H = Math.max(1, Math.round(cssH * dpr));

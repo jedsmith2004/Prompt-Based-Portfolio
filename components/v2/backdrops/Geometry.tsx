@@ -45,6 +45,7 @@
 
 import { useEffect, useRef } from 'react';
 import type { BackdropProps, BackdropPalette } from './types';
+import { backdropDpr } from './types';
 
 const TAU = Math.PI * 2;
 
@@ -424,7 +425,7 @@ export default function Geometry({
       const rect = canvas.getBoundingClientRect();
       const nw = Math.max(1, Math.round(rect.width));
       const nh = Math.max(1, Math.round(rect.height));
-      const ndpr = Math.min(2, window.devicePixelRatio || 1);
+      const ndpr = backdropDpr();
       if (nw === w && nh === h && ndpr === dpr && mask) return;
 
       w = nw;

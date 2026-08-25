@@ -25,7 +25,7 @@
 
 import { useEffect, useRef } from 'react';
 import type { BackdropProps } from './types';
-import { mulberry32, rgba, toRgb } from './types';
+import { mulberry32, rgba, toRgb, backdropDpr } from './types';
 
 /* ---------------------------------------------------------------------------
    The route. Latitude/longitude pairs lifted verbatim from
@@ -1103,7 +1103,7 @@ export default function Scrapbook({
       const rect = canvas.getBoundingClientRect();
       const nw = Math.max(Math.round(rect.width), 1);
       const nh = Math.max(Math.round(rect.height), 1);
-      const nd = Math.min(window.devicePixelRatio || 1, 2); // capped, always
+      const nd = backdropDpr(); // capped, always
       if (nw === W && nh === H && nd === dpr) return;
       W = nw;
       H = nh;

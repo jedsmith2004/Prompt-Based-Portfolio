@@ -17,7 +17,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { BackdropProps } from './types';
-import { toRgb, rgba, mulberry32 } from './types';
+import { toRgb, rgba, mulberry32, backdropDpr } from './types';
 
 /* --- survey constants ---------------------------------------------------- */
 
@@ -211,7 +211,7 @@ export default function Topography({
       const r = canvas!.getBoundingClientRect();
       const w = Math.max(1, Math.round(r.width));
       const h = Math.max(1, Math.round(r.height));
-      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      const dpr = backdropDpr();
       cssW = w;
       cssH = h;
       canvas!.width = Math.round(w * dpr);
