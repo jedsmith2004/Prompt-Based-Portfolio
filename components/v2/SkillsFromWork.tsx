@@ -215,8 +215,8 @@ export function buildTechLedger(source: readonly Project[]): TechLedger {
 
   source.forEach((project, index) => {
     /* An absent, empty or malformed tech array must not break the count. It
-       simply contributes nothing — which is exactly what the stealth project
-       needs, and what a half-filled new entry needs too. */
+       simply contributes nothing — which is what a half-filled new entry
+       needs, and what anything deliberately left thin would need. */
     const list = Array.isArray(project?.tech) ? project.tech : [];
     const time = times[index];
     const weight = recency(time);

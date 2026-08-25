@@ -108,24 +108,16 @@ export default function V2Projects() {
 function ProjectRow({ project: p, index }: { project: Project; index: number }) {
   const [open, setOpen] = useState(false);
 
-  /* The stealth project gets a redacted row: it is listed, because hiding it
-     entirely would be stranger than acknowledging it, but nothing about what it
-     is appears anywhere. */
-  if (p.stealth) {
-    return (
-      <li className="v2-proj-row is-stealth">
-        <span className="v2-proj-num">{String(index).padStart(2, '0')}</span>
-        <div className="v2-proj-main">
-          <h2 className="v2-proj-name">{p.title}</h2>
-          <p className="v2-proj-desc">{p.description}</p>
-          <p className="v2-proj-redacted" aria-label="Details withheld">
-            <span /><span /><span />
-          </p>
-        </div>
-        <span className="v2-proj-meta">{p.date}</span>
-      </li>
-    );
-  }
+  /*
+   * There is no redacted row any more, on purpose.
+   *
+   * This used to special-case `p.stealth` into a name, a vague line and three
+   * black bars. Recensorium launched in August 2026 and nothing in the data
+   * sets that flag now, so the branch was dead code that drew a redaction over
+   * the best thing on the page — the kind of dead code that comes back. It is
+   * gone. If something genuinely undisclosed ever needs listing, it wants a
+   * deliberate treatment rather than a resurrected one.
+   */
 
   const links: Array<{ href: string; label: string }> = [];
   if (p.demo) links.push({ href: p.demo, label: 'Live' });

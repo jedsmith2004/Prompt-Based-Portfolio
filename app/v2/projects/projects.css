@@ -198,19 +198,6 @@
 }
 .v2-proj-links a:hover { color: var(--verm-text); border-color: currentColor; }
 
-/* --- the one that is staying quiet --------------------------------------- */
-.v2-proj-row.is-stealth .v2-proj-name { color: var(--ink-3); }
-.v2-proj-redacted {
-  display: flex;
-  gap: 6px;
-  margin: 14px 0 0;
-}
-.v2-proj-redacted span {
-  display: block;
-  height: 11px;
-  background: var(--ink);
-  opacity: 0.72;
-}
-.v2-proj-redacted span:nth-child(1) { width: 128px; }
-.v2-proj-redacted span:nth-child(2) { width: 76px; }
-.v2-proj-redacted span:nth-child(3) { width: 168px; }
+/* The redaction bars that used to live here are gone with the branch that
+   drew them. See the note in page.tsx: Recensorium launched, and the row it
+   was hiding is now the first thing on the page. */
