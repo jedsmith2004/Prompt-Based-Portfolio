@@ -20,7 +20,7 @@ import Polaroids from '@/components/v2/Polaroids';
 import NeuralPlayground from '@/components/v2/NeuralPlayground';
 import HighlightReel from '@/components/v2/HighlightReel';
 import RouteMap from '@/components/v2/RouteMap';
-import SkillsFromWork from '@/components/v2/SkillsFromWork';
+import SkillConstellation from '@/components/v2/SkillConstellation';
 import SectionBackdrops from '@/components/v2/SectionBackdrops';
 import { usePalette } from '@/components/v2/usePalette';
 import CareerLine from '@/components/v2/CareerLine';
@@ -86,7 +86,21 @@ function sectionExtra(id: string) {
     case 'from-scratch':
       return <NeuralPlayground />;
     case 'models':
-      return <SkillsFromWork />;
+      /*
+       * The constellation rather than the ledger, PROVISIONALLY — the two are
+       * still benched against each other at /v2/skills, keys 1-2, and this is
+       * my answer to that bench rather than Jack's.
+       *
+       * The reasoning, so it can be argued with: the ledger is the more
+       * rigorous document and the wrong answer to the question that was asked.
+       * The live site already has a frequency cloud, and the ledger is that
+       * same one number measured precisely — duller for it, not more creative.
+       * Neither a cloud nor a table can tell you that gRPC and Unity belong to
+       * the same piece of work. A chart where a line joins two technologies
+       * that were used together can, and that is the one fact here that is not
+       * derivable from a list.
+       */
+      return <SkillConstellation />;
     case 'recensorium':
       /* The reel leads with Recensorium, so it belongs on the plate that is
          about Recensorium rather than two sections further down. */
