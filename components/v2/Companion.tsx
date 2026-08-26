@@ -503,6 +503,39 @@ const LINE_CHASE: readonly string[] = [
 const LINE_PVZ: readonly string[] = ['We have a situation.', 'Lawn defence.', 'Not again.'];
 const LINE_WAKE: readonly string[] = ['I was resting my eyes.', 'What did I miss?'];
 
+/* The set pieces. One pool each, because a line that repeats inside a four
+   second bit is a line the reader watches repeat. */
+const LINE_CREEPER: readonly string[] = [
+  'I know that sound.',
+  'Oh, come on.',
+  'That hissing is never a good sign.'
+];
+const LINE_TOTEM: readonly string[] = [
+  'I had one spare.',
+  'Not today.',
+  'Do not tell anyone about that.'
+];
+const LINE_BTTF: readonly string[] = [
+  "Where we're going, we don't need roads.",
+  'Roads. Apparently optional.',
+  'He was very committed to that solo.'
+];
+const LINE_LANTERN: readonly string[] = [
+  'Something just went past my head.',
+  'I do not care for October.',
+  'It is behind me, is it not.'
+];
+const LINE_GIFT: readonly string[] = [
+  'That one is addressed to me.',
+  'Seed. It is always seed.',
+  'I have been extremely good.'
+];
+const LINE_EGG: readonly string[] = [
+  'Where did you come from?',
+  'That was not my egg.',
+  'Right. Off you go, then.'
+];
+
 /*
  * ANGER, IN WORDS. The client asked for the anger level to be "reflected in
  * the messages", so the drag pools are banded rather than shuffled together:
@@ -916,8 +949,87 @@ type Mode =
   | 'sleep'
   | 'chat'
   | 'pvz'
+  /* a set piece is happening to him; see the bit machinery */
+  | 'bit'
   /* held by the reader. He does not care for it. */
   | 'drag';
+
+/**
+ * The set pieces, by name.
+ *
+ * > "Give him some more fun idle easter eggs ... Figure out some more cool
+ * > easter eggs, and ones for halloween, christmas, easter, etc."
+ *
+ * `bttf` is the long one and carries its own gate: a full minute of stillness
+ * before it is even in the hat, because a ten second film is a gift to a
+ * reader who has settled and an ambush to one who has not.
+ */
+type BitName = 'creeper' | 'bttf' | 'lantern' | 'gift' | 'egg';
+
+/**
+ * WHEN EACH SEASONAL BIT IS IN SEASON.
+ *
+ * Day-of-year windows, inclusive, except `egg` which follows Easter and is
+ * computed rather than tabled. Halloween runs into the first of November
+ * because the lantern is still funny on the morning after.
+ */
+const SEASON_WINDOW: Partial<Record<BitName, [number, number, number, number]>> = {
+  /* [fromMonth, fromDay, toMonth, toDay], months 1-12 */
+  lantern: [10, 24, 11, 1],
+  gift: [12, 8, 12, 27]
+};
+
+/**
+ * Jack, 2026-08-26: "put those ones in now so I can see them."
+ *
+ * While this is true every seasonal bit is in the hat all year, at a fraction
+ * of the weight it carries in its own window. It is one line to turn off, and
+ * turning it off is the only thing that has to happen for the seasons to
+ * behave like seasons.
+ */
+const SEASON_PREVIEW = true;
+/** Weight in season, and weight the rest of the year while previewing. */
+const SEASON_WEIGHT = { inSeason: 22, preview: 5 };
+
+/**
+ * Easter Sunday, as a Date, by the anonymous Gregorian algorithm.
+ *
+ * Written out rather than approximated because "the last Sunday in March-ish"
+ * is wrong by up to a month, and an egg bit that fires in the wrong week is
+ * a bug that only shows up once a year and only to whoever is looking.
+ */
+function easterOf(year: number): Date {
+  const a = year % 19;
+  const b = Math.floor(year / 100);
+  const c = year % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(year, month - 1, day);
+}
+
+/** Is this bit in its own window today? Non-seasonal bits are always in. */
+function inSeason(name: BitName, now: Date): boolean {
+  if (name === 'egg') {
+    /* The week before Easter Sunday and the two days after it. */
+    const e = easterOf(now.getFullYear()).getTime();
+    const day = 86400000;
+    return now.getTime() >= e - 7 * day && now.getTime() <= e + 2 * day;
+  }
+  const win = SEASON_WINDOW[name];
+  if (!win) return true;
+  const [m0, d0, m1, d1] = win;
+  const key = (now.getMonth() + 1) * 100 + now.getDate();
+  return key >= m0 * 100 + d0 && key <= m1 * 100 + d1;
+}
 
 interface Waypoint {
   kind: 'perch' | 'wall';
@@ -1926,7 +2038,13 @@ export default function Companion({
       tumbleUntil: 0,
       sleepUntil: 0,
       dreamIdx: 0,
-      dreamUntil: 0
+      dreamUntil: 0,
+      /**
+       * How solid he is, 0..1. Only a set piece ever moves it, and every exit
+       * from one puts it back to 1, so nothing else in the rig has to know it
+       * exists. Applied once, around the puppet composite.
+       */
+      alpha: 1
     };
 
     /* ---- the rig ------------------------------------------------------- */
@@ -2081,6 +2199,54 @@ export default function Companion({
       splatT: 0,
       splatX: 0,
       splatY: 0,
+      gate: 0
+    };
+
+    /* ---- set pieces -------------------------------------------------------
+     *
+     * A BIT is a scripted thing that happens TO him while he is standing
+     * still: a creeper drops in and detonates, a DeLorean pulls up. The lawn
+     * (pvz) is the one that existed first and it is built the other way round
+     * -- a script of HIS animations that the rig walks -- which works because
+     * he is the only actor in it. Once there are two actors, and one of them
+     * has to keep going after he has stopped, that shape falls over.
+     *
+     * So a bit is a TIMELINE and nothing else. `t` is milliseconds from the
+     * start, every phase is an absolute time on that clock (durations drift
+     * against each other the moment anyone edits one), and the tick simply
+     * asks where on it we are. Two consequences worth having:
+     *
+     *   1. It runs OUTSIDE the mode switch. `holds` says whether the bit
+     *      currently owns the bird; when the reader interrupts, that goes
+     *      false, he is handed straight back to his own behaviour, and the
+     *      actors carry on and see themselves out. Which is exactly what was
+     *      asked for: "pip carries on but marty (if he's out) gets back in the
+     *      car and they get struck by lightning and zoom away."
+     *
+     *   2. Nothing is stateful except the clock, so a bit cannot get stuck
+     *      half way through. There is no step counter to fall off the end of.
+     * ---------------------------------------------------------------------- */
+    const bit = {
+      name: null as BitName | null,
+      /** ms since the bit began */
+      t: 0,
+      /** does the bit own the bird right now */
+      holds: false,
+      /** the reader interrupted; the actors are seeing themselves out */
+      cut: false,
+      /** primary actor, document space, bottom centre */
+      ax: 0,
+      ay: 0,
+      /** second actor, same */
+      bx: 0,
+      by: 0,
+      /** which way the set piece arrives from. Behind him, so he turns. */
+      side: 1 as 1 | -1,
+      /** the line he was standing on when it started */
+      floorY: 0,
+      /** how far through his own part of the script he is */
+      beat: 0,
+      /** no bit may start before this */
       gate: 0
     };
 
@@ -3323,6 +3489,8 @@ export default function Companion({
 
     function beginDrag() {
       if (reduced) return;
+      /* Being picked up outranks any set piece running around him. */
+      cutBit();
       drag.active = true;
       drag.hauled = 0;
       drag.escapeAt = bird.clock + ESCAPE_TICK_MS;
@@ -3848,6 +4016,7 @@ export default function Companion({
 
     function openChat() {
       if (chat.current.open) return;
+      cutBit();
       chat.current.open = true;
       chat.current.perch = CHAT_PERCHES[(Math.random() * CHAT_PERCHES.length) | 0];
       chat.current.version++;
@@ -4034,6 +4203,393 @@ export default function Companion({
         }
         startAnim(PVZ_SCRIPT[pvz.step]);
       }
+    }
+
+
+    /* ---- set pieces, the machinery ---------------------------------------- */
+
+    /** Which seasonal bits there are. The order is only the order they roll. */
+    const SEASONAL: readonly BitName[] = ['lantern', 'gift', 'egg'];
+
+    /** How still he has to have been, in ms, before any bit is in the hat. */
+    const BIT_SETTLE_MS = 9000;
+    /**
+     * ...and the long one wants a whole minute of it.
+     *
+     * > "That one should only have a chance of happening if they've been idle
+     * > for more than a minute."
+     *
+     * `settledMs` is exactly that measure and it is already maintained: it
+     * counts continuous stillness and is reset by any scroll or any pointer
+     * movement, so it says "nobody has touched this page for a minute" rather
+     * than "a minute has passed".
+     */
+    const BTTF_SETTLE_MS = 60000;
+    /** Per-second odds once he qualifies. */
+    const BIT_RATE = 0.05;
+    /** Quiet afterwards, so two never run into one another. */
+    const BIT_COOLDOWN = 52000;
+    const BTTF_COOLDOWN = 240000;
+    /** Every bit fades its actors out over its own last stretch. */
+    const BIT_FADE_MS = 380;
+
+    /* The timelines. Absolute ms from the start of the bit, because a set
+       piece read as a list of durations drifts against itself the first time
+       anyone edits one number in the middle. */
+    const CREEP = {
+      land: 540,
+      notice: 660,
+      hiss: 1420,
+      boom: 2240,
+      totem: 2420,
+      back: 3280,
+      len: 4600
+    };
+    const BTTF = {
+      stop: 1000,
+      fade: 1300,
+      gone: 2300,
+      out: 2600,
+      play: 3400,
+      knees: 5400,
+      rise: 6800,
+      inCar: 7800,
+      line: 8500,
+      strike: 9100,
+      away: 9420,
+      len: 10800
+    };
+    const LANT = { ghost: 700, startle: 1150, up: 2700, len: 4200 };
+    const GIFT = { land: 1500, peck: 1950, open: 2550, len: 4400 };
+    const EGGB = { peck: 900, crack: 1400, hatch: 1700, len: 4400 };
+    const BIT_LEN: Record<BitName, number> = {
+      creeper: CREEP.len,
+      bttf: BTTF.len,
+      lantern: LANT.len,
+      gift: GIFT.len,
+      egg: EGGB.len
+    };
+
+    function startBit(name: BitName) {
+      bit.name = name;
+      bit.t = 0;
+      bit.holds = true;
+      bit.cut = false;
+      bit.beat = 0;
+      bit.floorY = bird.y;
+      /* It arrives BEHIND him, so the first thing he does is turn round... */
+      bit.side = (bird.facing === 1 ? -1 : 1) as 1 | -1;
+      /* ...unless that would put a DeLorean off the side of the page. */
+      const room = bit.side === 1 ? scrollXNow + W - bird.x : bird.x - scrollXNow;
+      if (room < 240) bit.side = -bit.side as 1 | -1;
+      bit.ax = bird.x;
+      bit.ay = bird.y;
+      bit.bx = bird.x;
+      bit.by = bird.y;
+      bird.alpha = 1;
+      setMode('bit');
+      startAnim('lookAtViewer');
+    }
+
+    function endBit() {
+      const was = bit.name;
+      bit.name = null;
+      bit.holds = false;
+      bird.alpha = 1;
+      bit.gate = bird.clock + (was === 'bttf' ? BTTF_COOLDOWN : BIT_COOLDOWN);
+      if (bird.mode === 'bit') enterIdle();
+    }
+
+    /**
+     * The reader interrupted.
+     *
+     * > "if the user interrupts during the sequence (like scrolls off the page
+     * > or drags pip), pip carries on but marty (if he's out) gets back in the
+     * > car and they get struck by lightning and zoom away."
+     *
+     * Two separate things, and separate on purpose. He is handed back his own
+     * behaviour on THIS frame with no wind-down, because whatever the reader
+     * just did is more interesting than the film. The actors are given the
+     * shortest exit that still makes sense, which for the DeLorean is the
+     * ending it was always going to have, arriving early.
+     */
+    function cutBit() {
+      if (!bit.name || bit.cut) return;
+      bit.cut = true;
+      bit.holds = false;
+      bird.alpha = 1;
+      if (bird.mode === 'bit') enterIdle();
+      if (bit.name === 'bttf') {
+        bit.t =
+          bit.t < BTTF.out
+            ? Math.max(bit.t, BTTF.strike - 300)
+            : Math.max(bit.t, BTTF.inCar);
+      } else {
+        bit.t = Math.max(bit.t, BIT_LEN[bit.name] - BIT_FADE_MS);
+      }
+    }
+
+    function tickBit(dt: number) {
+      if (!bit.name) return;
+      bit.t += dt * 1000;
+      switch (bit.name) {
+        case 'creeper':
+          tickCreeper();
+          break;
+        case 'bttf':
+          tickBttf();
+          break;
+        case 'lantern':
+          tickLantern();
+          break;
+        case 'gift':
+          tickGift();
+          break;
+        case 'egg':
+          tickEgg();
+          break;
+      }
+      if (bit.t >= BIT_LEN[bit.name]) {
+        endBit();
+        return;
+      }
+      /* He has to keep breathing through a set piece. The timeline only sets
+         the beats, and a finished one-shot would otherwise hold its last frame
+         for the rest of it. */
+      if (bit.holds && animDone() && !currentAnim().loop) startAnim('breathe', 420);
+    }
+
+    /**
+     * Where a thing that arrives from above starts, in document space.
+     *
+     * Off the top of the screen, but never further above him than the band
+     * canvas actually reaches: the band is BAND_UP tall above his head, and
+     * anything drawn higher than that is quietly clipped for the first part of
+     * its fall. Which of the two binds depends on how far down the screen he
+     * is standing, so both are asked and the lower one wins.
+     */
+    function dropCeiling(): number {
+      return Math.max(scrollYNow - 140, bit.floorY - (BAND_UP - 80));
+    }
+
+    /** Turn to face whatever has just turned up. */
+    function faceTheBit() {
+      bird.facing = (bit.side >= 0 ? 1 : -1) as 1 | -1;
+    }
+
+    function tickCreeper() {
+      const t = bit.t;
+      bit.ax = bird.x + bit.side * 82;
+      const from = dropCeiling();
+      if (t < CREEP.land) {
+        const u = t / CREEP.land;
+        /* Falling, not descending: it accelerates. */
+        bit.ay = from + (bit.floorY - from) * u * u;
+      } else {
+        bit.ay = bit.floorY;
+      }
+      if (!bit.holds) return;
+      if (t >= CREEP.notice && bit.beat === 0) {
+        bit.beat = 1;
+        faceTheBit();
+        startAnim('startledAwake');
+        say(pickLine(LINE_CREEPER), 1500);
+      } else if (t >= CREEP.hiss && bit.beat === 1) {
+        bit.beat = 2;
+        startAnim('shiver', CREEP.boom - CREEP.hiss);
+      }
+      if (t >= CREEP.boom && t < CREEP.back) bird.alpha = 0;
+      if (t >= CREEP.back) {
+        bird.alpha = Math.min(1, (t - CREEP.back) / 520);
+        if (bit.beat === 2) {
+          bit.beat = 3;
+          startAnim('flutter', 0);
+          say(pickLine(LINE_TOTEM), 2400);
+        }
+      }
+    }
+
+    function tickBttf() {
+      const t = bit.t;
+      /* Four marks on one line: off the page, parked, the door, and the spot
+         he plays from. Everything either sits on one or moves between two. */
+      const off = bird.x + bit.side * (W * 0.7 + 240);
+      /* The car is 180px long at the scale it is drawn, so the mark it parks
+         on has to clear the bird by more than half of that or it pulls up
+         through him. */
+      const park = bird.x + bit.side * 172;
+      const door = park - bit.side * 46;
+      const spot = park - bit.side * 104;
+      bit.ay = bit.floorY;
+      bit.by = bit.floorY;
+
+      if (t < BTTF.stop) {
+        const u = t / BTTF.stop;
+        const e = 1 - (1 - u) * (1 - u) * (1 - u);
+        /* Overshoots its mark and comes back onto it. A car that stops dead
+           where it was going reads as a sprite being positioned. */
+        bit.ax = off + (park - off) * e - bit.side * Math.sin(u * Math.PI) * 32;
+      } else if (t < BTTF.away) {
+        bit.ax = park;
+      } else {
+        const u = Math.min(1, (t - BTTF.away) / (BTTF.len - BTTF.away));
+        bit.ax = park + (off - park) * u * u;
+      }
+
+      if (t < BTTF.out) bit.bx = door;
+      else if (t < BTTF.play)
+        bit.bx =
+          door + (spot - door) * smoothstep(Math.min(1, (t - BTTF.out) / (BTTF.play - BTTF.out)));
+      else if (t < BTTF.inCar) bit.bx = spot;
+      else
+        bit.bx =
+          spot +
+          (door - spot) * smoothstep(Math.min(1, (t - BTTF.inCar) / (BTTF.line - BTTF.inCar)));
+
+      if (!bit.holds) return;
+      if (t < BTTF.fade) {
+        if (bit.beat === 0 && t > BTTF.stop * 0.5) {
+          bit.beat = 1;
+          faceTheBit();
+          startAnim('startledAwake');
+        }
+      } else if (t < BTTF.gone) {
+        bird.alpha = 1 - (t - BTTF.fade) / (BTTF.gone - BTTF.fade);
+        if (bit.beat === 1 && t > BTTF.gone - 640) {
+          bit.beat = 2;
+          /* The bubble is drawn independently of how solid he is, which is
+             the whole joke: the last thing left of him is the word. */
+          say('Help.', 1400);
+        }
+      } else if (t < BTTF.rise) {
+        bird.alpha = 0;
+      } else {
+        bird.alpha = Math.min(1, (t - BTTF.rise) / 900);
+        if (bit.beat === 2 && t > BTTF.rise + 700) {
+          bit.beat = 3;
+          startAnim('lookAtViewer');
+        }
+        /*
+         * THE LINE, said by him rather than by the car.
+         *
+         * The speech bubble hangs off his beak by construction: it is
+         * positioned from the sprite and its tail picks an edge from where his
+         * head is, so pointing one at a DeLorean means a second speech system
+         * for the sake of one sentence. A bird delivering it is the better
+         * trade and, on the evidence, the funnier one.
+         */
+        if (bit.beat === 3 && t >= BTTF.line) {
+          bit.beat = 4;
+          say(LINE_BTTF[0], 2600);
+        }
+        if (bit.beat === 4 && t >= BTTF.away + 520) {
+          bit.beat = 5;
+          say(LINE_BTTF[1 + ((Math.random() * (LINE_BTTF.length - 1)) | 0)], 2600);
+        }
+      }
+    }
+
+    function tickLantern() {
+      const t = bit.t;
+      bit.ax = bird.x + bit.side * 74;
+      bit.ay = bit.floorY;
+      /* Up out of the lantern and AWAY from him, wandering as it goes. It used
+         to rise straight up into the space the speech bubble occupies, so the
+         two things that happen at the same moment covered each other. */
+      const u = Math.max(0, Math.min(1, (t - LANT.ghost) / (LANT.up - LANT.ghost)));
+      bit.bx = bit.ax + Math.sin(u * 4.2) * 30 + bit.side * u * 34;
+      bit.by = bit.floorY - u * 118;
+      if (!bit.holds) return;
+      if (t >= LANT.startle && bit.beat === 0) {
+        bit.beat = 1;
+        faceTheBit();
+        startAnim('startledAwake');
+        say(pickLine(LINE_LANTERN), 2000);
+      }
+    }
+
+    function tickGift() {
+      const t = bit.t;
+      bit.ax = bird.x + bit.side * 70;
+      const from = dropCeiling();
+      /* Under a chute, so it comes down at a steady rate rather than falling.
+         That is the whole difference between a parcel and a rock. */
+      bit.ay = from + (bit.floorY - from) * Math.min(1, t / GIFT.land);
+      if (!bit.holds) return;
+      if (t >= GIFT.peck && bit.beat === 0) {
+        bit.beat = 1;
+        faceTheBit();
+        startAnim('peck');
+      } else if (t >= GIFT.open && bit.beat === 1) {
+        bit.beat = 2;
+        startAnim('showOff');
+        say(pickLine(LINE_GIFT), 2400);
+      }
+    }
+
+    function tickEgg() {
+      const t = bit.t;
+      bit.ax = bird.x + bit.side * 66;
+      bit.ay = bit.floorY;
+      /* The chick leaves along the same line, in a run of little arcs. */
+      const ht = Math.max(0, t - EGGB.hatch);
+      bit.bx = bit.ax + bit.side * ht * 0.1;
+      bit.by = bit.floorY - Math.abs(Math.sin(ht * 0.011)) * 16;
+      if (!bit.holds) return;
+      if (t >= EGGB.peck && bit.beat === 0) {
+        bit.beat = 1;
+        faceTheBit();
+        startAnim('peck');
+      } else if (t >= EGGB.hatch && bit.beat === 1) {
+        bit.beat = 2;
+        startAnim('recoilHop');
+      } else if (t >= EGGB.hatch + 900 && bit.beat === 2) {
+        bit.beat = 3;
+        startAnim('headShake');
+        say(pickLine(LINE_EGG), 2400);
+      }
+    }
+
+    /**
+     * Which set piece, if any.
+     *
+     * The seasonal ones are WEIGHTED by the calendar rather than gated by it,
+     * so SEASON_PREVIEW is a dial rather than a switch and the site does not
+     * carry three features nobody can see for eleven months of the year.
+     */
+    const BIT_POOL: BitName[] = [];
+    const BIT_WEIGHT: number[] = [];
+    function rollBit(): BitName | null {
+      BIT_POOL.length = 0;
+      BIT_WEIGHT.length = 0;
+      const now = new Date();
+      const push = (n: BitName, w: number) => {
+        if (w <= 0) return;
+        BIT_POOL.push(n);
+        BIT_WEIGHT.push(w);
+      };
+      push('creeper', 20);
+      if (bird.settledMs > BTTF_SETTLE_MS) push('bttf', 9);
+      for (let i = 0; i < SEASONAL.length; i++) {
+        const n = SEASONAL[i];
+        push(
+          n,
+          inSeason(n, now)
+            ? SEASON_WEIGHT.inSeason
+            : SEASON_PREVIEW
+              ? SEASON_WEIGHT.preview
+              : 0
+        );
+      }
+      let total = 0;
+      for (let i = 0; i < BIT_WEIGHT.length; i++) total += BIT_WEIGHT[i];
+      if (total <= 0) return null;
+      let r = Math.random() * total;
+      for (let i = 0; i < BIT_POOL.length; i++) {
+        r -= BIT_WEIGHT[i];
+        if (r <= 0) return BIT_POOL[i];
+      }
+      return BIT_POOL[0];
     }
 
     /* ---- transit ---------------------------------------------------------- */
@@ -4397,7 +4953,26 @@ export default function Companion({
         !onErrand() &&
         bird.mode !== 'transit' &&
         bird.mode !== 'pvz' &&
+        bird.mode !== 'bit' &&
         bird.mode !== 'drag';
+
+      /*
+       * SET PIECES RUN OUTSIDE THE MODE SWITCH, on purpose. `holds` is what
+       * says the bit currently owns the bird; the actors keep going either
+       * way, which is what lets the DeLorean see itself out after the reader
+       * has taken him back.
+       *
+       * Scrolling hard, or scrolling him off the screen, is an interrupt for
+       * the same reason a drag is: the reader has stopped watching, and a set
+       * piece that plays on regardless is one playing to an empty room.
+       */
+      if (bit.name && bit.holds) {
+        const bsy = bird.y - scrollYNow;
+        if (Math.abs(vel) > 7 || bsy < -OFF_SCREEN_MARGIN || bsy > H + OFF_SCREEN_MARGIN) {
+          cutBit();
+        }
+      }
+      if (bit.name) tickBit(dt);
       {
         const sy = bird.y - scrollYNow;
         const gone = sy < -OFF_SCREEN_MARGIN || sy > H + OFF_SCREEN_MARGIN;
@@ -4520,6 +5095,24 @@ export default function Companion({
           if (bird.settledMs > 11000 && bird.clock > pvz.gate && Math.random() < dt * 0.02) {
             startPvz();
             break;
+          }
+
+          /* The rest of the set pieces, off the same stillness measure. The
+             lawn keeps its own gate and its own odds because it is a minute
+             long and predates all of this. */
+          if (
+            !bit.name &&
+            !onErrand() &&
+            bird.perch &&
+            bird.settledMs > BIT_SETTLE_MS &&
+            bird.clock > bit.gate &&
+            Math.random() < dt * BIT_RATE
+          ) {
+            const pick = rollBit();
+            if (pick) {
+              startBit(pick);
+              break;
+            }
           }
 
           /* every so often, move house — roughly once every twelve seconds */
@@ -4955,6 +5548,18 @@ export default function Companion({
               bird.flyX = cursorPerch.x0 + 14;
             }
           }
+          break;
+        }
+
+        case 'bit': {
+          if (chat.current.open) {
+            cutBit();
+            break;
+          }
+          /* He stands where he was and the timeline drives everything else.
+             holdPerch is still wanted: the furniture under him can reflow
+             mid-set-piece and a creeper is no reason to sink through it. */
+          holdPerch(dt);
           break;
         }
 
@@ -5431,6 +6036,233 @@ export default function Companion({
       ctx!.restore();
     }
 
+
+    /**
+     * A SET-PIECE ACTOR, at an arbitrary screen position.
+     *
+     * `sx, sy` is its BOTTOM CENTRE, because everything in a set piece either
+     * stands on the line he is standing on or hangs over his head, and both of
+     * those are measured from the middle of the thing rather than its corner.
+     *
+     * `turn` is a HORIZONTAL scale and it is how a flat sprite rotates: squash
+     * it toward its own centre line, let it go through zero, and it comes back
+     * showing its other side. Putting a pixel bitmap through a real rotation
+     * matrix stops it being pixel art on the first frame that is not square.
+     * `grow` scales both axes, for things that swell.
+     */
+    function drawActor(
+      name: PropName,
+      sx: number,
+      sy: number,
+      alpha = 1,
+      turn = 1,
+      grow = 1,
+      mirror = false
+    ) {
+      const img = atlas.get(`prop:${name}`);
+      if (!img || alpha <= 0.004) return;
+      const w = img.width * PIXEL_SCALE * grow;
+      const h = img.height * PIXEL_SCALE * grow;
+      ctx!.save();
+      ctx!.globalAlpha = Math.min(1, alpha);
+      ctx!.imageSmoothingEnabled = false;
+      ctx!.translate(Math.round(sx), Math.round(sy));
+      ctx!.scale(turn * (mirror ? -1 : 1), 1);
+      ctx!.drawImage(img, -w / 2, -h, w, h);
+      ctx!.restore();
+    }
+
+    /** 1 while the bit runs, easing to 0 over its last stretch. */
+    function bitFade(): number {
+      if (!bit.name) return 0;
+      const left = BIT_LEN[bit.name] - bit.t;
+      return left >= BIT_FADE_MS ? 1 : Math.max(0, left / BIT_FADE_MS);
+    }
+
+    /** Everything in a set piece that stands behind him. */
+    function drawBitBehind(offX: number, offY: number) {
+      if (!bit.name) return;
+      const f = bitFade();
+      const x = bit.ax - offX;
+      const y = bit.ay - offY;
+      switch (bit.name) {
+        case 'creeper': {
+          if (bit.t >= CREEP.boom) break;
+          const hs = (bit.t - CREEP.hiss) / (CREEP.boom - CREEP.hiss);
+          let lit = false;
+          let swell = 1;
+          if (hs > 0) {
+            /* The fuse: it flashes faster the closer it gets and swells while
+               it does, which is the only part of a creeper anyone recalls. */
+            const period = 230 - 160 * hs;
+            lit = (bit.t - CREEP.hiss) % period < period * 0.5;
+            swell = 1 + 0.18 * hs;
+          }
+          drawActor(lit ? 'creeperLit' : 'creeper', x, y, f, 1, swell);
+          break;
+        }
+        case 'bttf': {
+          /* The trail exists only while it is actually moving. Four stamps
+             along what it has just covered, thinning as they go. */
+          if (bit.t >= BTTF.away) {
+            for (let i = 0; i < 4; i++) {
+              drawActor(
+                'deloreanFire',
+                x - bit.side * (70 + i * 32),
+                y - 18,
+                f * (0.9 - i * 0.2),
+                1,
+                1 + i * 0.12,
+                bit.side === -1
+              );
+            }
+          }
+          /* It arrives nose-first at him and leaves the way it came, so the
+             mirror flips at the departure: a car driving off in reverse is a
+             sprite that forgot to turn round. */
+          const leaving = bit.t >= BTTF.away;
+          drawActor('delorean', x, y, f, 1, 1.5, leaving ? bit.side === -1 : bit.side === 1);
+          if (bit.t >= BTTF.out && bit.t < BTTF.line) {
+            const m: PropName =
+              bit.t >= BTTF.knees && bit.t < BTTF.inCar
+                ? 'martyKnee'
+                : bit.t >= BTTF.play
+                  ? 'martyPlay'
+                  : 'martyStand';
+            drawActor(m, bit.bx - offX, bit.by - offY, f, 1, 1, bit.side === 1);
+          }
+          break;
+        }
+        case 'lantern': {
+          drawActor('pumpkin', x, y, f * Math.min(1, bit.t / 420), 1, 1.4);
+          break;
+        }
+        case 'gift': {
+          drawActor('present', x, y, f, 1, 1.3);
+          /* Down under the chute the rig already owns. */
+          if (bit.t < GIFT.land) drawActor('parachute', x, y - 46, f, 1, 1);
+          break;
+        }
+        case 'egg': {
+          drawActor(bit.t >= EGGB.crack ? 'eggCracked' : 'egg', x, y, f, 1, 1.3);
+          if (bit.t >= EGGB.hatch) {
+            drawActor('chick', bit.bx - offX, bit.by - offY, f, 1, 1.2, bit.side === -1);
+          }
+          break;
+        }
+      }
+    }
+
+    /** Everything in a set piece that goes over the top of him. */
+    function drawBitFront(offX: number, offY: number) {
+      if (!bit.name) return;
+      const f = bitFade();
+      const x = bit.ax - offX;
+      const y = bit.ay - offY;
+      switch (bit.name) {
+        case 'creeper': {
+          const bt = bit.t - CREEP.boom;
+          if (bt >= 0 && bt < 460) {
+            /* Centred between the two of them, because it takes them both. */
+            const mid = (bit.ax + bird.x) * 0.5 - offX;
+            const name: PropName = bt < 110 ? 'blastA' : bt < 250 ? 'blastB' : 'blastC';
+            const a = bt < 250 ? f : f * Math.max(0, 1 - (bt - 250) / 210);
+            drawActor(name, mid, y + 26, a, 1, 1 + bt / 520);
+          }
+          if (bit.t >= CREEP.totem) {
+            const u = (bit.t - CREEP.totem) / (CREEP.len - CREEP.totem);
+            const turn = Math.cos((bit.t - CREEP.totem) * 0.0092);
+            const a = f * (u < 0.7 ? 1 : Math.max(0, 1 - (u - 0.7) / 0.3));
+            drawActor('totem', bird.x - offX, bird.y - offY - 82 - u * 34, a, turn, 1.3);
+          }
+          break;
+        }
+        case 'bttf': {
+          if (bit.t >= BTTF.play && bit.t < BTTF.inCar) {
+            for (let i = 0; i < 3; i++) {
+              const nt = (bit.t - BTTF.play + i * 430) % 1300;
+              const u = nt / 1300;
+              drawActor(
+                'musicNote',
+                bit.bx - offX - bit.side * 12 + Math.sin(u * 6.2 + i * 2) * 13,
+                bit.by - offY - 70 - u * 54,
+                f * (1 - u) * 0.9,
+                1,
+                1
+              );
+            }
+          }
+          const lt = bit.t - BTTF.strike;
+          if (lt >= 0 && lt < 330) {
+            /* Three flickers rather than one flash. A bolt that appears once
+               reads as a sprite; one that stutters reads as lightning. */
+            const on = lt < 90 || (lt > 150 && lt < 212) || (lt > 252 && lt < 302);
+            if (on) {
+              /* On the viewport surface: a bolt runs to the top of the SCREEN,
+                 which is a good deal further than the band around him reaches.
+                 Same reasoning as the rope, a few branches down. */
+              const prev = ctx;
+              ctx = pageCtx;
+              const vx = bit.ax - scrollXNow;
+              let by = bit.ay - scrollYNow - 74;
+              for (let i = 0; i < 16 && by > -90; i++) {
+                drawActor('bolt', vx + Math.sin(i * 1.7) * 11, by, f, 1, 1.5);
+                by -= 68;
+              }
+              ctx = prev;
+            }
+          }
+          break;
+        }
+        case 'lantern': {
+          const u = (bit.t - LANT.ghost) / (LANT.up - LANT.ghost);
+          if (u > 0) {
+            const a = u < 0.75 ? Math.min(1, u * 5) : Math.max(0, 1 - (u - 0.75) / 0.25);
+            drawActor('ghost', bit.bx - offX, bit.by - offY, f * a * 0.85, 1, 1.2);
+          }
+          break;
+        }
+        case 'gift': {
+          if (bit.t >= GIFT.open && bit.t < GIFT.open + 720) {
+            const u = (bit.t - GIFT.open) / 720;
+            for (let i = 0; i < 5; i++) {
+              const a2 = (i / 5) * Math.PI * 2;
+              drawActor(
+                'sparkle',
+                x + Math.cos(a2) * u * 48,
+                y - 26 + Math.sin(a2) * u * 42,
+                f * (1 - u)
+              );
+            }
+          }
+          break;
+        }
+      }
+    }
+
+    /**
+     * The snow, on the VIEWPORT surface rather than the band.
+     *
+     * It belongs to the screen, not to the paragraph he happens to be standing
+     * on, so it goes on the fixed canvas the way the rope does. Deterministic
+     * rather than stored: eighteen flakes whose whole state is the clock, so
+     * this allocates nothing and survives a resize without a respawn.
+     */
+    function drawSnow() {
+      if (bit.name !== 'gift') return;
+      const prev = ctx;
+      ctx = pageCtx;
+      const f = bitFade();
+      for (let i = 0; i < 26; i++) {
+        const lane = ((i * 4423) % 977) / 977;
+        const rate = 0.05 + (i % 5) * 0.014;
+        const sxp = lane * W + Math.sin(bit.t * 0.0011 + i) * 24;
+        const syp = ((bit.t * rate + i * 137) % (H + 70)) - 34;
+        drawActor('snowflake', sxp, syp, f * 0.6, 1, 0.45 + (i % 3) * 0.15);
+      }
+      ctx = prev;
+    }
+
     function draw() {
       ctx = pageCtx;
       pageCtx.clearRect(0, 0, W, H);
@@ -5522,6 +6354,9 @@ export default function Companion({
         if (pvz.z0Alive) drawPropAt(zName, pvz.z0x - docOffX - zw * 0.5, floor - zh, mirror);
       }
 
+      /* ---- the set piece, behind him ---- */
+      drawBitBehind(docOffX, docOffY);
+
       if (onScreen) {
         /* Snap the whole puppet to the pixel grid. Drawn at a fractional
            offset a pixel sparrow shimmers, which undoes the entire look. */
@@ -5567,6 +6402,10 @@ export default function Companion({
 
         ctx!.save();
         ctx!.imageSmoothingEnabled = false;
+        /* How solid he is. Only a set piece ever moves it, and every exit from
+           one puts it back, so this is the only line in the paint path that
+           has to know the fade exists. */
+        ctx!.globalAlpha = bird.alpha;
         const flips = flipsBefore(anim, bird.animT);
         const facing = flips % 2 === 1 ? ((-bird.facing) as 1 | -1) : bird.facing;
         if (facing === -1) {
@@ -5668,6 +6507,10 @@ export default function Companion({
           ctx = prev;
         }
       }
+
+      /* ---- the set piece, over the top of him ---- */
+      drawBitFront(docOffX, docOffY);
+      drawSnow();
 
       /* ---- the pea and its splat, in front of everything ---- */
       if (bird.mode === 'pvz') {
@@ -6162,6 +7005,11 @@ export default function Companion({
           startAnim('sleep', 0);
         },
         forcePvz: startPvz,
+        /* The set pieces, on demand. `forceBit()` with no name rolls one the
+           way the idle scheduler would, seasons and all. */
+        forceBit: (name?: BitName) => startBit(name ?? rollBit() ?? 'creeper'),
+        cutBit,
+        bitState: () => ({ name: bit.name, t: Math.round(bit.t), holds: bit.holds, cut: bit.cut }),
         forceFall: enterFall,
         say,
         openChat,
