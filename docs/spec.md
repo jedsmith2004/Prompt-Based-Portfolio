@@ -135,6 +135,47 @@ on it in the first substep; `FALL_CLEARANCE` starts the drop 2px below. Ending a
 errand releases the *perch*, not just the errand, and also abandons a flight
 still heading for it.
 
+**A HOP THAT CANNOT REACH ITS TARGET IS FLOWN, NOT LAUNCHED.** `launchTo`
+clamps the arc's rise (`HOP_REACH`: 420px hurrying, 620 otherwise), so a leg
+asked for a taller climb than that has its apex *below* its own target. It does
+not arrive slowly, it does not arrive at all. That single fact was the light
+switch going off without him and most of the times he left down the bottom of
+the screen after a wall kick, because a wall kick splits a climb 28/72 and a 72
+that is still too tall is a leap into nothing. The reach is asked before the
+launch, and an unreachable leg becomes a flight to the end of the plan.
+
+**A DEVICE IS FOR WHAT A JUMP CANNOT DO.** An errand whose climb is taller than
+a whole chain (`CHAIN_REACH`, the binding 72 leg) is flown with the jetpack or
+the balloon — animations he already owns off the transit table, already carrying
+their own furniture. Which one is decided by the clock, not by a coin: the
+balloon only comes out when it can still make the deadline. He is a bird; he
+jumps wherever jumping works.
+
+**A FALL ASKS THE LANDING QUESTION ONE FRAME EARLY.** The off-screen net sits
+200px past the bottom edge, which is 200px after the reader has watched him go.
+It stays, but if nothing in his corridor is both below him and still on the
+screen, the drop has no ending and he glides toward something that has.
+
+**SET PIECES ARE TIMELINES, NOT SCRIPTS.** The lawn (`pvz`) is a script of *his*
+animations that the rig walks, which works only while he is the only actor. A
+**bit** — creeper, Back to the Future, and the three seasonal ones — is a
+timeline: `t` in ms from the start, every phase an absolute time on it, running
+*outside* the mode switch. `holds` says whether it owns the bird, so an
+interrupt hands him back on that frame and the actors see themselves out.
+Seasons are **weighted** by the calendar, not gated by it; `SEASON_PREVIEW`
+keeps all three in the hat all year and is one line to turn off.
+
+**EVERY PROP NEEDS A K OUTLINE ROUND A MID-TONE INTERIOR.** The plates flip
+light and dark under him, so anything authored bright-on-nothing — a white
+blast, a white bolt, a white flake, an ink-black note — is invisible on exactly
+half the site. This is why the puppet has always been drawn this way. Bright
+things keep bright interiors; they still need a silhouette.
+
+**NOTHING IS DRAWN THROUGH A ROTATION MATRIX.** A pixel bitmap through a real
+rotation stops being pixel art on the first frame that is not square. Things
+that turn (the totem) are squashed toward their own centre line and let through
+zero, which shows the far side.
+
 **He is drawn on TWO canvases, and the split is the whole point.**
 
 1. A **band in document flow**, roughly 560px tall, translated in DOCUMENT

@@ -8,7 +8,191 @@ See also: [spec.md](spec.md) · [plan.md](plan.md) · [ab-log.md](ab-log.md) · 
 
 ---
 
-## 2026-08-26 (latest) — two pixels
+## 2026-08-26 (latest) — the tweak list, plate by plate
+
+Jack read the whole site and came back with a list: two or three notes per
+plate, a general note about passive motion and the day dial, and three about
+Pip. This is what was under them.
+
+### One arithmetic fact was two of the Pip complaints
+
+> *"Especially when going up, sometimes he doesn't get to the light switch in
+> time and it goes off without him."*
+> *"He sometimes jumps off a wall and just straight off the bottom of the
+> screen."*
+
+`launchTo` clamps a hop's rise to 420px when it is hurrying. A leg asked for a
+taller climb than that has its apex **below its own target**: he does not arrive
+slowly, he does not arrive at all. He leaps, misses by whatever the clamp took
+off, and falls back down the page until gravity finds him some furniture. The
+old code launched it anyway and let the fall handler pick up the pieces.
+
+The light cord hangs at the top of the screen and most of a plate is further
+below it than 420px. And the wall kick splits a climb 28/72, so a 72 that is
+still too tall is a leap into nothing — which is the second complaint, one
+level down.
+
+`launchTo` now asks the question before it launches and flies the leg instead
+of jumping it when the answer is no. `HOP_REACH` is the same number the clamp
+uses, named once.
+
+**The device is only for what a jump genuinely cannot do.** A climb taller than
+a whole hop chain (`CHAIN_REACH`, the binding 72 leg) is flown with a jetpack or
+a balloon — both animations he already owns off the transit table, both already
+carrying their own furniture, so nothing new is drawn. Which one is picked by
+the clock rather than by a coin: the balloon is lovely and slow, so it only
+comes out when it can still make the deadline. He is a bird; he should jump
+wherever jumping works.
+
+### The fall now asks the landing question one frame early
+
+The old safety net sits 200px past the bottom edge, so by the time it fired the
+reader had already watched him go. It stays — a net belongs where nothing can
+pass it — but if nothing in his corridor is both below him and still on the
+screen, the drop has no ending and he opens into a glide toward something that
+has. Gated to the lower half of the screen, so the drop off the light cord still
+reads as a drop.
+
+### Five easter eggs, and the shape they are built on
+
+The lawn (`pvz`) was the first set piece and it is built the wrong way round for
+any of these: a script of *his* animations that the rig walks. That works while
+he is the only actor. Once there are two, and one of them has to keep going
+after he has stopped, it falls over.
+
+So a **bit** is a timeline and nothing else. `t` is milliseconds from the start,
+every phase is an absolute time on it, and the tick asks where on it we are. It
+runs **outside** the mode switch, and `holds` says whether it currently owns the
+bird. Which is what makes the interrupt work as asked:
+
+> *"If the user interrupts during the sequence (like scrolls off the page or
+> drags pip), pip carries on but marty (if he's out) gets back in the car and
+> they get struck by lightning and zoom away."*
+
+He is handed back his own behaviour on the frame the reader touches anything;
+the actors are given the shortest exit that still makes sense, which for the
+DeLorean is the ending it was always going to have, arriving early.
+
+`creeper` · `bttf` · `lantern` · `gift` · `egg`. The long one only enters the
+hat after a full minute of stillness, which `settledMs` already measured: it
+counts *continuous* stillness and resets on any scroll or pointer move, so it
+says "nobody has touched this page for a minute" rather than "a minute has
+passed".
+
+Seasons are **weighted** by the calendar rather than gated by it, so
+`SEASON_PREVIEW` is a dial and not a switch — Jack asked to see them now, so
+every seasonal bit is in the hat all year at a fraction of its in-season weight,
+and one line turns that off. Easter is the anonymous Gregorian algorithm,
+because "late March, ish" is wrong by up to a month and a bug that appears once
+a year is a bug nobody catches.
+
+### Six of the twenty new sprites were invisible on half the site
+
+First draft: a white blast, a white bolt, a white ghost, a white flash, a white
+flake and an ink-black music note. Every plate on this site flips light and dark
+under him, so each of those is invisible on exactly half of it — and the note
+was invisible on the plate I happened to photograph, which is the only reason it
+was caught.
+
+The puppet has always solved this the same way and it is not decoration: **a K
+outline round a mid-tone interior.** The bright ones keep their bright
+interiors; they gained a silhouette.
+
+Nothing is drawn through a rotation matrix. The totem of undying turns by being
+squashed toward its own centre line and let through zero, because a pixel bitmap
+through a real rotation stops being pixel art on the first frame that is not
+square.
+
+### The day dial was a coin
+
+> *"The sun to moon animation should be bigger, and just a line representing the
+> horizon ... a little bit of overshoot as well."*
+
+It was a badge: a paper disc with a rim, an opaque half-disc for the ground,
+both bodies inside it. The occlusion came free that way, but the whole thing was
+a small illustrated coin in the corner, and the sun setting inside a coin is not
+the sun setting.
+
+No disc, no ground, no rim. **One rule across the top of the page is the
+horizon, and the sky is a clip** — the same occlusion with nothing standing in
+for the world.
+
+The pop is a **scale about the middle of the line**, and that is the whole
+trick: scaling about a point that lies *on* the horizon runs each body along its
+own radius, so the top one rises out of the line and the bottom one stays under
+it. One animation, correct for whichever body happens to be up, and the exit is
+the same scale backwards so the whole thing goes back into the line it came out
+of. The sweep is a real 180 now, so the two bodies are a genuine half-turn apart
+and the exchange *is* the animation.
+
+And no keyframe percentages. The old version carried the phase boundaries twice
+— four constants in the component, two percentages in the stylesheet — under a
+comment warning they were one number in two files. Every phase now sits on its
+own element with a single-purpose animation and a `calc()` delay over the same
+five custom properties.
+
+Commit moves from 0.4s in to about 1.4s, which is what a hang costs.
+`DEVICE_TIMEOUT` is 5200ms, so there is room.
+
+### The masthead rendered as one capital per line
+
+The passive layer was asked for as *"subtle, passive animations ... text
+effects, shimmers"*. The rule it is written under: **nothing runs at rest.** A
+permanent shimmer is a permanent compositor layer and, through
+`background-clip`, a repaint every frame forever — on the branch whose entire
+subject was the frame budget, for an effect nobody notices after ten seconds. So
+everything is a one-shot on the plate's own reveal, except the masthead, which
+is gated on `data-v2-palette='top'` and stops animating the moment the reader
+leaves it.
+
+Then the masthead disappeared.
+
+`background-position` percentages resolve against **(positioning area − image)**,
+and the image is 320% of the box. So "155% to −55%, so it starts off the edge"
+puts the gradient entirely off the element — and with `background-repeat:
+no-repeat`, a letterform with no background under it and a transparent fill is a
+letterform that is not there. `100%` to `0%` keeps it over the box at every
+point in the sweep.
+
+The same arithmetic caught the tuning: the gradient stops are a third as wide as
+they look, so `42%`–`58%` measured out at *half the headline lit*, which is a
+wash rather than a sheen. It is 5% of the image now, a sixth of the line.
+
+### The route map reads itself out
+
+> *"Maybe a passive cycle switching the selection between the stops before you
+> select one could be cool."*
+
+It walks its own road until somebody takes it off it, and stops for good on the
+first touch of any kind — click, key, hover, focus — because a selection that
+keeps moving after you have made one is a fight over the same control. It
+deliberately does *not* force the reveal the way a real selection does: reaching
+for a stop means "show me the whole road, now", and the plate showing itself off
+means no such thing. The panel is `aria-live="off"` while it walks, because a
+stop announced every two seconds is a screen reader nobody can use.
+
+### What the harness could and could not do
+
+The Browser pane still cannot run this site: `document.hidden` is `true` there,
+so `requestAnimationFrame` never fires and `bird.clock` sat at 0 through a
+creeper that had been "running" for half a minute. Every timing check in this
+pass went through a real headless Chrome over CDP instead.
+
+Two instrumentation errors worth keeping:
+
+- **`Page.captureScreenshot`'s `clip` is in DOCUMENT coordinates, not viewport
+  ones.** A clip of `y: 0..340` on a page scrolled to 7200 photographs the
+  masthead and reports a blank plate. I diagnosed "the set piece is not
+  drawing" off one of those before probing the DOM and finding the creeper
+  exactly where it should be.
+- The sprites were checked by **rendering the matrices to a PNG and looking at
+  it**, not by reading them. The totem read as a signpost, the note as a smudge
+  and the chick as a blob, and all three were fixed in one pass — none of which
+  `tsc`, a row-length check or a palette audit could have told me.
+
+---
+
+## 2026-08-26 — two pixels
 
 Jack: *"The bird is not pulling the light switch."*
 

@@ -864,17 +864,121 @@ regression of this. Worth a lint rule if it ever happens a third time.
 
 ---
 
-## Immediate next three (2026-08-26)
+## P1 — the tweak list (new, 2026-08-26)
+
+### P1-TWEAKS — DONE (2026-08-26)
+
+Jack read the whole site and came back with a list. Every line of it is below,
+with what it turned out to be. Nothing here was invented.
+
+**The splash**
+
+`[x]` *"Move the top particle line a bit higher, so it doesn't go through the
+body text."* The type bands were measured off the live page (title 0.34-0.63,
+reading matter 0.76-0.94) and `ridgeline`'s two layers moved to 0.370-0.728 and
+0.920-1.
+
+**Plate 1 — from-scratch**
+
+`[x]` *"Move the small spinning circles fractal further to the right corner so
+it occupies the space."* The gasket inset now takes the bottom-right corner,
+with a clearance test against the limb and the old beside/below placement as a
+fallback.
+`[x]` *"When no digit is drawn in the box, the first set of weight connections
+are invisible."* `restingLinks` was setting `inCount = 0`. It now picks each
+shown hidden unit's strongest raw inputs with a separation constraint, so the
+first layer is drawn at rest.
+
+**Plate 2 — models**
+
+`[x]` *"Pip can't land on the projects carousel."* The perch is the **rail**,
+not a card: the cards translate every frame forever and the harvester
+re-measures on a resize or a transition end, not per frame.
+
+**Plate 3 — recensorium / the reel**
+
+`[x]` The reel's four faults were all sizing, and two of them were the same
+fact: a canvas is a REPLACED element, so `width: auto` resolves to its intrinsic
+attribute size and the far-side offset is dropped as over-constrained. A stale
+`layout()` wrote the attribute; `.v2-reel-side` then lost a specificity contest
+to `.v2-reel-stage canvas`.
+`[x]` *"There is no link to each project ... there is also no link to an 'all
+projects' page."* Fifteen generated project pages under `/v2/projects/[id]`,
+each dressed with its own plate and world from `lib/v2/projectPages.ts`, and
+both links on the reel.
+
+**Plate 4 — delivery**
+
+`[x]` *"Pip can't land on some of the items."* `data-perch` on the career bar,
+the entries, the degree line and the band.
+
+**Plate 5 — the road**
+
+`[x]` *"Maybe a passive cycle switching the selection between the stops before
+you select one could be cool."* It walks its own route until any touch takes it
+over, does not force the reveal, and is `aria-live="off"` while it walks.
+
+**Plate 6 — practice**
+
+`[x]` *"The climbing animation is almost entirely invisible, it is a black
+background so all the black letters should be white."* One mount-time token bake
+wearing five hats. `lib/v2/paletteWatch.ts` and four subscribers.
+
+**Plate 7 — cv / the press wall**
+
+`[x]` *"There are massive gaps in the newspaper cutouts."* The appointments card
+sat alone in an outer-grid row, leaving five columns and ~700px of nothing. It
+is a multicolumn flow now.
+`[x]` *"The black background is also too black, make it slightly grey."* Every
+dark form lifted +12 per channel, re-audited: 18 forms, worst small text 4.50:1,
+zero failures.
+
+**Plate 8 — contact**
+
+`[x]` *"When it first loads in, the screen becomes noise."* Not spawning
+particles. The 39s breath swung stiffness 0.24x-1.00x and took the spread from
+0.10 to 0.42 NDC — no silhouette at all. Measured by `gl.readPixels` off the sim
+FBO: mean particle-to-target distance ran 0.308 → 0.219 → 0.176 → 0.217 → 0.052,
+a bounce rather than a gather.
+`[x]` *"The email, github and linkedin should all be massive link boxes."*
+`[x]` *"There should be a minimal contact form, in line with the theme."*
+`[x]` *"Add some shooting stars, every now and again."*
+
+**General**
+
+`[x]` *"There should be more subtle, passive animations ... text effects,
+shimmers, etc."* Written under one rule: nothing runs at rest. See the passive
+block at the bottom of `v2.css`.
+`[x]` *"The sun to moon animation should be bigger, and just a line
+representing the horizon ..."* The dial loses its badge; the pop is a scale
+about the middle of the line.
+
+**Pip**
+
+`[x]` *"Make him use one of his abilities like jetpack or hot air balloon to go
+straight to it if he is too far away."*
+`[x]` *"Quite often he struggles to find a nearby surface to land on and falls
+off the screen ... he sometimes jumps off a wall and just straight off the
+bottom of the screen."*
+`[x]` *"Give him some more fun idle easter eggs ... Figure out some more cool
+easter eggs, and ones for halloween, christmas, easter, etc. — put those ones in
+now so I can see them."* Five bits and the timeline machinery to hang more on.
+`SEASON_PREVIEW` is on, so the seasonal three are in the hat all year.
+
+---
+
+## Immediate next three (2026-08-26, after the tweak list)
 
 Everything above that was mine to do is done. What is left needs Jack, or needs
 a decision he has not made yet.
 
-1. **Read the site, and the two devices and the lag before anything else.**
-   Whether the switch reads as Pip pulling it, whether the dial is snappy,
-   whether the worlds now feel like the centrepiece rather than louder
-   wallpaper, and whether the page still feels laggy now the two forced layouts
-   are out. None of the four can be checked from here, and between them they are
-   most of what this pass was.
+1. **Read the site, and the set pieces and the dial before anything else.**
+   Whether the creeper and the DeLorean land as jokes rather than as
+   interruptions, whether ten seconds is too long for the DeLorean even behind a
+   minute of stillness, whether the seasonal three should stay in the hat all
+   year (`SEASON_PREVIEW`, one line), whether the new dial's 1.4s to commit
+   reads as a hang or as a delay, and whether the masthead sheen is too subtle
+   to have been worth it. None of the five can be checked from here.
 2. **P2-VOCABULARY, in its new form.** The backdrops are the vocabulary; he
    settled that. The open question is the eight interactive figures on top of
    them. This is the one place where cutting something good is probably right,
