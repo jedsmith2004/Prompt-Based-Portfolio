@@ -927,6 +927,17 @@ const UPDATE_DT_MAX = 1 / 30;
  */
 const MEASURE_QUIET_MS = 150;
 
+/**
+ * How fast a scroll burns the page's accrued quiet, as a multiple.
+ *
+ * Burning rather than zeroing. A reader who nudges the wheel once should not
+ * lose eight seconds of accumulated calm and have to sit through the whole
+ * wait again -- which, with a reset, is exactly what a twitchy trackpad does
+ * forever. At 3x a real scroll still clears it in a third of the time it took
+ * to build, so travelling through the page genuinely does disqualify.
+ */
+const CALM_BURN = 3;
+
 /** Move `cur` toward `target` by at most one frame of travel. */
 function approach(cur: number, target: number, dt: number, speed = CORRECT_SPEED): number {
   const d = target - cur;
@@ -2012,6 +2023,25 @@ export default function Companion({
       restUntil: 0,
       sinceMove: 0,
       settledMs: 0,
+      /**
+       * How long the PAGE has been quiet, in ms. Not the reader.
+       *
+       * `settledMs` above is the lawn's measure and it is stricter on purpose:
+       * it also requires the pointer to have been still for 2.6s, so any mouse
+       * movement inside that window zeroes it. For a reader sitting with a hand
+       * on the mouse, which is most readers, it never accumulates at all --
+       * which made the set pieces UNREACHABLE rather than rare. That is the
+       * same fault the comment on the lawn's gate warns about one step up: an
+       * easter egg nobody can trigger has not shipped.
+       *
+       * A set piece happens TO him while he stands somewhere. What it needs is
+       * a page that is not moving under it, and nothing else. So this counts
+       * scroll quiet only, it is accumulated OUTSIDE the mode switch so it
+       * keeps running while he walks and hops, and a scroll BURNS it at 3x
+       * rather than resetting it -- nudging the page should not cost a reader
+       * eight seconds of accrued calm.
+       */
+      calmMs: 0,
       /** How long he has been off the screen, in ms. Only this fires an
           ability; see the trigger in update(). */
       strandedMs: 0,
@@ -4211,25 +4241,54 @@ export default function Companion({
     /** Which seasonal bits there are. The order is only the order they roll. */
     const SEASONAL: readonly BitName[] = ['lantern', 'gift', 'egg'];
 
-    /** How still he has to have been, in ms, before any bit is in the hat. */
-    const BIT_SETTLE_MS = 9000;
+/* ------------------------------------------------------------------------
+     * HOW OFTEN, AND THE ONE LINE THAT TURNS THE FIREHOSE OFF
+     *
+     * Jack, 2026-08-26: "Can you make the easter eggs more common in general,
+     * and way more common right now, I want to see them and I'm waiting ages!"
+     *
+     * The waiting was not the odds. `settledMs` -- the measure this used to
+     * gate on -- also requires 2.6s of pointer stillness, so a reader with a
+     * hand on the mouse zeroed it every frame and never once qualified. See
+     * bird.calmMs. The numbers below are the second half of the answer, on a
+     * clock that now actually runs.
+     *
+     * IMPATIENT is for looking at them. It is one boolean and it multiplies
+     * every gate at once, so there is exactly one thing to turn off when the
+     * set is signed off rather than five numbers to remember to put back.
+     * ---------------------------------------------------------------------- */
+
+    /** Turn this off when the set pieces have been seen and signed off. */
+    const BIT_IMPATIENT = true;
+    /** What IMPATIENT does to the wait, the odds and the quiet after. */
+    const RUSH = BIT_IMPATIENT
+      ? { settle: 0.18, rate: 5, cool: 0.15, bttf: 0.1 }
+      : { settle: 1, rate: 1, cool: 1, bttf: 1 };
+
     /**
-     * ...and the long one wants a whole minute of it.
+     * How quiet the page has to have been, in ms, before any bit is in the hat.
+     *
+     * Was 9000 against the old measure. Halved, because the new one is a real
+     * clock: 4.5s is about the time it takes to read a plate's lede, which is
+     * the moment a reader is most likely to be looking at him.
+     */
+    const BIT_SETTLE_MS = 4500 * RUSH.settle;
+    /**
+     * ...and the long one still wants a whole minute.
      *
      * > "That one should only have a chance of happening if they've been idle
      * > for more than a minute."
      *
-     * `settledMs` is exactly that measure and it is already maintained: it
-     * counts continuous stillness and is reset by any scroll or any pointer
-     * movement, so it says "nobody has touched this page for a minute" rather
-     * than "a minute has passed".
+     * A minute of the page not moving is a genuinely idle reader, and unlike
+     * the old measure it is a minute they can actually accumulate.
      */
-    const BTTF_SETTLE_MS = 60000;
-    /** Per-second odds once he qualifies. */
-    const BIT_RATE = 0.05;
+    const BTTF_SETTLE_MS = 60000 * RUSH.bttf;
+    /** Per-second odds once he qualifies. 0.05 was one every twenty seconds
+        of quiet ON TOP of a gate nobody reached. */
+    const BIT_RATE = 0.16 * RUSH.rate;
     /** Quiet afterwards, so two never run into one another. */
-    const BIT_COOLDOWN = 52000;
-    const BTTF_COOLDOWN = 240000;
+    const BIT_COOLDOWN = 26000 * RUSH.cool;
+    const BTTF_COOLDOWN = 120000 * RUSH.bttf;
     /** Every bit fades its actors out over its own last stretch. */
     const BIT_FADE_MS = 380;
 
@@ -4559,6 +4618,8 @@ export default function Companion({
      */
     const BIT_POOL: BitName[] = [];
     const BIT_WEIGHT: number[] = [];
+    /** The last one he did. It does not get to be the next one. */
+    let lastBit: BitName | null = null;
     function rollBit(): BitName | null {
       BIT_POOL.length = 0;
       BIT_WEIGHT.length = 0;
@@ -4566,10 +4627,13 @@ export default function Companion({
       const push = (n: BitName, w: number) => {
         if (w <= 0) return;
         BIT_POOL.push(n);
-        BIT_WEIGHT.push(w);
+        /* Rushing, the hat is FLAT: the point of IMPATIENT is to see all five,
+           and authored odds under a five-times rate just means five creepers
+           and a wait for the rest. */
+        BIT_WEIGHT.push(BIT_IMPATIENT ? 10 : w);
       };
       push('creeper', 20);
-      if (bird.settledMs > BTTF_SETTLE_MS) push('bttf', 9);
+      if (bird.calmMs > BTTF_SETTLE_MS) push('bttf', 9);
       for (let i = 0; i < SEASONAL.length; i++) {
         const n = SEASONAL[i];
         push(
@@ -4581,15 +4645,29 @@ export default function Companion({
               : 0
         );
       }
+      /* NEVER THE SAME ONE TWICE RUNNING, as long as there is anything else
+         in the hat. A rare thing that repeats immediately is the one outcome
+         that makes a set of five feel like a set of one -- and at IMPATIENT
+         odds the reader sees enough rolls for it to happen constantly. */
+      if (lastBit && BIT_POOL.length > 1) {
+        const i = BIT_POOL.indexOf(lastBit);
+        if (i >= 0) BIT_WEIGHT[i] = 0;
+      }
+
       let total = 0;
       for (let i = 0; i < BIT_WEIGHT.length; i++) total += BIT_WEIGHT[i];
       if (total <= 0) return null;
       let r = Math.random() * total;
+      let pick = BIT_POOL[0];
       for (let i = 0; i < BIT_POOL.length; i++) {
         r -= BIT_WEIGHT[i];
-        if (r <= 0) return BIT_POOL[i];
+        if (r <= 0) {
+          pick = BIT_POOL[i];
+          break;
+        }
       }
-      return BIT_POOL[0];
+      lastBit = pick;
+      return pick;
     }
 
     /* ---- transit ---------------------------------------------------------- */
@@ -4966,6 +5044,10 @@ export default function Companion({
        * the same reason a drag is: the reader has stopped watching, and a set
        * piece that plays on regardless is one playing to an empty room.
        */
+      /* The page's own quiet, for the set pieces. See bird.calmMs. */
+      if (Math.abs(vel) < 2) bird.calmMs += dt * 1000;
+      else bird.calmMs = Math.max(0, bird.calmMs - dt * 1000 * CALM_BURN);
+
       if (bit.name && bit.holds) {
         const bsy = bird.y - scrollYNow;
         if (Math.abs(vel) > 7 || bsy < -OFF_SCREEN_MARGIN || bsy > H + OFF_SCREEN_MARGIN) {
@@ -4973,6 +5055,33 @@ export default function Companion({
         }
       }
       if (bit.name) tickBit(dt);
+
+      /*
+       * THE SET PIECES FIRE FROM HERE, not from inside the idle case.
+       *
+       * Two reasons, and both of them were costing the reader eggs. The lawn's
+       * gate sits above where this used to be and `break`s on success, so the
+       * lawn could quietly eat a turn. And `idle` is only one of the four modes
+       * he spends time in with his feet on something: a creeper is perfectly
+       * happy to drop on a bird who is mid-walk, and refusing to let it halved
+       * the number of frames that could ever roll.
+       *
+       * `land` is left out because he is still arriving, and `sleep` because
+       * waking him has its own path.
+       */
+      if (
+        !bit.name &&
+        !onErrand() &&
+        !chat.current.open &&
+        bird.perch &&
+        (bird.mode === 'idle' || bird.mode === 'act' || bird.mode === 'walk') &&
+        bird.calmMs > BIT_SETTLE_MS &&
+        bird.clock > bit.gate &&
+        Math.random() < dt * BIT_RATE
+      ) {
+        const pick = rollBit();
+        if (pick) startBit(pick);
+      }
       {
         const sy = bird.y - scrollYNow;
         const gone = sy < -OFF_SCREEN_MARGIN || sy > H + OFF_SCREEN_MARGIN;
@@ -5095,24 +5204,6 @@ export default function Companion({
           if (bird.settledMs > 11000 && bird.clock > pvz.gate && Math.random() < dt * 0.02) {
             startPvz();
             break;
-          }
-
-          /* The rest of the set pieces, off the same stillness measure. The
-             lawn keeps its own gate and its own odds because it is a minute
-             long and predates all of this. */
-          if (
-            !bit.name &&
-            !onErrand() &&
-            bird.perch &&
-            bird.settledMs > BIT_SETTLE_MS &&
-            bird.clock > bit.gate &&
-            Math.random() < dt * BIT_RATE
-          ) {
-            const pick = rollBit();
-            if (pick) {
-              startBit(pick);
-              break;
-            }
           }
 
           /* every so often, move house — roughly once every twelve seconds */

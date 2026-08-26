@@ -165,6 +165,20 @@ interrupt hands him back on that frame and the actors see themselves out.
 Seasons are **weighted** by the calendar, not gated by it; `SEASON_PREVIEW`
 keeps all three in the hat all year and is one line to turn off.
 
+**A STILLNESS GATE IS NOT ONE MEASURE, AND USING THE WRONG ONE SHIPS NOTHING.**
+`bird.settledMs` counts *reader* stillness: it is zeroed by a scroll **or by any
+pointer movement in a 2.6s window**, so a reader with a hand on the mouse never
+accumulates any of it. That is correct for the lawn, a minute-long performance
+you should not walk in on. For anything a reader is meant to *see*, it is a gate
+they cannot satisfy, and an easter egg nobody can trigger has not shipped. The
+set pieces use `bird.calmMs`: *page* quiet only, accumulated outside the mode
+switch, and **burned** by a scroll at 3x rather than reset, because one nudge of
+a trackpad should not cost the whole wait.
+
+**A RARE THING MUST NOT REPEAT ITSELF.** The last set piece played is dropped
+from the hat while there is anything else in it. Two of the same in a row makes
+a set of five read as a set of one, which is worse than either being rarer.
+
 **EVERY PROP NEEDS A K OUTLINE ROUND A MID-TONE INTERIOR.** The plates flip
 light and dark under him, so anything authored bright-on-nothing — a white
 blast, a white bolt, a white flake, an ink-black note — is invisible on exactly

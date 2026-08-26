@@ -8,7 +8,69 @@ See also: [spec.md](spec.md) · [plan.md](plan.md) · [ab-log.md](ab-log.md) · 
 
 ---
 
-## 2026-08-26 (latest) — the tweak list, plate by plate
+## 2026-08-26 (latest) — the easter eggs nobody could reach
+
+> *"Can you make the easter eggs more common in general, and way more common
+> right now, I want to see them and I'm waiting ages!"*
+
+The waiting was not the odds. It was a gate that most readers can never satisfy.
+
+The set pieces fired off `bird.settledMs`, which is the lawn's stillness measure
+and is stricter than it looks: it counts continuous quiet, and it is zeroed by a
+scroll **or by any pointer movement inside a 2.6s window**. That is right for the
+lawn, which is a minute-long performance you should not walk in on. It is wrong
+for a ten-second gag. A reader sitting with a hand on the mouse — which is most
+readers, most of the time — zeroes it every frame and never accumulates a single
+one of the nine seconds required. The eggs were not rare. They were unreachable.
+
+Two smaller faults on top of it, both costing turns:
+
+- The trigger lived inside `case 'idle'` **below** the lawn's own gate, which
+  `break`s on success, so the lawn could quietly eat a roll.
+- `idle` is one of four modes he spends time in with his feet on something. A
+  creeper is perfectly happy to drop on a bird who is mid-walk, and refusing to
+  let it halved the frames that could ever roll.
+
+### bird.calmMs
+
+A set piece happens **to** him while he stands somewhere. What it needs is a page
+that is not moving under it, and nothing else. So the new measure counts scroll
+quiet only, accumulates *outside* the mode switch so it keeps running while he
+walks and hops, and a scroll **burns** it at 3x rather than resetting it. Burning
+matters: with a reset, one nudge of a twitchy trackpad costs a reader the whole
+wait, forever.
+
+### The numbers, and the one line that turns the firehose off
+
+`BIT_IMPATIENT` is a single boolean multiplying every gate at once — the wait,
+the odds, the cooldown, and the DeLorean's minute. One thing to switch off when
+the set has been signed off, rather than five numbers to remember to put back.
+While it is on, the weights also go **flat**: authored odds under a five-times
+rate is five creepers and a wait for the rest, and the point of IMPATIENT is to
+see all five. The last one played is also dropped from the hat, because a rare
+thing that repeats immediately is the one outcome that makes a set of five feel
+like a set of one.
+
+### Measured, with the mouse moving the whole time
+
+Headless Chrome over CDP, scrolled to a plate, `Input.dispatchMouseEvent` firing
+continuously for 90s — precisely the condition that used to zero the old gate:
+
+```
+   19594ms  + 19594ms  gift
+   32823ms  + 13229ms  creeper
+   52297ms  + 19474ms  egg
+   73890ms  + 21593ms  gift
+   86235ms  + 12345ms  bttf
+```
+
+Four of the five in a minute and a half, including the DeLorean behind its own
+longer quiet. Before the change the same 90 seconds produced nothing at all, and
+would have produced nothing at any length.
+
+---
+
+## 2026-08-26 — the tweak list, plate by plate
 
 Jack read the whole site and came back with a list: two or three notes per
 plate, a general note about passive motion and the day dial, and three about
