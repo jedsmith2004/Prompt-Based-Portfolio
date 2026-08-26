@@ -160,7 +160,17 @@ const STORIES: Story[] = [
     emph: 'an advisor to the Prime Minister',
     badges: ['ADVOCACY', 'COMMUNICATION', 'STAGE'],
     weight: 'story',
-    cut: 'wide',
+    /* No picture. `cut: 'wide'` fell through to the bare `.v2-clip-cut`
+       band, which is a full-measure block 118px tall dropped between the
+       headline and the citation -- 136px of nothing in the middle of four
+       lines of copy, on exactly this cutting and one other, and on no others.
+       There has never been an `.is-cut-wide` rule to make it behave.
+
+       > "It's only the public speaking competition and engineering you're
+       >  hired ones that had the gaps in their text!"
+
+       Those two, and those two only, are the ones that carried it. */
+    cut: null,
     rot: -1.6,
     seed: 31338,
     torn: T_TOP | T_RIGHT,
@@ -194,7 +204,17 @@ const STORIES: Story[] = [
     emph: 'decentralised swarm robotics',
     badges: ['SWARM', 'ROBOTICS', 'AI'],
     weight: 'brief',
-    cut: 'wide',
+    /* No picture. `cut: 'wide'` fell through to the bare `.v2-clip-cut`
+       band, which is a full-measure block 118px tall dropped between the
+       headline and the citation -- 136px of nothing in the middle of four
+       lines of copy, on exactly this cutting and one other, and on no others.
+       There has never been an `.is-cut-wide` rule to make it behave.
+
+       > "It's only the public speaking competition and engineering you're
+       >  hired ones that had the gaps in their text!"
+
+       Those two, and those two only, are the ones that carried it. */
+    cut: null,
     rot: -1.7,
     seed: 51066,
     torn: T_TOP | T_BOTTOM,
@@ -818,11 +838,11 @@ export default function AwardsClippings({ className }: AwardsClippingsProps) {
       </div>
 
       <div className="v2-clipwall-grid">
-        {/* role="list" is not redundant. The wall is a multicolumn flow and
-            this element carries `display: contents` so the flow balances the
-            cuttings rather than one tall list box; several engines drop list
-            semantics from a display:contents list, and the role puts them
-            back. See the wall block in v2.css. */}
+        {/* role="list" is not redundant. This list carries `list-style: none`
+            and becomes a grid at 900px, and WebKit drops list semantics from
+            both, so the role puts them back. (It used to say the wall was a
+            multicolumn flow with `display: contents`. That was true for a
+            day; the role is still needed, for the older reason.) */}
         <ol className="v2-clip-stories" role="list" aria-label="Awards and distinctions">
           {STORIES.map((s, i) => (
             <Cutting key={s.id} story={s} z={i + 1} />

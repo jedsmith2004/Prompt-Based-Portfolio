@@ -3919,62 +3919,64 @@ html[data-v2-theme='dark']  body { background: #15130E; }
 /* -------------------------------------------------------------------------
    the layered wall
 
-   THE WALL IS A MULTICOLUMN FLOW, NOT A GRID, and that is the fix for "there
-   are massive gaps in the newspaper cutouts".
+   Reverted to this, 2026-08-26. It was a multicolumn flow for about a day.
 
-   It used to be a twelve column grid with every sheet placed by hand. A grid
-   row is as tall as its tallest item and cuttings are wildly different
-   heights, so every row left a slab of empty wall under the shorter sheet.
-   The worst of them was structural rather than incidental: the appointments
-   column sat alone in its own row of the OUTER grid, in columns 8 to 13, so
-   the five columns beside it were seven hundred pixels of nothing.
+   > "I like how the newspaper clippings were before, now they're stacked up.
+   >  It's only the public speaking competition and engineering you're hired
+   >  ones that had the gaps in their text!"
 
-   A multicolumn flow packs by height instead of by row. Each sheet is
-   unbreakable, they fill column one until it balances and then column two,
-   and there is no such thing as a short item leaving a hole. It is also what a
-   real pinned wall does, which is the point.
+   The multicolumn was a fix for the wrong gap. It read "massive gaps in the
+   newspaper cutouts" as whitespace BETWEEN sheets, found a real 649x440 void
+   under the appointments column, and packed the wall by height to close it.
+   That was not the complaint. The gaps were INSIDE two cuttings' copy, and
+   they had been there since the wall was first written -- `.v2-clip-cut` is
+   byte-identical across that commit. See AwardsClippings.tsx, `cut`.
 
-   The cuttings are direct children of the flow (`display: contents` on the
-   list) so the flow can balance THEM rather than balancing one tall list box.
-   That drops the list semantics in some engines, which is why the element
-   carries an explicit role="list" in AwardsClippings.tsx.
+   What the multicolumn cost: a multicol gives every block child the same
+   column width and two hard left edges, so six sheets at three different
+   widths on staggered offsets became two flush stacks of three. It also
+   killed the overlap. THE OVERLAP IS `gap: 0` PLUS `--clip-bleed`, and
+   nothing else: the boxes have to touch, because each canvas is drawn 18px
+   past its own box on all four sides and 36px of that is the layered paper.
+   A column-gap of 44px at any normal width means no two sheets ever meet.
 
-   Overlap still comes from the BLEED, never from the layout: see THE OVERLAP
-   INVARIANT at the top of that file. Nothing here pulls a sheet into its
-   neighbour, so nothing here can bury a word.
+   The void the multicolumn closed is real and comes back with this. It was
+   never what he was pointing at, so it stays until he says otherwise.
    ------------------------------------------------------------------------- */
 @media (min-width: 900px) {
   .v2-clipwall { --clip-bleed: 18px; }
 
   .v2-clipwall-grid {
-    display: block;
-    columns: 2;
-    column-gap: clamp(30px, 3.6vw, 58px);
-    /* balance rather than fill: two columns of roughly equal height read as a
-       wall, one full column beside a half-empty one reads as an accident */
-    column-fill: balance;
-    margin-top: 42px;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 0;
+    align-items: start;
   }
-  .v2-clip-stories { display: contents; }
-
-  .v2-clip {
-    transform: rotate(var(--rot, 0deg));
-    break-inside: avoid;
-    -webkit-column-break-inside: avoid;
-    margin: 0 0 clamp(24px, 2.6vw, 42px);
-    /* A rotated sheet whose paint bleeds past its box still has to be an
-       unbreakable block in the flow. */
-    display: block;
+  .v2-clip-stories {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    align-items: start;
+    gap: 0;
   }
+  .v2-clip { transform: rotate(var(--rot, 0deg)); }
   .v2-clip:hover,
   .v2-clip:focus-visible,
   .v2-clip:focus-within {
     transform: rotate(0deg) translateY(-7px);
   }
 
-  /* The appointments column is the last thing in the flow, so it lands at the
-     foot of whichever column has room for it. */
-  .v2-clip-appts { margin-bottom: 0; }
+  .v2-clip-stories > li:nth-child(1) { grid-column: 1 / 8;  grid-row: 1; }
+  .v2-clip-stories > li:nth-child(2) { grid-column: 8 / 13; grid-row: 1; margin-top: 46px; }
+  .v2-clip-stories > li:nth-child(3) { grid-column: 7 / 13; grid-row: 2; margin-top: 0; }
+  .v2-clip-stories > li:nth-child(4) { grid-column: 1 / 7;  grid-row: 2; margin-top: 30px; }
+  .v2-clip-stories > li:nth-child(5) { grid-column: 2 / 9;  grid-row: 3; margin-top: 8px; }
+
+  /* The column goes under the last cutting, not beside it. Sharing the
+     stories' row and sitting on its floor put it straight through the third
+     cutting's citation, because that row's floor is set by a taller sheet in
+     a different column. */
+  .v2-clip-appts { grid-column: 8 / 13; grid-row: 2; margin-top: 0; }
 }
 
 @media (min-width: 1180px) {
