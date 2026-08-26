@@ -5501,3 +5501,141 @@ html[data-v2-palette] body { background: var(--ground); }
   .v2-doors a:hover::before,
   .v2-doors a:focus-visible::before { transform: scaleY(1); }
 }
+
+
+/* ==========================================================================
+   PASSIVE MOTION
+
+   Jack, 2026-08-26: "There should be more subtle, passive animations on the
+   website, text effects, shimmers, etc."
+
+   THE RULE THIS BLOCK IS WRITTEN UNDER: nothing here runs at rest.
+
+   A permanent shimmer is a permanent tax. It holds a compositor layer and,
+   for anything painted through background-clip, a repaint every frame for as
+   long as the element exists -- on a branch whose whole subject was the frame
+   budget, and for an effect nobody is still noticing ten seconds later. So
+   everything below is either a ONE-SHOT that fires on the plate's own reveal
+   (which is passive from where the reader sits: they scroll, it happens, they
+   did not ask for it) or, in the single case where a permanent one earns its
+   keep, gated to the plate it belongs to.
+
+   Three of them, in the order the reader meets them.
+   ========================================================================== */
+
+/* --- 1. the masthead shimmers --------------------------------------------
+   The one ambient effect on the site, and it is on the one line that is the
+   site's signature. A slow specular pass across the letterforms, the way light
+   crosses a foil-blocked cover.
+
+   GATED TO THE TOP PLATE. `data-v2-palette` on <html> names the plate the
+   reader is on, so the moment they leave the masthead this stops animating
+   entirely rather than repainting 210px type behind six other plates.
+
+   The cycle is 11s and the pass takes 1.7s of it; the remaining 84% is one
+   held keyframe value, so the computed background-position does not change
+   and no repaint is scheduled for the rest of the cycle.
+
+   THE @supports IS LOAD-BEARING. `color: transparent` and the gradient have
+   to arrive together or the title disappears, so both the background-clip and
+   the color-mix that mixes the highlight are tested before either is set.
+   -------------------------------------------------------------------------- */
+@supports ((-webkit-background-clip: text) or (background-clip: text)) and
+  (color: color-mix(in srgb, red, blue)) {
+  html[data-v2-palette='top'] .v2-hero.is-lit .v2-line-in {
+    /* Ink everywhere except a narrow band, so at every position in the sweep
+       the letterform is still the colour it would have been. */
+    /* A NARROW band. At 320% the box only sees about a third of the gradient,
+       so the stops are a third as wide as they look: 42-58 measured out at
+       half the headline lit, which is a wash rather than a sheen. Five per
+       cent of the image is a sixth of the line, which is a highlight. */
+    background-image: linear-gradient(
+      104deg,
+      var(--ink) 47.5%,
+      color-mix(in srgb, var(--ink) 62%, var(--paper-hi)) 50%,
+      var(--ink) 52.5%
+    );
+    background-size: 320% 100%;
+    background-repeat: no-repeat;
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    /* Staggered off the same --d the mask entrance uses, so the pass runs
+       down the lines in the order they arrived rather than across all of
+       them at once. */
+    animation: v2-sheen 11s linear calc(1.9s + var(--d, 0ms)) infinite;
+  }
+}
+/*
+ * 100% and 0%, NOT 155% and -55%.
+ *
+ * Background-position percentages resolve against (positioning area - image),
+ * and the image here is 320% of the box, so 100% of that difference is -220%
+ * of the box: the two ends of this sweep put the gradient at 0..320% and at
+ * -220..100%, and every position in between still covers the box. It is worth
+ * spelling out because the first draft used 155% and -55% "so it starts off
+ * the edge", which sends the gradient entirely off the element -- and with
+ * background-repeat: no-repeat, a letterform with no background under it and
+ * a transparent fill is a letterform that is not there. The masthead rendered
+ * as one capital per line.
+ */
+@keyframes v2-sheen {
+  0%   { background-position: 100% 0; }
+  16%  { background-position: 0% 0; }
+  100% { background-position: 0% 0; }
+}
+
+/* --- 2. the eyebrows print -----------------------------------------------
+   Mono, uppercase, eleven and a half pixels: a line that already looks like it
+   was struck rather than typeset. So it arrives struck -- wiped in from the
+   left over its own reveal delay.
+
+   clip-path rather than letter-spacing or width. Both of those animate layout
+   forty times a plate; this one is composited, and it is the difference
+   between a text effect and a reflow.
+
+   The slide comes off, for the same reason the kinetic titles took it off: two
+   kinds of movement on one line of type reads as a wobble, not as an arrival.
+   -------------------------------------------------------------------------- */
+.v2-reveal.v2-eyebrow {
+  transform: none;
+  clip-path: inset(0 100% 0 0);
+  transition:
+    opacity 0.5s var(--ease) var(--d, 0ms),
+    clip-path 0.62s var(--ease) var(--d, 0ms);
+}
+.v2-section.is-in .v2-reveal.v2-eyebrow {
+  clip-path: inset(0 0 0 0);
+}
+
+/* --- 3. the figures are set ----------------------------------------------
+   The shelf numbers come up out of their own baseline, one after another, the
+   way a board sets a figure. Staggered off the shelf's own reveal delay rather
+   than off a second timeline, so the shelf still arrives as one object.
+
+   The cells are wrapped in nothing, so the stagger is nth-child on the cell
+   and the wipe is on the numeral inside it. Four steps: a shelf wider than
+   that repeats the last delay, which is invisible and better than authoring
+   ten of them.
+   -------------------------------------------------------------------------- */
+.v2-shelf.v2-reveal .v2-shelf-cell b {
+  clip-path: inset(115% 0 0 0);
+  transition: clip-path 0.66s var(--ease) var(--fd, 0ms);
+}
+.v2-section.is-in .v2-shelf.v2-reveal .v2-shelf-cell b {
+  clip-path: inset(0 0 0 0);
+}
+.v2-shelf-cell:nth-child(1) b { --fd: 300ms; }
+.v2-shelf-cell:nth-child(2) b { --fd: 380ms; }
+.v2-shelf-cell:nth-child(3) b { --fd: 460ms; }
+.v2-shelf-cell:nth-child(n + 4) b { --fd: 540ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-v2-palette='top'] .v2-hero.is-lit .v2-line-in { animation: none; }
+  .v2-reveal.v2-eyebrow,
+  .v2-shelf.v2-reveal .v2-shelf-cell b {
+    clip-path: none;
+    transition: none;
+  }
+}
