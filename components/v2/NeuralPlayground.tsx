@@ -1145,8 +1145,15 @@ export default function NeuralPlayground({ height = 340, className }: NeuralPlay
           {/* the canvas itself is hidden from assistive tech: it cannot be
               driven from a keyboard, so the group label and the live verdict
               below carry the meaning instead of a lie about interactivity */}
+          {/* Three perches on this plate, and all three are real lines: the
+              pad's own border, the 2px rule over the verdict, and the hairline
+              along the top of the probability bars. Plate 01 had exactly one
+              landable surface in its figure before this, which is half of what
+              Jack meant by "he struggles to find a nearby surface to land on".
+              See THE PERCH CONTRACT in components/v2/Companion.tsx. */}
           <div
             className="v2-nn-padwrap"
+            data-perch
             role="group"
             aria-label="Digit pad. Draw one digit with a mouse or a finger, then read the result below."
           >
@@ -1173,7 +1180,7 @@ export default function NeuralPlayground({ height = 340, className }: NeuralPlay
             </button>
           </div>
 
-          <div className="v2-nn-verdict">
+          <div className="v2-nn-verdict" data-perch>
             <span className="v2-eyebrow">Reading</span>
             <b className={reading ? 'is-lit' : undefined}>{reading ? reading.digit : '—'}</b>
             <span className="v2-nn-conf">
@@ -1214,7 +1221,7 @@ export default function NeuralPlayground({ height = 340, className }: NeuralPlay
       </div>
 
       {/* --- the softmax --- */}
-      <ol className="v2-nn-bars" aria-label="Class probabilities">
+      <ol className="v2-nn-bars" aria-label="Class probabilities" data-perch>
         {bars.map((p, d) => (
           <li key={d} className={reading && reading.digit === d ? 'is-top' : undefined}>
             <span className="v2-nn-bar" aria-hidden="true">

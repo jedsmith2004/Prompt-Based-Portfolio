@@ -795,6 +795,71 @@ const FALL_STEP_PX = 16;
  * cord released him and he did not move a pixel.
  */
 const FALL_CLEARANCE = 2;
+
+/**
+ * The tallest climb ONE hop can make, px, by urgency.
+ *
+ * This is not a preference, it is a hard reach. `launchTo` clamps the arc's
+ * rise to it, so a leg asked for a taller climb than this has its apex BELOW
+ * its own target: he does not arrive slowly, he does not arrive at all. He
+ * throws himself upward, misses by however much the clamp took off, and falls
+ * back down the page until gravity finds him some furniture.
+ *
+ * That single fact was two of the complaints. The light switch went off
+ * without him because the cord hangs at the top of the screen and most of a
+ * plate is further below it than 420px. And he "jumps off a wall and straight
+ * off the bottom of the screen" because a wall kick splits a climb 28/72 (see
+ * planTo) and a 72 that is still too tall is a leap into nothing.
+ *
+ * `launchTo` now asks this question BEFORE it launches, and flies the leg
+ * instead of jumping it when the answer is no.
+ */
+const HOP_REACH = { urgent: 420, easy: 620 };
+function hopReach(urgency: number): number {
+  return urgency > 0.6 ? HOP_REACH.urgent : HOP_REACH.easy;
+}
+/**
+ * The tallest climb a whole hop CHAIN can make, px.
+ *
+ * A wall kick splits the climb 28/72, so the binding leg is the 72 and a chain
+ * reaches about a third further than one arc. A stepping-stone perch would
+ * reach further still, but only when one happens to exist between here and
+ * there, so it is not counted: over-estimating this costs a device the reader
+ * did not need, and under-estimating it costs the entire beat.
+ */
+const CHAIN_REACH = HOP_REACH.urgent / 0.72;
+
+/**
+ * THE SCRAMBLE — what he does when an errand is further up than he can jump.
+ *
+ * > "Especially when going up, sometimes he doesn't get to the light switch in
+ * > time and it goes off without him. Make him use one of his abilities like
+ * > jetpack or hot air balloon to go straight to it if he is too far away."
+ *
+ * Both are animations he already owns, off the transit table, and both already
+ * carry their own furniture: the jetpack is a `gear` variant on the puppet and
+ * the balloon is a pair of props. Nothing new is drawn. What is new is that
+ * they can now be flown DELIBERATELY, at a target, instead of only happening
+ * to a reader who scrolls.
+ *
+ * Which one he reaches for is decided by the clock rather than by a coin: the
+ * balloon is lovely and slow, so it only comes out when it can still make the
+ * deadline, and the jetpack covers everything else. When both would do, it is
+ * a coin, because the same answer twice running is a mechanism.
+ */
+const SCRAMBLE = {
+  jetpack: { anim: 'upJetpack' as AnimationName, speed: 1180 },
+  balloon: { anim: 'upBalloon' as AnimationName, speed: 430 }
+};
+/**
+ * How much of what is left of the deadline the FLIGHT itself may spend.
+ *
+ * The rest pays for the landing and the errand's own bookkeeping on the far
+ * end. Deliberately generous to the margin: a balloon that arrives one frame
+ * after the caller gave up is worse than a jetpack that arrives early, because
+ * the reader sees the whole ascent and then sees it not count.
+ */
+const SCRAMBLE_BUDGET = 0.78;
 /* TRANSIT_VEL and TRANSIT_SUSTAIN lived here. They defined "a fast scroll",
    which is no longer what licenses an ability: being off the screen is. See
    the trigger in update(). */
@@ -1963,6 +2028,24 @@ export default function Companion({
       props: EMPTY_PROPS
     };
 
+    /* ---- the ride ---------------------------------------------------------
+     *
+     * A device he is flying WITH, as opposed to a transit he is flying AS.
+     *
+     * The distinction matters because a transit rides the VIEWPORT and ends
+     * when the scroll settles, which is exactly wrong for an errand: an errand
+     * has a place to be. So a ride is an ordinary `fly` — same steering, same
+     * target, same landing — wearing a transit's animation and props.
+     *
+     * It lives for precisely one flight. `setMode` puts it away the moment he
+     * is anything other than in the air, so there is no path on which he lands
+     * still holding a balloon.
+     * ---------------------------------------------------------------------- */
+    const ride = {
+      anim: null as AnimationName | null,
+      props: EMPTY_PROPS as readonly PropName[]
+    };
+
     /* ---- pvz ----------------------------------------------------------- */
     /*
      * Assembled from PVZ_SEQUENCE and PVZ_LOOP rather than spelled out, so
@@ -2148,6 +2231,9 @@ export default function Companion({
      * to know the same thing, so they are one function now.
      */
     function activeProps(): readonly PropName[] {
+      /* A device outranks the lot: he cannot be in a transit, asleep, or sat
+         in a chat while he is hanging off a balloon. */
+      if (ride.anim) return ride.props;
       if (bird.mode === 'transit') return transit.props;
       if (bird.mode === 'sleep') return DREAM_BUBBLE_PARTS;
       if (bird.mode === 'chat') {
@@ -2524,6 +2610,13 @@ export default function Companion({
     }
     function setMode(m: Mode) {
       if (bird.mode === m) return;
+      /* A device exists for the length of the flight carrying it and not one
+         frame longer. Every exit from `fly` comes through here, so this is the
+         only place that has to remember to let go of it. */
+      if (m !== 'fly' && ride.anim) {
+        ride.anim = null;
+        ride.props = EMPTY_PROPS;
+      }
       bird.mode = m;
       bird.modeT = 0;
     }
@@ -2592,6 +2685,31 @@ export default function Companion({
       const now = urgencyAt(bird.y - scrollYNow);
       const soon = urgencyAt(projectedScreenY(bird.y, 0.5));
       return Math.max(now, soon);
+    }
+
+    /**
+     * Anything he could still land on, straight down from here and still on
+     * the screen.
+     *
+     * The corridor is the same one the fall's crossing test uses, and that is
+     * the point: this asks the landing question one frame EARLY, so a drop
+     * with no ending can be turned into a glide before the reader watches him
+     * leave down the bottom of the page.
+     *
+     * Screen-bounded on purpose. Furniture forty pixels below the fold would
+     * technically catch him, but he would still have gone, and "he falls off
+     * the screen" is a complaint about what it looks like.
+     */
+    function catchBelow(x: number, y: number): Perch | null {
+      const floor = scrollYNow + H - 8;
+      let best: Perch | null = null;
+      for (let i = 0; i < perches.length; i++) {
+        const q = perches[i];
+        if (q.y <= y || q.y > floor) continue;
+        if (x < q.x0 - 26 || x > q.x1 + 26) continue;
+        if (!best || q.y < best.y) best = q;
+      }
+      return best;
     }
 
     function nearestPerch(): Perch | null {
@@ -2939,6 +3057,39 @@ export default function Companion({
       if (fail && wasRunning) onErrandFailRef.current?.();
     }
 
+    /**
+     * Take the errand off the hop chain and fly it, when the hop chain cannot
+     * have it. Returns true when it took over.
+     *
+     * The test is REACH, not distance: see CHAIN_REACH. A climb the chain can
+     * make is better made by jumping, because he is a bird, and the device is
+     * the answer to the one case where jumping is not an answer at all. Going
+     * DOWN never scrambles — gravity is already the fastest thing available.
+     */
+    function scrambleTo(p: Perch): boolean {
+      const climb = bird.y - p.y;
+      if (climb <= CHAIN_REACH) return false;
+
+      /* Straight up rather than to the middle of the span: the whole point is
+         that this is the short way. A little wobble so two scrambles onto the
+         same cord are not the same picture twice. */
+      const lo = p.x0 + 12;
+      const hi = Math.max(lo, p.x1 - 12);
+      const tx = Math.max(lo, Math.min(hi, bird.x + (Math.random() - 0.5) * 40));
+      const dist = Math.hypot(tx - bird.x, p.y - bird.y);
+
+      const budget = Math.max(0, errandDeadline - bird.clock) * SCRAMBLE_BUDGET;
+      const balloonFits = (dist / SCRAMBLE.balloon.speed) * 1000 <= budget;
+      const kit = balloonFits && Math.random() < 0.5 ? SCRAMBLE.balloon : SCRAMBLE.jetpack;
+
+      beginPlan();
+      enterFly(tx, p.y, p, kit.speed);
+      ride.anim = kit.anim;
+      ride.props = TRANSIT_PROP_MAP[kit.anim] ?? EMPTY_PROPS;
+      startAnim(kit.anim, 0);
+      return true;
+    }
+
     function serviceErrand() {
       const e = errandRef.current;
       const key = e ? e.key : 0;
@@ -2980,7 +3131,7 @@ export default function Companion({
         errandPerch = p;
         errandDeadline = bird.clock + ERRAND_DEADLINE;
         onCursor = false;
-        planTo(p, 1);
+        if (!scrambleTo(p)) planTo(p, 1);
         return;
       }
 
@@ -2988,9 +3139,38 @@ export default function Companion({
       if (bird.clock > errandDeadline) endErrand(true);
     }
 
+    /**
+     * Cover the rest of the plan under power rather than by jumping.
+     *
+     * The chain is spent, not paused: the intermediate stops exist to make a
+     * hop chain possible and a flight has no use for them.
+     */
+    function flyLeg(wp: Waypoint, urgency: number) {
+      planIdx = planLen;
+      enterFly(wp.x, wp.y, wp.perch, 620 + Math.min(1, urgency) * 460);
+    }
+
     function launchTo(wp: Waypoint, urgency: number) {
       const dx = wp.x - bird.x;
       const dy = wp.y - bird.y;
+
+      /*
+       * CAN THIS ARC EVEN GET THERE?
+       *
+       * See HOP_REACH. A leg asking for a taller climb than one arc can make
+       * is not a slow hop, it is a hop that misses, and the old code launched
+       * it anyway and let the fall handler pick up the pieces. He flies those
+       * instead — and flies to the END of the plan, because a wall kick or a
+       * stepping stone is scaffolding for jumping, not for flying.
+       *
+       * The 10px is the landing test's own tolerance. An arc whose apex is
+       * level with its target does not land on it.
+       */
+      if (-dy > hopReach(urgency) - 10 && planLen > 0) {
+        flyLeg(PLAN[planLen - 1], urgency);
+        return;
+      }
+
       /* Urgency buys speed by raising the local gravity: the arc gets tighter
          and the whole flight gets shorter, which reads as hurrying. Capped at
          2x — beyond that the launch velocity passes 2000px/s and he crosses
@@ -2998,7 +3178,7 @@ export default function Companion({
          bird so much as a missing one. */
       const g = GRAVITY * (1 + Math.min(1, urgency));
       let rise = Math.max(50, Math.abs(dx) * 0.3, -dy + 44);
-      rise = Math.min(rise, urgency > 0.6 ? 420 : 620);
+      rise = Math.min(rise, hopReach(urgency));
       let vUp = Math.sqrt(2 * g * rise);
       let tUp = vUp / g;
       let tDown = Math.sqrt(Math.max((2 * (rise + dy)) / g, 1e-4));
@@ -4604,6 +4784,47 @@ export default function Companion({
             startAnim('downGlide', 0);
           }
 
+          /*
+           * NOTHING UNDERNEATH.
+           *
+           * > "Quite often he struggles to find a nearby surface to land on
+           * > and falls off the screen ... he sometimes jumps off a wall and
+           * > just straight off the bottom of the screen."
+           *
+           * The net below this is 200px PAST the bottom edge, so by the time
+           * it fires the reader has already watched him go. It stays, because
+           * a net belongs somewhere nothing can get past it, but it should
+           * almost never be the thing that catches him now.
+           *
+           * A fall is only a fall if there is something at the end of it. So
+           * ask the landing question one frame early, in the same corridor the
+           * crossing test uses: if nothing in it is both below him and still
+           * on the screen, this drop has no ending, and he opens into a glide
+           * toward something that has.
+           *
+           * Not while he is tumbling, and not while he is making off with the
+           * cursor: both of those are set pieces with their own recoveries a
+           * few lines up, and this would cut them off mid-gag.
+           *
+           * And not until he is into the lower half of the screen. A drop is
+           * a picture in its own right — it is the whole staging of the light
+           * cord letting go of him — and catching him at the top of it would
+           * replace a fall with a bird who never falls.
+           */
+          if (
+            bird.fallMs > 150 &&
+            bird.y > scrollYNow + H * 0.55 &&
+            bird.tumbleUntil === 0 &&
+            swap.hold !== 1 &&
+            !catchBelow(bird.x, bird.y)
+          ) {
+            const t = pickBandPerch(0.9) ?? nearestPerch();
+            if (t) {
+              enterFly(targetXOn(t), t.y, t, 900);
+              break;
+            }
+          }
+
           if (bird.y > scrollYNow + H + 200) {
             /*
              * BUG 1, cause (a): recovery used to reposition him 420px above a
@@ -4687,7 +4908,10 @@ export default function Companion({
           const dx = bird.flyX - bird.x;
           const dy = bird.flyY - bird.y;
           const d = Math.hypot(dx, dy);
-          if (bird.anim !== 'flyFlap' && bird.anim !== 'upFlap') {
+          /* A ride brings its own animation. Everything below this line is
+             a WINGBEAT model, and a bird under a balloon is not beating
+             anything, so the ordinary animation clock carries it instead. */
+          if (!ride.anim && bird.anim !== 'flyFlap' && bird.anim !== 'upFlap') {
             startAnim(dy < -20 ? 'upFlap' : 'flyFlap', 0);
           }
           /*
@@ -4702,16 +4926,18 @@ export default function Companion({
            * consulted in this mode (flyFlap and upFlap both loop) and the
            * phase is monotonic, so the pose never runs backwards.
            */
-          const fa = currentAnim();
-          const total = animDuration(fa);
-          const down = wingBottomMs(fa);
-          rig.flapPhase += (dt * 1000) / FLAP_CYCLE_MS;
-          rig.flapPhase -= Math.floor(rig.flapPhase);
-          bird.animT =
-            rig.flapPhase < FLAP_DOWN_FRAC
-              ? (rig.flapPhase / FLAP_DOWN_FRAC) * down
-              : down +
-                ((rig.flapPhase - FLAP_DOWN_FRAC) / (1 - FLAP_DOWN_FRAC)) * (total - down);
+          if (!ride.anim) {
+            const fa = currentAnim();
+            const total = animDuration(fa);
+            const down = wingBottomMs(fa);
+            rig.flapPhase += (dt * 1000) / FLAP_CYCLE_MS;
+            rig.flapPhase -= Math.floor(rig.flapPhase);
+            bird.animT =
+              rig.flapPhase < FLAP_DOWN_FRAC
+                ? (rig.flapPhase / FLAP_DOWN_FRAC) * down
+                : down +
+                  ((rig.flapPhase - FLAP_DOWN_FRAC) / (1 - FLAP_DOWN_FRAC)) * (total - down);
+          }
 
           if (d < 7) {
             land(bird.flyPerch, bird.flyY, 0);
@@ -4785,7 +5011,10 @@ export default function Companion({
     function updateRig(dt: number) {
       /* FLIGHT. Blended in and out over FLAP_BLEND so entering and leaving
          flight cannot snap a body offset into existence. */
-      const flying = bird.mode === 'fly';
+      /* A ride is flight without a wingbeat: blending the flap rig in would
+         put a wing-driven bob and pitch on a bird who is hanging off a
+         balloon by his feet. */
+      const flying = bird.mode === 'fly' && !ride.anim;
       rig.flight = approach(rig.flight, flying ? 1 : 0, dt, 1 / FLAP_BLEND);
 
       if (rig.flight > 0.001) {

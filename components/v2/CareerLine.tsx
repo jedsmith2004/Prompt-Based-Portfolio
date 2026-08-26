@@ -482,9 +482,18 @@ export default function CareerLine({ className }: CareerLineProps) {
                     >
                       <b>{r.index}</b> <span>{r.short}</span>
                     </span>
+                    {/* data-perch on the bar itself. Jack, 2026-08-26, of
+                        plate 04: "pip can't land on some of the items." The
+                        bars are the items, and they are the best perches on
+                        the page: a bar IS a horizontal line of solid ink, so
+                        the box edge is the mark and there is no inset. A bar
+                        narrower than the bird is rejected by the harvester on
+                        its own, which is the right answer for a role that
+                        lasted one year on a nine year axis. */}
                     <span
                       className="v2-career-bar"
                       data-partial={r.partial ? 'true' : undefined}
+                      data-perch
                       style={vars({
                         '--x': `${g.x}%`,
                         '--w': `${g.w}%`,
@@ -520,6 +529,7 @@ export default function CareerLine({ className }: CareerLineProps) {
             >
               <span
                 className="v2-career-band"
+                data-perch
                 style={vars({
                   '--x': `${degreeGeom.x}%`,
                   '--w': `${degreeGeom.w}%`,
@@ -560,6 +570,8 @@ export default function CareerLine({ className }: CareerLineProps) {
             .filter(Boolean)
             .join(' ')}
           id={degreeId}
+          /* 2px of solid rule along the top: box edge, no inset. */
+          data-perch
           tabIndex={0}
           onMouseEnter={() => setLit(DEGREE.id)}
           onMouseLeave={() => setLit((c) => (c === DEGREE.id ? null : c))}
@@ -578,6 +590,8 @@ export default function CareerLine({ className }: CareerLineProps) {
                 .filter(Boolean)
                 .join(' ')}
               key={r.id}
+              /* the entry's own border-top is the visible line */
+              data-perch
               tabIndex={0}
               onMouseEnter={() => setLit(r.id)}
               onMouseLeave={() => setLit((c) => (c === r.id ? null : c))}

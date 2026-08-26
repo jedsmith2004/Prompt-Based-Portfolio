@@ -749,6 +749,21 @@ function Cutting({ story, z }: { story: Story; z: number }) {
       style={{ '--rot': `${story.rot}deg`, '--z': z } as React.CSSProperties}
       tabIndex={0}
       aria-labelledby={headId}
+      /*
+       * data-perch. This plate is three and a half thousand pixels tall and
+       * had ten landable surfaces on it, the fewest per thousand pixels
+       * anywhere on the site, which is a large part of what Jack meant by
+       * "he struggles to find a nearby surface to land on and falls off the
+       * screen". A wall of cuttings is nothing BUT horizontal edges.
+       *
+       * The sheet is rotated and its paint bleeds past the box, so the perch
+       * lands a little inside the torn edge rather than on it. That is the
+       * right answer anyway: a bird stands on the paper, not on the tear.
+       * The harvester rebuilds the top edge from the untransformed box and
+       * the computed matrix, so the tilt is already handled. See THE PERCH
+       * CONTRACT in components/v2/Companion.tsx.
+       */
+      data-perch
     >
       <canvas className="v2-clip-paper" ref={canvasRef} aria-hidden="true" />
 
@@ -820,6 +835,7 @@ export default function AwardsClippings({ className }: AwardsClippingsProps) {
           className="v2-clip v2-clip-appts is-column"
           style={{ '--rot': '1.3deg', '--z': 6 } as React.CSSProperties}
           tabIndex={0}
+          data-perch
           aria-labelledby={apptId}
         >
           <canvas className="v2-clip-paper" ref={canvasRef} aria-hidden="true" />

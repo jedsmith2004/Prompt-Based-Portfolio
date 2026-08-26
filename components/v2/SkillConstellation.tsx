@@ -736,7 +736,21 @@ export default function SkillConstellation({
         projects again, and a keyboard reader tabbing through twenty-eight
         cards to find fourteen projects would be paying for a visual trick.
       */}
-      <div className="v2-const-rail" aria-label="Projects" id={listId}>
+      {/*
+        data-perch. Jack, 2026-08-26, of plate 02: "pip can't land on the
+        projects carousel."
+
+        The perch is the RAIL, not a card. The rail's top edge is a real
+        hairline and it never moves; the cards inside it translate every frame
+        forever, and the perch harvester re-measures on a resize or a
+        transition ending rather than per frame, so a card would hand him a
+        surface that had already slid out from under him. Standing on the rail
+        while the projects run past underneath is also the better picture.
+
+        The 1px border-top IS the line, so no inset. See THE PERCH CONTRACT in
+        components/v2/Companion.tsx.
+      */}
+      <div className="v2-const-rail" aria-label="Projects" id={listId} data-perch>
         <div className="v2-const-rail-in" ref={railRef}>
           {projects.map((c) => (
             <button
