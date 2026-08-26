@@ -49,6 +49,15 @@ import context from '@/public/context.json';
 import { withAlpha } from '@/lib/v2/colour';
 import COUNTRIES from '@/lib/v2/route-countries.json';
 
+/**
+ * How long the plate holds each stop while it is reading itself out, ms.
+ *
+ * Long enough to read the panel's heading and the day count, short enough that
+ * twenty stops is a walk rather than a slideshow: twenty times this is about
+ * three quarters of a minute, which is longer than anybody stares at one plate.
+ */
+const DRIFT_MS = 2100;
+
 /* -------------------------------------------------------------------- types */
 
 export interface RouteReel {
@@ -1335,9 +1344,69 @@ export default function RouteMap({
     };
   }, [box, stops, facts, count, theme]);
 
+  /* ---- the plate reads itself out ----------------------------------------
+   *
+   * Jack, 2026-08-26: "maybe a passive cycle switching the selection between
+   * the stops before you select one could be cool."
+   *
+   * So the plate walks its own route until somebody takes it off it. The
+   * moment the reader touches a mark, by any means -- click, key, hover,
+   * focus -- the walk stops for the rest of the session, because a selection
+   * that keeps moving after you have made one is not a flourish, it is a
+   * fight over the same control.
+   *
+   * It deliberately does NOT set forceFullRef. Reaching for a stop means "show
+   * me the whole road, now"; the plate showing itself off means no such thing,
+   * and forcing the reveal would throw away the scroll-progressive stroke that
+   * is the best thing on the plate.
+   */
+  const takenRef = useRef(false);
+  const [taken, setTaken] = useState(false);
+  const takeOver = useCallback(() => {
+    if (takenRef.current) return;
+    takenRef.current = true;
+    setTaken(true);
+  }, []);
+
+  useEffect(() => {
+    if (taken || count < 2) return;
+    /* An automatic cycle is motion nobody asked for, which is the exact thing
+       the preference is about. */
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const plate = plateRef.current;
+    if (!plate) return;
+    let timer = 0;
+    const step = () => {
+      if (document.hidden || takenRef.current) return;
+      const next = (activeRef.current + 1) % count;
+      activeRef.current = next;
+      setActive(next);
+      dirtyRef.current = true;
+    };
+    /* Only while it is actually on the screen. Its own observer rather than a
+       flag threaded out of the draw effect, which rebuilds on every resize and
+       every palette flip and would restart the walk each time. */
+    const io = new IntersectionObserver(
+      (entries) => {
+        window.clearInterval(timer);
+        timer = 0;
+        if (entries[0].isIntersecting) timer = window.setInterval(step, DRIFT_MS);
+      },
+      { rootMargin: '-8% 0px' }
+    );
+    io.observe(plate);
+    return () => {
+      io.disconnect();
+      window.clearInterval(timer);
+    };
+  }, [taken, count]);
+
   /* ---- keyboard travel along the route ---------------------------------- */
   const select = useCallback((i: number, focus: boolean) => {
     const next = Math.max(0, Math.min(count - 1, i));
+    /* Nothing but a person calls this; the passive walk sets the state itself
+       precisely so that it does not count as a choice. */
+    takeOver();
     /* written synchronously so a second key event in the same commit reads the
        stop this one just moved to, rather than the one before it */
     activeRef.current = next;
@@ -1347,7 +1416,7 @@ export default function RouteMap({
     revealTargetRef.current = 1;
     dirtyRef.current = true;
     if (focus) markRefs.current[next]?.focus();
-  }, [count]);
+  }, [count, takeOver]);
 
   /* Reads the current stop from the ref, not from the render closure. Two key
      events can land inside one commit, and a stale `active` would swallow the
@@ -1465,7 +1534,12 @@ export default function RouteMap({
                     select(i, false);
                   }}
                   onBlur={() => setHover((h) => (h === i ? null : h))}
-                  onMouseEnter={() => setHover(i)}
+                  onMouseEnter={() => {
+                    /* A pointer arriving on a mark is the reader taking the
+                       plate over, even if they never press anything. */
+                    takeOver();
+                    setHover(i);
+                  }}
                   onMouseLeave={() => setHover((h) => (h === i ? null : h))}
                 />
               );
@@ -1475,7 +1549,10 @@ export default function RouteMap({
 
         <div
           className="v2-route-panel"
-          aria-live="polite"
+          /* The walk is decoration and must not be announced: a stop read out
+             every two seconds is a screen reader nobody can use. The panel
+             becomes live the moment the reader makes a choice of their own. */
+          aria-live={taken ? 'polite' : 'off'}
           aria-atomic="true"
           aria-label="Selected stop"
         >
