@@ -4304,20 +4304,60 @@ export default function Companion({
       back: 3280,
       len: 4600
     };
+    /*
+     * IT ARRIVES FLYING, and the door is a gullwing.
+     *
+     * > "When the delorean flies in, the wheels should be facing down like in
+     * >  the movie, then when it lands it should be normal."
+     * > "When Marty gets out of the car, the door should open like a real
+     * >  delorean."
+     *
+     * `land` is the touchdown and `stop` is the end of the bounce on its
+     * springs. The three door marks each hold one authored angle; the shut is
+     * the same three run backwards, so it closes the way it opened.
+     *
+     * `rise` moved from 6800 to 5100 and `gone` is gone entirely. He used to
+     * be at alpha 0 for four and a half seconds, which is a long time to have
+     * the mascot missing; he flickers through that stretch now instead, and
+     * the first chord is what brings him back. See the fade in tickBttf.
+     */
     const BTTF = {
-      stop: 1000,
-      fade: 1300,
-      gone: 2300,
-      out: 2600,
-      play: 3400,
-      knees: 5400,
-      rise: 6800,
+      land: 1150,
+      stop: 1500,
+      fade: 1750,
+      doorA: 2000,
+      doorB: 2200,
+      doorC: 2400,
+      out: 2700,
+      play: 3900,
+      rise: 5100,
+      knees: 5900,
       inCar: 7800,
+      shut: 8260,
       line: 8500,
       strike: 9100,
       away: 9420,
       len: 10800
     };
+
+    /**
+     * Which of the five cars to draw at time t.
+     *
+     * Every one of them is a whole car on its own canvas and a sprite's anchor
+     * is its bottom centre, so swapping between them leaves the car exactly
+     * where it was. The alternative, a door drawn as a separate panel, needs a
+     * hinge position in page coordinates that changes with every frame of the
+     * swing and with the mirror.
+     */
+    function deloreanSprite(t: number): PropName {
+      if (t < BTTF.land) return 'deloreanFly';
+      if (t < BTTF.doorA || t >= BTTF.shut) return 'delorean';
+      if (t < BTTF.doorB) return 'deloreanDoorA';
+      if (t < BTTF.doorC) return 'deloreanDoorB';
+      if (t < BTTF.inCar) return 'deloreanDoorC';
+      const c = t - BTTF.inCar;
+      return c < 160 ? 'deloreanDoorC' : c < 320 ? 'deloreanDoorB' : 'deloreanDoorA';
+    }
     const LANT = { ghost: 700, startle: 1150, up: 2700, len: 4200 };
     const GIFT = { land: 1500, peck: 1950, open: 2550, len: 4400 };
     const EGGB = { peck: 900, crack: 1400, hatch: 1700, len: 4400 };
@@ -4338,9 +4378,10 @@ export default function Companion({
       bit.floorY = bird.y;
       /* It arrives BEHIND him, so the first thing he does is turn round... */
       bit.side = (bird.facing === 1 ? -1 : 1) as 1 | -1;
-      /* ...unless that would put a DeLorean off the side of the page. */
+      /* ...unless that would put a DeLorean off the side of the page. The
+         car is 224px long now rather than 180, so the room it wants grew. */
       const room = bit.side === 1 ? scrollXNow + W - bird.x : bird.x - scrollXNow;
-      if (room < 240) bit.side = -bit.side as 1 | -1;
+      if (room < 320) bit.side = -bit.side as 1 | -1;
       bit.ax = bird.x;
       bit.ay = bird.y;
       bit.bx = bird.x;
@@ -4472,27 +4513,36 @@ export default function Companion({
       const t = bit.t;
       /* Four marks on one line: off the page, parked, the door, and the spot
          he plays from. Everything either sits on one or moves between two. */
-      const off = bird.x + bit.side * (W * 0.7 + 240);
-      /* The car is 180px long at the scale it is drawn, so the mark it parks
+      const off = bird.x + bit.side * (W * 0.7 + 300);
+      /* The car is 224px long at the scale it is drawn, so the mark it parks
          on has to clear the bird by more than half of that or it pulls up
          through him. */
-      const park = bird.x + bit.side * 172;
-      const door = park - bit.side * 46;
-      const spot = park - bit.side * 104;
-      bit.ay = bit.floorY;
+      const park = bird.x + bit.side * 196;
+      const door = park - bit.side * 34;
+      const spot = park - bit.side * 122;
       bit.by = bit.floorY;
 
-      if (t < BTTF.stop) {
-        const u = t / BTTF.stop;
+      if (t < BTTF.land) {
+        /* IT FLIES IN, down and along at once, wheels turned flat under it.
+           The vertical runs on the slower curve so the last thing to happen
+           is the touchdown rather than the arrival. */
+        const u = t / BTTF.land;
         const e = 1 - (1 - u) * (1 - u) * (1 - u);
-        /* Overshoots its mark and comes back onto it. A car that stops dead
-           where it was going reads as a sprite being positioned. */
-        bit.ax = off + (park - off) * e - bit.side * Math.sin(u * Math.PI) * 32;
+        bit.ax = off + (park - off) * e;
+        bit.ay = bit.floorY - 300 * (1 - u * u);
+      } else if (t < BTTF.stop) {
+        /* Onto its springs. A car that stops dead where it was going reads as
+           a sprite being positioned. */
+        const u = (t - BTTF.land) / (BTTF.stop - BTTF.land);
+        bit.ax = park;
+        bit.ay = bit.floorY - Math.sin(u * Math.PI) * 7;
       } else if (t < BTTF.away) {
         bit.ax = park;
+        bit.ay = bit.floorY;
       } else {
         const u = Math.min(1, (t - BTTF.away) / (BTTF.len - BTTF.away));
         bit.ax = park + (off - park) * u * u;
+        bit.ay = bit.floorY;
       }
 
       if (t < BTTF.out) bit.bx = door;
@@ -4507,24 +4557,39 @@ export default function Companion({
 
       if (!bit.holds) return;
       if (t < BTTF.fade) {
-        if (bit.beat === 0 && t > BTTF.stop * 0.5) {
+        if (bit.beat === 0 && t > BTTF.land * 0.6) {
           bit.beat = 1;
           faceTheBit();
           startAnim('startledAwake');
         }
-      } else if (t < BTTF.gone) {
-        bird.alpha = 1 - (t - BTTF.fade) / (BTTF.gone - BTTF.fade);
-        if (bit.beat === 1 && t > BTTF.gone - 640) {
+      } else {
+        /*
+         * THE PHOTOGRAPH. He does not simply go: he flickers, the way the
+         * photograph in the film does, and the song is what brings him back.
+         *
+         * > "When the pip fades out, he should be fading in and out until
+         * >  marty does his song."
+         *
+         * Two curves rather than one. `dip` is how far gone he is: it runs
+         * 0 -> 1 up to the first chord and 1 -> 0 after it. The flicker rides
+         * on top and is SCALED BY IT, so he is solid before and after and only
+         * unstable in between. A flicker at constant depth would strobe him
+         * for six seconds, which is a headache rather than a joke.
+         */
+        const dip =
+          t < BTTF.play
+            ? (t - BTTF.fade) / (BTTF.play - BTTF.fade)
+            : Math.max(0, 1 - (t - BTTF.play) / (BTTF.rise - BTTF.play));
+        const flick = 0.5 + 0.5 * Math.cos(t * 0.021);
+        bird.alpha = Math.max(0, (1 - 0.82 * dip) * (1 - dip * 0.85 * flick));
+
+        if (bit.beat === 1 && t > BTTF.fade + 950) {
           bit.beat = 2;
           /* The bubble is drawn independently of how solid he is, which is
              the whole joke: the last thing left of him is the word. */
           say('Help.', 1400);
         }
-      } else if (t < BTTF.rise) {
-        bird.alpha = 0;
-      } else {
-        bird.alpha = Math.min(1, (t - BTTF.rise) / 900);
-        if (bit.beat === 2 && t > BTTF.rise + 700) {
+        if (bit.beat === 2 && t >= BTTF.rise) {
           bit.beat = 3;
           startAnim('lookAtViewer');
         }
@@ -6212,7 +6277,18 @@ export default function Companion({
              mirror flips at the departure: a car driving off in reverse is a
              sprite that forgot to turn round. */
           const leaving = bit.t >= BTTF.away;
-          drawActor('delorean', x, y, f, 1, 1.5, leaving ? bit.side === -1 : bit.side === 1);
+          /* grow 1, not 1.5. The sprite is 56 wide now rather than 30, so it
+             is the same 224px of car at the bird's own pixel size instead of
+             180px of visibly chunkier one. */
+          drawActor(
+            deloreanSprite(bit.t),
+            x,
+            y,
+            f,
+            1,
+            1,
+            leaving ? bit.side === -1 : bit.side === 1
+          );
           if (bit.t >= BTTF.out && bit.t < BTTF.line) {
             const m: PropName =
               bit.t >= BTTF.knees && bit.t < BTTF.inCar
@@ -6262,9 +6338,24 @@ export default function Companion({
           }
           if (bit.t >= CREEP.totem) {
             const u = (bit.t - CREEP.totem) / (CREEP.len - CREEP.totem);
-            const turn = Math.cos((bit.t - CREEP.totem) * 0.0092);
+            /*
+             * A SLOW WOBBLE, not a spin.
+             *
+             * This was cos(t * 0.0092), which is 1.46 revolutions a second, and
+             * a turn is drawn by squashing toward the centre line. The totem
+             * therefore spent most of its two seconds as a vertical sliver, and
+             * a sliver of a face is a couple of green pixels. That is the other
+             * half of "it doesn't have a green face, just green eyes": the face
+             * was there, and it was edge-on nearly every frame you looked at.
+             *
+             * It never goes narrower than 0.88 now, so the face is always a
+             * face and the movement is a hover rather than a coin toss.
+             */
+            const turn = 0.94 + 0.06 * Math.cos((bit.t - CREEP.totem) * 0.0042);
             const a = f * (u < 0.7 ? 1 : Math.max(0, 1 - (u - 0.7) / 0.3));
-            drawActor('totem', bird.x - offX, bird.y - offY - 82 - u * 34, a, turn, 1.3);
+            /* grow 1.1: the sprite went from 18 rows to 22 when the face
+               was given room to be a face, and 1.3 made it taller than him. */
+            drawActor('totem', bird.x - offX, bird.y - offY - 82 - u * 34, a, turn, 1.1);
           }
           break;
         }
