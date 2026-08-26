@@ -295,8 +295,11 @@ const PRESSURE_MEAN = 0.80;
  * @returns a ShapePainter
  *
  * Coverage: measured 20.5 / 20.5 / 20.6% at 640x400, 640x320 and 640x640 for
- * seed 1, and 22.5 / 22.4 / 22.9% for seed 7. Aspect independent, since every
- * dimension is a fraction of h; the seed spread is the terrain itself.
+ * seed 1, and 22.5 / 22.4 / 22.9% for seed 7, BEFORE the crests were moved
+ * apart to clear the hero's reading matter. Re-measure if you touch `layers`;
+ * the note there carries the arithmetic and the current figure.
+ * Aspect independent, since every dimension is a fraction of h; the seed
+ * spread is the terrain itself.
  */
 export function ridgeline(seed: number = 1): ShapePainter {
   return function paintRidgeline(ctx: CanvasRenderingContext2D, w: number, h: number): void {
@@ -308,9 +311,39 @@ export function ridgeline(seed: number = 1): ShapePainter {
        depth: band thickness, or -1 to fill to the floor.
        rough: midpoint decay. Low, because moorland is long wavelength: high
               roughness gives alpine scree, which is the wrong hill entirely. */
+    /*
+     * THE TWO CRESTS ARE PLACED AROUND THE TYPE, not just on the frame.
+     *
+     * Jack, 2026-08-26: "move the top particle line a bit higher, so it
+     * doesn't go through the body text."
+     *
+     * This painter is only ever used behind the hero, and the hero's type is
+     * not spread evenly down the plate. Measured at 1440 wide, as a fraction
+     * of the viewport: the display title occupies 0.34 to 0.63, and the lede
+     * and the figure shelf occupy 0.76 to 0.94. The band's lowest reach was
+     * base + amp + depth = 0.828, which put it straight through the lede and
+     * the shelf, and the near ridge crested as high as 0.815, which put THAT
+     * through them too. Between them the reading matter was the one part of
+     * the plate with particles all over it.
+     *
+     * There is no horizontal strip below the title that clears both, so the
+     * band goes up rather than down. It still crosses the title, which it
+     * always did and which is fine: a distant ridge behind display type at
+     * this size reads as ground behind a sign. It no longer crosses a word
+     * anyone has to read.
+     *
+     *   far band  0.500 - 0.130 .. 0.500 + 0.130 + 0.098  =  0.370 .. 0.728
+     *   near bank 0.965 - 0.045 .. floor                  =  0.920 .. 1
+     *
+     * The near layer also had to move: it is a fill to the floor, so lowering
+     * its crest is what turns it from a mass covering the bottom third into a
+     * bank along the bottom edge. Coverage drops from about 20.5% to about
+     * 13%, which is still inside the 8-25% band the file asks for, and the
+     * particle budget is fixed, so what is left simply reads denser.
+     */
     const layers = [
-      { base: 0.600, amp: 0.130, depth: 0.098, rough: 0.52, alpha: 0.78, oct: 7 },
-      { base: 0.895, amp: 0.080, depth: -1, rough: 0.48, alpha: 1.0, oct: 7 }
+      { base: 0.500, amp: 0.130, depth: 0.098, rough: 0.52, alpha: 0.78, oct: 7 },
+      { base: 0.965, amp: 0.045, depth: -1, rough: 0.48, alpha: 1.0, oct: 7 }
     ];
 
     const prevAlpha = ctx.globalAlpha;

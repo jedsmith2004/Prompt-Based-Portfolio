@@ -250,6 +250,15 @@ function hex01(c: Rgb01): string {
  */
 const FADE_OUT_MS = 760;
 
+/**
+ * How far, in NDC, a woken particle starts from its target.
+ *
+ * 0.05 is about a fortieth of the screen. Small enough that the field reads as
+ * already drawn the instant it fades up, large enough that the last of the
+ * gather is visible rather than a hard cut. See retarget(settle).
+ */
+const SETTLE_SCATTER = 0.05;
+
 /* -------------------------------------------------------------------------- */
 /* shader sources                                                              */
 /* -------------------------------------------------------------------------- */
@@ -594,8 +603,13 @@ export default function InkField({
    */
   const inkRef = useRef<FieldInk>(newFieldInk());
 
-  /** Set by the GL effect so the shapeKey effect can retarget without a rebuild. */
-  const retargetRef = useRef<(() => void) | null>(null);
+  /**
+   * Set by the GL effect so the shapeKey effect can retarget without a rebuild.
+   *
+   * `settle` puts the particles ON the new shape rather than letting them fly
+   * to it from wherever they were left. See the wake path below.
+   */
+  const retargetRef = useRef<((settle?: boolean) => void) | null>(null);
 
   /** Set by the GL effect so `dormant` can park and wake the loop in place. */
   const runRef = useRef<{ start: () => void; stop: () => void } | null>(null);
@@ -660,11 +674,32 @@ export default function InkField({
     const run = runRef.current;
     if (!run) return;
     if (!dormant) {
-      /* it changed shape while nobody was looking; catch up before waking */
-      if (retargetPending.current) {
-        retargetPending.current = false;
-        retargetRef.current?.();
-      }
+      /*
+       * WAKE ONTO THE SHAPE, NOT INTO IT.
+       *
+       * Jack, 2026-08-26, of the closing plate: "when it first loads in, the
+       * screen becomes noise (probably filled with the pixels spawning in)."
+       *
+       * He read the cause correctly. The field is parked for the whole middle
+       * of the page with its particles frozen wherever the hero left them,
+       * which is a ridgeline across the bottom of the screen. Waking it
+       * retargeted them at a portrait blob in the middle and let them fly: two
+       * hundred thousand points crossing the viewport at once, in front of the
+       * one plate on the site that is asking the reader for something. The
+       * flight IS the noise.
+       *
+       * So the wake seeds them on their targets with a little scatter and lets
+       * the last of it tighten up inside the fade that was already there. The
+       * pigment they laid down on the last plate goes with it, or the closing
+       * plate opens with a ghost of the hero's hills printed on it.
+       *
+       * The opening screen still does the full draw-in from a random disc.
+       * That entrance is the site introducing itself and nobody complained
+       * about it; this is the same field arriving somewhere it has already
+       * been.
+       */
+      retargetPending.current = false;
+      retargetRef.current?.(true);
       run.start();
       return;
     }
@@ -896,22 +931,72 @@ export default function InkField({
     let aspect = 1;
     let dpr = 1;
 
-    /** Re-sample the current shape painter into the target texture. */
-    function retarget() {
+    /**
+     * When the breath was last reset to its tightest, in ms on performance.now().
+     *
+     * -1 means "never": the field is on the page's own clock and the reader
+     * arrives at whatever phase they arrive at, which is right for the opening
+     * screen. A wake sets it, so the closing plate always opens assembled and
+     * breathes out from there rather than fading up half dispersed. See the
+     * note on the breath in renderOnce.
+     */
+    let breathAnchorMs = -1;
+
+    /**
+     * Re-sample the current shape painter into the target texture.
+     *
+     * `settle` also moves the PARTICLES onto that shape, with a small scatter
+     * so the last of the move is still visible, and wipes the pigment they had
+     * already laid down. Two callers want it: reduced motion, where the
+     * simulation never advances and the silhouette would otherwise never
+     * appear at all, and waking from dormant. See the wake path above.
+     */
+    function retarget(settle = false) {
       const g = gl!;
       const targets = buildTargets(aspect);
       g.bindTexture(g.TEXTURE_2D, texTarget);
       g.texImage2D(g.TEXTURE_2D, 0, g.RGBA32F, SIDE, SIDE, 0, g.RGBA, g.FLOAT, targets);
-      /* With motion reduced the simulation never advances, so seed the
-         particles ON the shape. Otherwise the field would freeze as random
-         scatter and the silhouette would never appear at all. */
-      if (reduced) {
-        g.bindTexture(g.TEXTURE_2D, texA);
-        g.texImage2D(g.TEXTURE_2D, 0, g.RGBA32F, SIDE, SIDE, 0, g.RGBA, g.FLOAT, targets);
-        g.bindTexture(g.TEXTURE_2D, texB);
-        g.texImage2D(g.TEXTURE_2D, 0, g.RGBA32F, SIDE, SIDE, 0, g.RGBA, g.FLOAT, targets);
-        requestFrame();
+      if (!reduced && !settle) return;
+
+      /* Reduced motion lands exactly on the shape, since nothing is ever going
+         to move afterwards. A wake gets SETTLE_SCATTER of NDC either way, which
+         is about a fortieth of the screen: enough that the field visibly draws
+         itself together inside the fade, nowhere near enough to read as
+         scatter. */
+      const spread = reduced ? 0 : SETTLE_SCATTER;
+      const start = new Float32Array(targets.length);
+      start.set(targets);
+      if (spread > 0) {
+        for (let i = 0; i < COUNT; i++) {
+          start[i * 4] += (Math.random() - 0.5) * spread;
+          start[i * 4 + 1] += (Math.random() - 0.5) * spread;
+        }
       }
+      /* Match the seed's pigment distribution rather than the target's. The
+         renderer reads pigment off the POSITION texture, which has carried a
+         uniform random w since the field was first seeded; writing the
+         target's banded w here instead would change the vermilion on this
+         plate and on no other. */
+      for (let i = 0; i < COUNT; i++) start[i * 4 + 3] = Math.random();
+
+      g.bindTexture(g.TEXTURE_2D, texA);
+      g.texImage2D(g.TEXTURE_2D, 0, g.RGBA32F, SIDE, SIDE, 0, g.RGBA, g.FLOAT, start);
+      g.bindTexture(g.TEXTURE_2D, texB);
+      g.texImage2D(g.TEXTURE_2D, 0, g.RGBA32F, SIDE, SIDE, 0, g.RGBA, g.FLOAT, start);
+
+      /* Open at the tight end of the breath. Without this the plate can fade
+         up at whatever phase the page's clock happens to be at, which is the
+         one thing that can still put a dispersed field in front of the
+         reader. See the note on the breath in renderOnce. */
+      breathAnchorMs = performance.now();
+
+      /* the last plate's wash, wiped */
+      g.bindFramebuffer(g.FRAMEBUFFER, pigFbo);
+      g.clearColor(0, 0, 0, 0);
+      g.clear(g.COLOR_BUFFER_BIT);
+      g.bindFramebuffer(g.FRAMEBUFFER, null);
+
+      if (reduced) requestFrame();
     }
     retargetRef.current = retarget;
 
@@ -996,7 +1081,36 @@ export default function InkField({
       g.uniform1f(uSim.dt, dt);
       g.uniform1f(uSim.aspect, aspect);
       g.uniform1f(uSim.drift, 0.2);
-      const breath = breatheRef.current ? 0.62 + 0.38 * Math.sin(t * 0.16) : 1;
+      /*
+       * THE BREATH, AND WHY ITS LOOSE END MOVED.
+       *
+       * The field is a spring against a curl-noise drift, so what the reader
+       * sees is an equilibrium: the particles sit about drift/k away from the
+       * shape they are holding. Breathing modulates k on a 39 second cycle,
+       * and it used to swing between 0.24 and 1.00 of the base stiffness.
+       *
+       * Measured, by reading the simulation back and averaging the distance
+       * from each particle to its target: that swing takes the field from
+       * about 0.10 of NDC away from the shape to about 0.42. At 0.10 you are
+       * looking at a silhouette. At 0.42 there is no silhouette at all — a
+       * quarter of a million opaque points spread evenly over the viewport,
+       * which on a dark plate is television static.
+       *
+       * Jack, 2026-08-26, of the closing plate: "when it first loads in, the
+       * screen becomes noise (probably filled with the pixels spawning in)."
+       * It was not the spawn. It was the field arriving at the wrong end of
+       * its own breath and staying there for the best part of twenty seconds.
+       *
+       * 0.78 to 1.00 keeps the swing visible — the field still loosens and
+       * gathers — while holding the spread between about 0.10 and 0.18, which
+       * is the difference between a crisp shape and a soft one rather than the
+       * difference between a shape and nothing.
+       *
+       * cos rather than sin so that phase zero is the TIGHT end, which is what
+       * lets a wake anchor the cycle and open assembled.
+       */
+      const bt = breathAnchorMs >= 0 ? t - (breathAnchorMs - t0) / 1000 : t;
+      const breath = breatheRef.current ? 0.78 + 0.22 * Math.cos(bt * 0.16) : 1;
       /* Gather is an explicit-Euler spring. Keep k*dt below ~1 or it overshoots
          and rings; dt is already clamped to 1/30, so cap the stiffness here. */
       const k = Math.min(Math.max(0.08, cohesionRef.current * breath) * 2.2, 24);

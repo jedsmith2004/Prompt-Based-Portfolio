@@ -200,6 +200,9 @@
   padding-bottom: 2px;
 }
 .v2-proj-links a:hover { color: var(--verm-text); border-color: currentColor; }
+/* the one internal link in the row, and the one that matters most */
+.v2-proj-links a.is-lead { color: var(--verm-text); border-bottom-color: var(--verm); }
+.v2-proj-links a.is-lead:hover { color: var(--ink); }
 
 /* The redaction bars that used to live here are gone with the branch that
    drew them. See the note in page.tsx: Recensorium launched, and the row it

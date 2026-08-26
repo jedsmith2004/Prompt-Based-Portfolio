@@ -441,16 +441,45 @@ export default function Geometry({
          plate must read as a whole instrument, not a cropped arc. */
       R = m * 0.405;
 
-      /* The enlarged-detail circle belongs beside the plate, never on top of
-         it. Beside it when the frame is wide enough; below it when it is not. */
-      insetR = Math.max(34, m * 0.115);
-      const beside = cx + R * 1.3;
-      if (beside + insetR + 10 <= w) {
-        insetX = beside;
-        insetY = cy + R * 0.62;
+      /*
+       * THE DETAIL CIRCLE GOES IN THE CORNER.
+       *
+       * Jack, 2026-08-26: "move the small spinning circles fractal further to
+       * the right corner so it occupies the space."
+       *
+       * It used to sit at cx + 1.3R, which is beside the plate but still well
+       * inside the frame, so on a wide viewport it landed under the middle of
+       * the section's figure and the bottom right of the plate was empty. The
+       * corner is both the emptiest part of the frame and the conventional
+       * place for an enlarged detail on a real drawing.
+       *
+       * It is also bigger, since it now has a corner to fill rather than a gap
+       * to squeeze into.
+       *
+       * The corner is a preference, not a guarantee: if the graduated limb
+       * reaches into it, the old placement beside the plate is used instead,
+       * because a detail circle overlapping the instrument is worse than a
+       * detail circle in the wrong place.
+       */
+      insetR = Math.max(38, m * 0.135);
+      const pad = Math.max(14, m * 0.045);
+      const cornerX = w - insetR - pad;
+      const cornerY = h - insetR - pad;
+      const clearsLimb = (x: number, y: number): boolean =>
+        Math.hypot(x - cx, y - cy) > R * 1.2 + insetR * 0.86;
+
+      if (cornerX - insetR > 4 && cornerY - insetR > 4 && clearsLimb(cornerX, cornerY)) {
+        insetX = cornerX;
+        insetY = cornerY;
       } else {
-        insetX = cx + R * 0.55;
-        insetY = cy + R * 1.45;
+        const beside = cx + R * 1.3;
+        if (beside + insetR + 10 <= w) {
+          insetX = beside;
+          insetY = cy + R * 0.62;
+        } else {
+          insetX = cx + R * 0.55;
+          insetY = cy + R * 1.45;
+        }
       }
       insetX = Math.min(w - insetR - 10, Math.max(insetR + 10, insetX));
       insetY = Math.min(h - insetR - 10, Math.max(insetR + 10, insetY));

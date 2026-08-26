@@ -31,6 +31,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { withAlpha } from '@/lib/v2/colour';
+import { onPaletteChange } from '@/lib/v2/paletteWatch';
 
 /* -------------------------------------------------------------------------- */
 /* model                                                                       */
@@ -219,6 +220,8 @@ function token(style: CSSStyleDeclaration, name: string, fallback: string): stri
 /* Which wires get drawn. Recomputed once per inference, never per frame, into
    buffers allocated once. Layout is [a, b, strength 0..1, sign]. */
 const HID_SHOWN = 10; /* strongest hidden units that get their inputs drawn */
+/** Minimum separation, in 28x28 cells, between two resting input picks. */
+const RESTING_SEP = 6;
 const IN_PER_HID = 3;
 const OUT_PER_CLASS = 4;
 const LINKS_IN_MAX = HID_SHOWN * IN_PER_HID;
@@ -229,6 +232,14 @@ interface Links {
   inCount: number;
   outBuf: Float32Array;
   outCount: number;
+  /**
+   * True when this is the picture of the untouched net rather than of a digit.
+   *
+   * It used to be inferred as `inCount === 0`, which was only correct because
+   * the resting picture drew no input wires at all. It draws them now, so the
+   * flag has to be stated. See restingLinks.
+   */
+  resting: boolean;
 }
 
 /** Strongest contributions into the strongest hidden units, and out of them
@@ -319,11 +330,25 @@ function computeLinks(
   }
   for (let i = 0; i < m; i++) links.outBuf[i * 4 + 2] = clamp01(links.outBuf[i * 4 + 2] / maxOut);
   links.outCount = m;
+  links.resting = false;
 }
 
-/** The resting picture: strongest raw weights into each class, no input. */
+/**
+ * The resting picture: strongest raw weights, no input.
+ *
+ * BOTH LAYERS, and that is a fix rather than a flourish. Jack, 2026-08-26:
+ * "when no digit is drawn in the box, the first set of weight connections are
+ * invisible." They were not faint, they were absent: this function set
+ * `inCount = 0` and returned, so the resting diagram read INPUT 784, a gap,
+ * then HIDDEN 64 wired to CLASS 10. Half a network.
+ *
+ * With no digit there are no contributions to rank, so the first layer is
+ * ranked by RAW WEIGHT instead, for the hidden units the second layer already
+ * chose. That keeps the two halves of the resting picture talking about the
+ * same units: every wire drawn on the left ends on a bar that has a wire
+ * leaving it on the right, so the diagram is one connected object.
+ */
 function restingLinks(net: Net, links: Links) {
-  links.inCount = 0;
   let m = 0;
   let maxOut = 1e-6;
   for (let o = 0; o < NOUT; o++) {
@@ -356,6 +381,74 @@ function restingLinks(net: Net, links: Links) {
   }
   for (let i = 0; i < m; i++) links.outBuf[i * 4 + 2] = clamp01(links.outBuf[i * 4 + 2] / maxOut);
   links.outCount = m;
+
+  /* --- input -> hidden, for the hidden units the classes just picked ------
+     Walked in the order they were emitted, so the strongest class evidence
+     gets its inputs drawn first and the cap falls on the weakest. */
+  const seen: number[] = [];
+  for (let i = 0; i < m && seen.length < HID_SHOWN; i++) {
+    const j = links.outBuf[i * 4];
+    if (seen.indexOf(j) < 0) seen.push(j);
+  }
+  let n = 0;
+  let maxIn = 1e-6;
+  for (let k = 0; k < seen.length; k++) {
+    const j = seen[k];
+    const base = j * NIN;
+    const bi = [-1, -1, -1];
+    const bv = [0, 0, 0];
+    /*
+     * Strongest, but never three neighbours of the same pixel.
+     *
+     * A plain top-three by magnitude picks three cells of one blob near the
+     * centre of the frame, because that is where a digit classifier's mass
+     * is, and three wires leaving the same point read as one wire. Each pick
+     * is therefore the strongest input at least RESTING_SEP cells away from
+     * every pick before it, which spreads the fan across the plate without
+     * inventing anything: they are still the three biggest weights the unit
+     * has, subject to being distinguishable.
+     */
+    for (let t = 0; t < IN_PER_HID; t++) {
+      let best = -1;
+      let bestMag = 0;
+      for (let i = 0; i < NIN; i++) {
+        const w = net.w1[base + i];
+        const mag = w < 0 ? -w : w;
+        if (mag <= bestMag) continue;
+        const cx = i % 28;
+        const cy = (i / 28) | 0;
+        let clash = false;
+        for (let q = 0; q < t; q++) {
+          const o = bi[q];
+          if (o < 0) continue;
+          const dx = (o % 28) - cx;
+          const dy = ((o / 28) | 0) - cy;
+          if (Math.abs(dx) < RESTING_SEP && Math.abs(dy) < RESTING_SEP) {
+            clash = true;
+            break;
+          }
+        }
+        if (clash) continue;
+        bestMag = mag;
+        best = i;
+      }
+      bi[t] = best;
+      bv[t] = bestMag;
+    }
+    for (let t = 0; t < IN_PER_HID; t++) {
+      if (bi[t] < 0) continue;
+      const p = n * 4;
+      links.inBuf[p] = bi[t];
+      links.inBuf[p + 1] = j;
+      links.inBuf[p + 2] = bv[t];
+      links.inBuf[p + 3] = net.w1[base + bi[t]] < 0 ? -1 : 1;
+      if (bv[t] > maxIn) maxIn = bv[t];
+      n++;
+    }
+  }
+  for (let i = 0; i < n; i++) links.inBuf[i * 4 + 2] = clamp01(links.inBuf[i * 4 + 2] / maxIn);
+  links.inCount = n;
+  links.resting = true;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -395,7 +488,8 @@ export default function NeuralPlayground({ height = 340, className }: NeuralPlay
     inBuf: new Float32Array(LINKS_IN_MAX * 4),
     inCount: 0,
     outBuf: new Float32Array(LINKS_OUT_MAX * 4),
-    outCount: 0
+    outCount: 0,
+    resting: true
   });
 
   /** Set by the plate effect; lets inference wake the render loop. */
@@ -566,6 +660,9 @@ export default function NeuralPlayground({ height = 340, className }: NeuralPlay
     paintStrokes(ctx, strokesRef.current, size, lw);
   }, []);
 
+  /* The pad draws in --ink, so a plate change re-inks whatever is on it. */
+  useEffect(() => onPaletteChange(repaintPad), [repaintPad]);
+
   useEffect(() => {
     const c = padRef.current;
     if (!c) return;
@@ -668,15 +765,27 @@ export default function NeuralPlayground({ height = 340, className }: NeuralPlay
     if (!ctx) return;
 
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const style = getComputedStyle(document.documentElement);
+    /* Re-read on every plate change: this figure is mounted at page load, when
+       the sheet is the hero's, and it is READ several plates later under a
+       palette that may have inverted. See lib/v2/paletteWatch.ts. */
     const C = {
-      ink: token(style, '--ink', '#17140F'),
-      ink3: token(style, '--ink-3', '#7C7364'),
-      ink4: token(style, '--ink-4', '#A79D8B'),
-      verm: token(style, '--verm', '#B5402F'),
-      blue: token(style, '--blue', '#2A4C7D'),
-      mono: token(style, '--f-mono', '"JetBrains Mono", ui-monospace, Menlo, monospace')
+      ink: '#17140F',
+      ink3: '#7C7364',
+      ink4: '#A79D8B',
+      verm: '#B5402F',
+      blue: '#2A4C7D',
+      mono: '"JetBrains Mono", ui-monospace, Menlo, monospace'
     };
+    const readInks = () => {
+      const style = getComputedStyle(document.documentElement);
+      C.ink = token(style, '--ink', '#17140F');
+      C.ink3 = token(style, '--ink-3', '#7C7364');
+      C.ink4 = token(style, '--ink-4', '#A79D8B');
+      C.verm = token(style, '--verm', '#B5402F');
+      C.blue = token(style, '--blue', '#2A4C7D');
+      C.mono = token(style, '--f-mono', '"JetBrains Mono", ui-monospace, Menlo, monospace');
+    };
+    readInks();
 
     /* eased mirrors of the true activations, so the plate settles rather than
        snapping; the numbers under the pad are never eased */
@@ -802,6 +911,15 @@ export default function NeuralPlayground({ height = 340, className }: NeuralPlay
         ctx.fillRect(cx, cy, L.cell + 0.4, L.cell + 0.4);
       }
 
+      /*
+       * THE RESTING STATE IS THE STATE ALMOST EVERYONE SEES, and both layers
+       * are drawn in it now. See restingLinks. Quieter than the live picture
+       * on purpose: a resting wire is a weight that exists, a live one is a
+       * weight that just fired, and the plate should not claim the first is
+       * the second.
+       */
+      const resting = links.resting;
+
       /* ---- wires: input -> hidden ---- */
       for (let k = 0; k < links.inCount; k++) {
         const p = k * 4;
@@ -816,13 +934,16 @@ export default function NeuralPlayground({ height = 340, className }: NeuralPlay
            colours had gone. A vermilion wire at eight percent alpha is not a
            faint vermilion wire, it is a grey one: the hue survives contact
            with the paper for about a fifth of its stated strength. */
-        ctx.strokeStyle = rgba(neg ? C.blue : C.verm, 0.26 + 0.6 * s);
-        ctx.lineWidth = 0.6 + 1.35 * s;
+        ctx.strokeStyle = rgba(
+          neg ? C.blue : C.verm,
+          resting ? 0.2 + 0.34 * s : 0.26 + 0.6 * s
+        );
+        ctx.lineWidth = resting ? 0.6 + 0.45 * s : 0.6 + 1.35 * s;
         ctx.beginPath();
         ctx.moveTo(ax, ay);
         ctx.lineTo(L.hidX, by);
         ctx.stroke();
-        if (waveA >= 0 && s > 0.3) {
+        if (waveA >= 0 && s > 0.3 && !resting) {
           ctx.fillStyle = rgba(neg ? C.blue : C.verm, 0.85 * (1 - waveA * 0.35));
           ctx.beginPath();
           ctx.arc(ax + (L.hidX - ax) * waveA, ay + (by - ay) * waveA, 1.7, 0, TAU);
@@ -831,7 +952,6 @@ export default function NeuralPlayground({ height = 340, className }: NeuralPlay
       }
 
       /* ---- wires: hidden -> class ---- */
-      const resting = links.inCount === 0;
       for (let k = 0; k < links.outCount; k++) {
         const p = k * 4;
         const j = links.outBuf[p];
@@ -992,6 +1112,11 @@ export default function NeuralPlayground({ height = 340, className }: NeuralPlay
     );
     io.observe(host);
 
+    const stopPalette = onPaletteChange(() => {
+      readInks();
+      kick(false);
+    });
+
     const onVis = () => {
       if (document.hidden) stop();
       else kick(false);
@@ -1003,6 +1128,7 @@ export default function NeuralPlayground({ height = 340, className }: NeuralPlay
       stop();
       ro.disconnect();
       io.disconnect();
+      stopPalette();
       document.removeEventListener('visibilitychange', onVis);
       kickRef.current = () => {};
     };

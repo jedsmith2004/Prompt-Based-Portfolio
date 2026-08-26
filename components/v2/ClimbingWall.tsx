@@ -31,6 +31,7 @@
 
 import { useEffect, useRef } from 'react';
 import { withAlpha } from '@/lib/v2/colour';
+import { onPaletteChange } from '@/lib/v2/paletteWatch';
 
 export interface ClimbingWallProps {
   /** Plate height. A number is taken as px. */
@@ -200,15 +201,34 @@ export default function ClimbingWall({
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     let disposed = false;
 
-    /* ---- palette, read from the live tokens so the plate follows the sheet -- */
-    const rootStyle = getComputedStyle(document.documentElement);
-    const toneColors = TONES.map((t) => {
-      const v = rootStyle.getPropertyValue(t.token);
-      return rgba(v && v.trim() ? v : t.fallback, t.alpha);
-    });
-    const monoStack =
-      rootStyle.getPropertyValue('--f-mono').trim() ||
-      '"JetBrains Mono", ui-monospace, Menlo, monospace';
+    /* ---- palette, read from the live tokens so the plate follows the sheet --
+     *
+     * READ AGAIN ON EVERY PLATE CHANGE, and that is the whole of the fix for
+     * "the climbing animation is almost entirely invisible".
+     *
+     * This used to be a single read at mount. Mount is page load, page load is
+     * the hero, and the hero is LIGHT: the atlas was rasterised in near-black
+     * ink and then carried down to plate 06, which settles dark, where every
+     * glyph on the wall was black on black. The wall was drawing perfectly and
+     * nobody could see it.
+     *
+     * The glyphs live in a pre-rasterised atlas, one row per tone, so a colour
+     * change is not a variable to re-read at draw time: the atlas has to be
+     * rebuilt and every cell repainted. See the subscription near the bottom
+     * of this effect. */
+    let toneColors: string[] = [];
+    let monoStack = '"JetBrains Mono", ui-monospace, Menlo, monospace';
+    function readTones(): void {
+      const rootStyle = getComputedStyle(document.documentElement);
+      toneColors = TONES.map((t) => {
+        const v = rootStyle.getPropertyValue(t.token);
+        return rgba(v && v.trim() ? v : t.fallback, t.alpha);
+      });
+      monoStack =
+        rootStyle.getPropertyValue('--f-mono').trim() ||
+        '"JetBrains Mono", ui-monospace, Menlo, monospace';
+    }
+    readTones();
 
     /* ---- character table -------------------------------------------------- */
     /* The ramp drives the wall texture and the holds; the figure chars are
@@ -1024,6 +1044,18 @@ export default function ClimbingWall({
     document.addEventListener('visibilitychange', sync);
     sync();
 
+    /* The sheet changed colour under us. Re-read, re-rasterise, repaint. See
+       readTones above, and lib/v2/paletteWatch.ts for why this is an observer
+       rather than a prop. */
+    const stopPalette = onPaletteChange(() => {
+      if (disposed) return;
+      readTones();
+      buildAtlas();
+      repaintAll();
+      compose();
+      blit();
+    });
+
     /* dev handle, same reasoning as InkField and Companion: the ascent has to
        be steppable without a visible tab, since a hidden one gets no frames. */
     if (process.env.NODE_ENV !== 'production') {
@@ -1071,6 +1103,7 @@ export default function ClimbingWall({
       cancelAnimationFrame(resizeRaf);
       io.disconnect();
       ro.disconnect();
+      stopPalette();
       document.removeEventListener('visibilitychange', sync);
       atlas = null;
     };

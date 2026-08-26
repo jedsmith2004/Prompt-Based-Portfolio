@@ -45,6 +45,7 @@
 
 import { useEffect, useId, useRef } from 'react';
 import { mulberry32, rgba, toRgb } from './backdrops/types';
+import { onPaletteChange } from '@/lib/v2/paletteWatch';
 
 /* ------------------------------------------------------------------- types */
 
@@ -240,7 +241,7 @@ interface Stock {
 /**
  * Palette, read live off the root element so the wall follows the sheet rather
  * than carrying its own copy of the colours. Called only on a repaint, which
- * is only on a resize, so a getComputedStyle here costs nothing.
+ * is a resize or a plate change, so a getComputedStyle here costs nothing.
  */
 function readStock(): Stock {
   const cs = getComputedStyle(document.documentElement);
@@ -679,6 +680,20 @@ function usePaper<T extends HTMLElement>(spec: PaperSpec) {
     ro.observe(host);
     window.addEventListener('resize', schedule);
 
+    /*
+     * THE SHEET IS STOCK, AND THE STOCK CHANGES COLOUR.
+     *
+     * readStock() reads --paper and --ink off the root, and the comment above
+     * it used to say a repaint only ever happens on a resize. That was the
+     * bug: this plate settles DARK and the page loads LIGHT, so a cutting
+     * painted at mount carried cream newsprint down to a black plate, or the
+     * reverse on the way back up, and the headline set in var(--ink) then sat
+     * on paper from the other palette. Black type on a black sheet is exactly
+     * what that looks like.
+     *
+     * A palette change is a repaint reason like any other. */
+    const stopPalette = onPaletteChange(schedule);
+
     /* Dev-only handle: headless panes report a zero box and never fire a
        resize, so there is otherwise no way to drive a paint and inspect it. */
     if (process.env.NODE_ENV !== 'production') {
@@ -688,6 +703,7 @@ function usePaper<T extends HTMLElement>(spec: PaperSpec) {
     return () => {
       cancelAnimationFrame(raf);
       ro.disconnect();
+      stopPalette();
       window.removeEventListener('resize', schedule);
     };
   }, []);
@@ -787,7 +803,12 @@ export default function AwardsClippings({ className }: AwardsClippingsProps) {
       </div>
 
       <div className="v2-clipwall-grid">
-        <ol className="v2-clip-stories" aria-label="Awards and distinctions">
+        {/* role="list" is not redundant. The wall is a multicolumn flow and
+            this element carries `display: contents` so the flow balances the
+            cuttings rather than one tall list box; several engines drop list
+            semantics from a display:contents list, and the role puts them
+            back. See the wall block in v2.css. */}
+        <ol className="v2-clip-stories" role="list" aria-label="Awards and distinctions">
           {STORIES.map((s, i) => (
             <Cutting key={s.id} story={s} z={i + 1} />
           ))}

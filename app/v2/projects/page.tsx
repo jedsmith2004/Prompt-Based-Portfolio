@@ -172,20 +172,24 @@ function ProjectRow({ project: p, index }: { project: Project; index: number }) 
           </>
         ) : null}
 
-        {links.length ? (
-          <p className="v2-proj-links">
-            {links.map((l) => (
-              <a
-                key={l.label}
-                href={l.href}
-                target={l.href.startsWith('/') ? undefined : '_blank'}
-                rel={l.href.startsWith('/') ? undefined : 'noreferrer noopener'}
-              >
-                {l.label}
-              </a>
-            ))}
-          </p>
-        ) : null}
+        {/* The page for this project always comes first, and it is the only
+            link here that is internal: everything else leaves the site. A row
+            in an index should be able to open the thing it is indexing. */}
+        <p className="v2-proj-links">
+          <Link href={`/v2/projects/${p.id}`} className="is-lead">
+            The full page
+          </Link>
+          {links.map((l) => (
+            <a
+              key={l.label}
+              href={l.href}
+              target={l.href.startsWith('/') ? undefined : '_blank'}
+              rel={l.href.startsWith('/') ? undefined : 'noreferrer noopener'}
+            >
+              {l.label}
+            </a>
+          ))}
+        </p>
       </div>
       <span className="v2-proj-meta">{p.date}</span>
     </li>

@@ -19,8 +19,10 @@
    ========================================================================== */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { FEATURED_PROJECTS, type FeaturedProject } from '@/lib/v2/content';
 import { projects as ALL_PROJECTS } from '@/lib/projects-data';
+import { onPaletteChange } from '@/lib/v2/paletteWatch';
 
 /* -------------------------------------------------------------------------- */
 /* 1. geometry                                                                 */
@@ -416,8 +418,17 @@ const SHADE_LOG: { on: boolean; v: number[] } = { on: false, v: [] };
    leaves the paper showing; a face in shadow fills with ink.
    ========================================================================== */
 
-/** Dot pitch in CSS px. Square, unlike the character cell it replaces. */
-const DOT = 3;
+/**
+ * Dot pitch in CSS px. Square, unlike the character cell it replaces.
+ *
+ * 2 rather than 3. Jack, 2026-08-26: "the objects aren't very high quality."
+ * The centre plate is 58% of the stage now that the neighbours actually sit
+ * beside it rather than on top of it, so at a 3px pitch the object was landing
+ * on about a hundred cells across and every curve in it was a staircase. Two
+ * is a little over twice the cells for a plate that only paints while it is
+ * turning, which is three quarters of a second per selection.
+ */
+const DOT = 2;
 
 /**
  * 8x8 ordered dither, values in 0..1, MEAN 0.4921875.
@@ -545,12 +556,36 @@ export default function HighlightReel({ className, height = 400 }: HighlightReel
     /* preallocated: nothing may be created inside the frame loop */
     let lum: Uint8ClampedArray | null = null;
 
-    function layout() {
+    /**
+     * Size the backing store to the box. Returns true if anything moved.
+     *
+     * THE STALE BOX WAS THE WHOLE OF "THE OBJECT DOESN'T APPEAR AT FIRST" AND
+     * "THE OBJECTS APPEAR OFF TO THE RIGHT OF THE VIEWPORT".
+     *
+     * This used to run once, at mount, with nothing but a window resize
+     * listener behind it. The stage is inside a section that reveals, under
+     * type set in a web font that lands after first paint, in a grid whose
+     * columns depend on both: the box it measured at mount was not the box it
+     * ended up with. And because the stylesheet asked for `width: auto` on a
+     * canvas — a replaced element, so auto means the intrinsic width, which is
+     * whatever this function last wrote to the width attribute — the stale
+     * measurement then became the CSS width and locked itself in. An 800px
+     * canvas in a 606px stage, clipped on the right by the stage's own
+     * overflow, with the object drawn at its centre and therefore sitting near
+     * the right edge of what you could see.
+     *
+     * The CSS states a real width now, and this runs whenever the box changes.
+     */
+    function layout(): boolean {
       const r = canvas!.getBoundingClientRect();
-      if (!r.width || !r.height) return;
-      dpr = Math.min(window.devicePixelRatio || 1, 2);
-      W = Math.round(r.width);
-      H = Math.round(r.height);
+      if (!r.width || !r.height) return false;
+      const d = Math.min(window.devicePixelRatio || 1, 2);
+      const nw = Math.round(r.width);
+      const nh = Math.round(r.height);
+      if (nw === W && nh === H && d === dpr) return false;
+      dpr = d;
+      W = nw;
+      H = nh;
       canvas!.width = Math.round(W * dpr);
       canvas!.height = Math.round(H * dpr);
       ctx!.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -559,6 +594,7 @@ export default function HighlightReel({ className, height = 400 }: HighlightReel
       rows = Math.max(6, Math.ceil(H / CELL_H));
       shade.width = cols;
       shade.height = rows;
+      return true;
     }
     layout();
 
@@ -608,8 +644,10 @@ export default function HighlightReel({ className, height = 400 }: HighlightReel
       sctx!.fillStyle = "#000";
       sctx!.fillRect(0, 0, tCols, tRows);
       /* 1.9 used to be here, undoing the 7:13 character cell. The cells are
-         square now, so the object is drawn at its own proportions. */
-      const scale = Math.min(tCols, tRows) * 0.34;
+         square now, so the object is drawn at its own proportions. 0.40 rather
+         than 0.34 because the centre plate is 58% of the stage now that the
+         neighbours are beside it instead of over it. */
+      const scale = Math.min(tCols, tRows) * 0.4;
       const cx = tCols / 2;
       const cy = tRows / 2;
       /* One projected, shaded face, ready to be depth-sorted and filled. */
@@ -845,8 +883,11 @@ export default function HighlightReel({ className, height = 400 }: HighlightReel
         if (!c2) continue;
         c2.setTransform(d, 0, 0, d, 0, 0);
         c2.clearRect(0, 0, w, h);
-        const cc = Math.max(8, Math.ceil(w / (CELL_W + 2)));
-        const rr2 = Math.max(6, Math.ceil(h / (CELL_H + 3)));
+        /* One pitch up from the centre, and square like it: the sides are
+           blurred and half-transparent, so the extra cells would not survive
+           the treatment anyway. */
+        const cc = Math.max(8, Math.ceil(w / (CELL_W + 1)));
+        const rr2 = Math.max(6, Math.ceil(h / (CELL_H + 1)));
         paint(
           c2,
           w,
@@ -904,12 +945,34 @@ export default function HighlightReel({ className, height = 400 }: HighlightReel
     }
     document.addEventListener('visibilitychange', onVis);
 
+    /* The plate is drawn in the page's ink, read off the canvas once per
+       render — and a render only happens while the object is turning. A plate
+       change is therefore invisible to it unless it is told. */
+    const stopPalette = onPaletteChange(() => {
+      if (!running) return;
+      if (!spinning) render(performance.now());
+    });
+
     let rr = 0;
+    function relayout() {
+      rr = 0;
+      if (!layout()) return;
+      /* the sides are stills painted at their own size, so they are stale too */
+      neighboursFor = -1;
+      if (!spinning) render(performance.now());
+    }
     function onResize() {
       cancelAnimationFrame(rr);
-      rr = requestAnimationFrame(() => { layout(); if (reduce) render(0); });
+      rr = requestAnimationFrame(relayout);
     }
     window.addEventListener('resize', onResize);
+
+    /* A ResizeObserver on the plate itself, which is the thing that actually
+       changes: the reveal, the web font landing, and the grid re-solving are
+       all invisible to a window resize listener. See layout(). */
+    const ro =
+      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(onResize) : null;
+    ro?.observe(canvas);
 
     /* Dev-only handle. Headless and hidden panes never fire rAF and report the
        canvas as non-intersecting, so there is otherwise no way to drive a frame
@@ -936,6 +999,8 @@ export default function HighlightReel({ className, height = 400 }: HighlightReel
       cancelAnimationFrame(raf);
       cancelAnimationFrame(rr);
       io.disconnect();
+      ro?.disconnect();
+      stopPalette();
       document.removeEventListener('visibilitychange', onVis);
       window.removeEventListener('resize', onResize);
     };
@@ -1000,6 +1065,28 @@ export default function HighlightReel({ className, height = 400 }: HighlightReel
             ))}
           </ul>
         ) : null}
+
+        {/*
+          THE WAY IN. Jack, 2026-08-26: "there is no link to each project (each
+          should have its own custom page) ... there is also no link to an 'all
+          projects' page."
+
+          Both live here rather than under the dots, because this panel is the
+          part of the reel that is about ONE project and the dots are the part
+          that is about the set. The first link is where you go if the object
+          you are looking at interested you; the second is where you go if it
+          did not.
+
+          data-perch on the row: it is a real line of ink with a rule above it,
+          which is a place a bird can stand. See THE PERCH CONTRACT in
+          components/v2/Companion.tsx.
+        */}
+        <p className="v2-reel-go" data-perch>
+          <Link href={`/v2/projects/${project.id}`} className="is-lead">
+            Open {project.title}
+          </Link>
+          <Link href="/v2/projects">Every project</Link>
+        </p>
       </div>
 
       <div className="v2-reel-controls">

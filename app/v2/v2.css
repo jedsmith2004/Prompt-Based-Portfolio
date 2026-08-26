@@ -2061,6 +2061,30 @@ html[data-v2-theme='dark']  body { background: #15130E; }
   padding: 4px 8px;
 }
 
+/* the two ways out of the reel: this project, or all of them */
+.v2-reel-go {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  align-items: baseline;
+  margin: 18px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--rule-firm);
+  font-family: var(--f-mono);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.v2-reel-go a {
+  color: var(--ink-2);
+  text-decoration: none;
+  border-bottom: 1px solid var(--rule-firm);
+  padding-bottom: 2px;
+  transition: color 0.18s var(--ease), border-color 0.18s var(--ease);
+}
+.v2-reel-go a.is-lead { color: var(--verm-text); border-bottom-color: var(--verm); }
+.v2-reel-go a:hover { color: var(--ink); border-bottom-color: currentColor; }
+
 .v2-reel-controls {
   grid-area: controls;
   display: flex;
@@ -3894,43 +3918,63 @@ html[data-v2-theme='dark']  body { background: #15130E; }
 
 /* -------------------------------------------------------------------------
    the layered wall
-   Columns are never shared: overlap comes from a negative margin small enough
-   to be swallowed by the neighbour's padding. See THE OVERLAP INVARIANT.
+
+   THE WALL IS A MULTICOLUMN FLOW, NOT A GRID, and that is the fix for "there
+   are massive gaps in the newspaper cutouts".
+
+   It used to be a twelve column grid with every sheet placed by hand. A grid
+   row is as tall as its tallest item and cuttings are wildly different
+   heights, so every row left a slab of empty wall under the shorter sheet.
+   The worst of them was structural rather than incidental: the appointments
+   column sat alone in its own row of the OUTER grid, in columns 8 to 13, so
+   the five columns beside it were seven hundred pixels of nothing.
+
+   A multicolumn flow packs by height instead of by row. Each sheet is
+   unbreakable, they fill column one until it balances and then column two,
+   and there is no such thing as a short item leaving a hole. It is also what a
+   real pinned wall does, which is the point.
+
+   The cuttings are direct children of the flow (`display: contents` on the
+   list) so the flow can balance THEM rather than balancing one tall list box.
+   That drops the list semantics in some engines, which is why the element
+   carries an explicit role="list" in AwardsClippings.tsx.
+
+   Overlap still comes from the BLEED, never from the layout: see THE OVERLAP
+   INVARIANT at the top of that file. Nothing here pulls a sheet into its
+   neighbour, so nothing here can bury a word.
    ------------------------------------------------------------------------- */
 @media (min-width: 900px) {
   .v2-clipwall { --clip-bleed: 18px; }
 
   .v2-clipwall-grid {
-    grid-template-columns: repeat(12, 1fr);
-    gap: 0;
-    align-items: start;
+    display: block;
+    columns: 2;
+    column-gap: clamp(30px, 3.6vw, 58px);
+    /* balance rather than fill: two columns of roughly equal height read as a
+       wall, one full column beside a half-empty one reads as an accident */
+    column-fill: balance;
+    margin-top: 42px;
   }
-  .v2-clip-stories {
-    grid-column: 1 / -1;
-    grid-row: 1;
-    display: grid;
-    grid-template-columns: repeat(12, 1fr);
-    align-items: start;
-    gap: 0;
+  .v2-clip-stories { display: contents; }
+
+  .v2-clip {
+    transform: rotate(var(--rot, 0deg));
+    break-inside: avoid;
+    -webkit-column-break-inside: avoid;
+    margin: 0 0 clamp(24px, 2.6vw, 42px);
+    /* A rotated sheet whose paint bleeds past its box still has to be an
+       unbreakable block in the flow. */
+    display: block;
   }
-  .v2-clip { transform: rotate(var(--rot, 0deg)); }
   .v2-clip:hover,
   .v2-clip:focus-visible,
   .v2-clip:focus-within {
     transform: rotate(0deg) translateY(-7px);
   }
 
-  .v2-clip-stories > li:nth-child(1) { grid-column: 1 / 8;  grid-row: 1; }
-  .v2-clip-stories > li:nth-child(2) { grid-column: 8 / 13; grid-row: 1; margin-top: 46px; }
-  .v2-clip-stories > li:nth-child(3) { grid-column: 7 / 13; grid-row: 2; margin-top: 0; }
-  .v2-clip-stories > li:nth-child(4) { grid-column: 1 / 7;  grid-row: 2; margin-top: 30px; }
-  .v2-clip-stories > li:nth-child(5) { grid-column: 2 / 9;  grid-row: 3; margin-top: 8px; }
-
-  /* The column goes under the last cutting, not beside it. Sharing the
-     stories' row and sitting on its floor put it straight through the third
-     cutting's citation, because that row's floor is set by a taller sheet in
-     a different column. */
-  .v2-clip-appts { grid-column: 8 / 13; grid-row: 2; margin-top: 0; }
+  /* The appointments column is the last thing in the flow, so it lands at the
+     foot of whichever column has room for it. */
+  .v2-clip-appts { margin-bottom: 0; }
 }
 
 @media (min-width: 1180px) {
@@ -4912,20 +4956,45 @@ html[data-v2-palette] body { background: var(--ground); }
    Inside the box now, legible, and only softened enough to stay behind the
    centre plate rather than competing with it.
 */
-.v2-reel-side {
+/*
+ * `.v2-reel-stage .v2-reel-side`, not `.v2-reel-side`, AND THIS IS THE BUG
+ * Jack reported as "the next and previous items that are meant to be either
+ * side aren't appearing".
+ *
+ * The base rule for this stage is `.v2-reel-stage canvas`: one class and one
+ * type, specificity 0,1,1. A bare `.v2-reel-side` is 0,1,0 and loses, so every
+ * declaration below that also appears up there — position, top, width, height
+ * — was silently discarded. The neighbours were not at 31% in the wings; they
+ * were full-bleed copies of the stage sitting on top of the centre plate,
+ * pulled up half their own height by a transform that DID apply because
+ * nothing else declared one. What reached the reader was a smear.
+ *
+ * The centre plate three rules down already carries a comment saying exactly
+ * this. The same fix never got applied to the sides.
+ */
+.v2-reel-stage .v2-reel-side {
   position: absolute;
-  top: 50%;
-  width: 31%;
+  top: 19%;
+  bottom: auto;
+  left: auto;
+  right: auto;
+  /* BOTH dimensions stated, never `auto`. A canvas is a REPLACED element:
+     `auto` on one resolves to its intrinsic size, which is whatever its width
+     and height attributes currently say, and the offset on the far side is
+     then thrown away as over-constrained. That is how the centre plate ended
+     up 800px wide inside a 606px stage with its object hanging off the right,
+     and how these two ended up 300x150 stubs pinned to the top. */
+  width: 27%;
   height: 62%;
-  transform: translateY(-50%);
+  transform: none;
   opacity: 0.5;
   filter: blur(0.7px);
   pointer-events: none;
   color: var(--ink);
   z-index: 0;
 }
-.v2-reel-side.is-prev { left: 0; }
-.v2-reel-side.is-next { right: 0; }
+.v2-reel-stage .v2-reel-side.is-prev { left: 0; }
+.v2-reel-stage .v2-reel-side.is-next { right: 0; }
 
 /* The centre plate sits above them and is the only sharp thing on the stage.
    It is inset so the object cannot grow over its own neighbours: the model is
@@ -4937,14 +5006,19 @@ html[data-v2-palette] body { background: var(--ground); }
 .v2-reel-stage .v2-reel-main {
   z-index: 1;
   left: 21%;
-  right: 21%;
-  width: auto;
+  right: auto;
+  /* See the note on the sides: `auto` on a canvas is the intrinsic width, so
+     this has to be a real length. 100 - 21 - 21. */
+  width: 58%;
+  height: 100%;
 }
 
 @media (max-width: 700px) {
   /* Two blurred plates crowding a narrow stage read as smudges rather than as
      neighbours, so below this they simply do not appear. */
-  .v2-reel-side { display: none; }
+  .v2-reel-stage .v2-reel-side { display: none; }
+  /* and the centre takes the whole stage back */
+  .v2-reel-stage .v2-reel-main { left: 4%; width: 92%; }
 }
 
 /* --- kinetic plate titles -------------------------------------------------- */
@@ -5187,4 +5261,200 @@ html[data-v2-palette] body { background: var(--ground); }
 }
 .v2-field[data-dormant='true'] {
   opacity: 0;
+}
+
+/* ==========================================================================
+   THE CLOSING PLATE  (components/v2/ContactPlate.tsx)
+
+   Three doors and a short form. The doors are the biggest interactive objects
+   on the site on purpose: this is the one plate that asks the reader to do
+   something, so the thing they do it with is set at display scale rather than
+   as a line of small print under a figure.
+   ========================================================================== */
+
+.v2-contact {
+  margin-top: clamp(30px, 4vw, 56px);
+}
+
+.v2-doors {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(12px, 1.6vw, 22px);
+}
+@media (max-width: 820px) {
+  .v2-doors { grid-template-columns: 1fr; }
+}
+
+.v2-doors a {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas: 'label mark' 'handle mark';
+  align-items: center;
+  gap: 8px 16px;
+  /* the 2px rule along the top is the perch, and the visible structure */
+  border-top: 2px solid var(--rule-hard);
+  border-bottom: 1px solid var(--rule);
+  padding: clamp(20px, 2.6vw, 32px) clamp(16px, 2vw, 24px) clamp(18px, 2.4vw, 28px);
+  text-decoration: none;
+  color: var(--ink);
+  position: relative;
+  overflow: hidden;
+  transition: color 0.24s var(--ease);
+}
+/* The fill sweeps up from the floor rather than the box changing colour: a
+   background-color transition on a box this size is a flat wipe, and this is
+   the one control on the page big enough for the gesture to read. */
+.v2-doors a::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--ink);
+  transform: scaleY(0);
+  transform-origin: 50% 100%;
+  transition: transform 0.34s var(--ease);
+  z-index: 0;
+}
+.v2-doors a > * { position: relative; z-index: 1; }
+.v2-doors a:hover,
+.v2-doors a:focus-visible { color: var(--paper-hi); }
+.v2-doors a:hover::before,
+.v2-doors a:focus-visible::before { transform: scaleY(1); }
+.v2-doors a:focus-visible { outline: 2px solid var(--verm); outline-offset: 3px; }
+
+.v2-doors b {
+  grid-area: label;
+  font-family: var(--f-display);
+  font-variation-settings: 'wdth' 90, 'opsz' 40;
+  font-size: clamp(28px, 3.4vw, 44px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 0.94;
+}
+.v2-doors span {
+  grid-area: handle;
+  font-family: var(--f-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: currentColor;
+  opacity: 0.62;
+  overflow-wrap: anywhere;
+}
+.v2-doors svg {
+  grid-area: mark;
+  opacity: 0.42;
+  transition: transform 0.34s var(--ease), opacity 0.24s var(--ease);
+}
+.v2-doors a:hover svg,
+.v2-doors a:focus-visible svg { opacity: 1; transform: translate(3px, -3px); }
+
+/* --- the form ------------------------------------------------------------ */
+/* Hairlines, not boxes. See the note at the top of ContactPlate.tsx. */
+
+.v2-note {
+  margin-top: clamp(40px, 6vw, 84px);
+  border-top: 2px solid var(--rule-hard);
+  padding-top: clamp(14px, 2vw, 22px);
+  display: grid;
+  gap: clamp(18px, 2.4vw, 30px);
+  max-width: 78ch;
+}
+.v2-note-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 24px;
+}
+.v2-note-strap {
+  margin: 0;
+  font-family: var(--f-read);
+  font-weight: 300;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ink-3);
+}
+
+.v2-note-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(16px, 2.4vw, 32px);
+}
+@media (max-width: 620px) {
+  .v2-note-row { grid-template-columns: 1fr; }
+}
+
+.v2-note-field { display: grid; gap: 7px; }
+.v2-note-field > span {
+  font-family: var(--f-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.v2-note-field input,
+.v2-note-field textarea {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--rule-firm);
+  border-radius: 0;
+  padding: 8px 2px;
+  font-family: var(--f-read);
+  font-weight: 300;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--ink);
+  transition: border-color 0.2s var(--ease);
+}
+.v2-note-field textarea { resize: vertical; min-height: 5.4em; }
+.v2-note-field input:focus,
+.v2-note-field textarea:focus {
+  outline: none;
+  border-bottom-color: var(--verm);
+}
+.v2-note-field input::placeholder,
+.v2-note-field textarea::placeholder { color: var(--ink-4); }
+
+.v2-note-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+}
+.v2-note-foot button {
+  appearance: none;
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid var(--ink);
+  color: var(--ink);
+  font-family: var(--f-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  padding: 12px 26px;
+  transition: background 0.22s var(--ease), color 0.22s var(--ease);
+}
+.v2-note-foot button:hover:not(:disabled) { background: var(--ink); color: var(--paper-hi); }
+.v2-note-foot button:disabled { opacity: 0.55; cursor: default; }
+.v2-note-say {
+  margin: 0;
+  font-family: var(--f-read);
+  font-weight: 300;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+.v2-note-say a { color: var(--verm-text); }
+
+@media (prefers-reduced-motion: reduce) {
+  .v2-doors a,
+  .v2-doors a::before,
+  .v2-doors svg,
+  .v2-note-foot button { transition: none; }
+  .v2-doors a:hover::before,
+  .v2-doors a:focus-visible::before { transform: scaleY(1); }
 }

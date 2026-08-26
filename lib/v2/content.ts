@@ -229,11 +229,12 @@ export const SECTIONS: Section[] = [
     lede:
       'I am looking for work in AI research, full-stack engineering, or a role technical enough to be uncomfortable. Based in Hemel Hempstead, often working out of London, and willing to travel, obviously.',
     shape: 'portraitBlob',
-    stats: [
-      { value: 'Email', label: 'jedsmith2004@gmail.com', tone: 'verm' },
-      { value: 'GitHub', label: 'jedsmith2004' },
-      { value: 'LinkedIn', label: 'jack-ed-smith', tone: 'blue' }
-    ]
+    /*
+     * NO SHELF. The three addresses are the three doors on this plate now, at
+     * display scale, in components/v2/ContactPlate.tsx. Setting them here as
+     * well would be the same three facts twice on one screen, and the smaller
+     * pair would read as the real ones.
+     */
   }
 ];
 

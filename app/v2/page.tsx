@@ -28,6 +28,7 @@ import SectionBackdrops from '@/components/v2/SectionBackdrops';
 import { usePalette } from '@/components/v2/usePalette';
 import CareerLine from '@/components/v2/CareerLine';
 import AwardsClippings from '@/components/v2/AwardsClippings';
+import ContactPlate from '@/components/v2/ContactPlate';
 import CurriculumVitae from '@/components/v2/CurriculumVitae';
 import { HERO, SECTIONS, SECTION_WORLDS, WHISPERS, type SectionShape } from '@/lib/v2/content';
 import {
@@ -151,9 +152,20 @@ function sectionExtra(id: string) {
         </>
       );
     case 'contact':
-      /* Nothing. The closing plate asks for one thing and should not be
-         competing with a figure while it does. See the note on `cv`. */
-      return null;
+      /*
+       * THE DOORS AND THE FORM, and this replaces "nothing".
+       *
+       * The old note here said the closing plate asks for one thing and should
+       * not be competing with a figure while it does. That is still true and
+       * this is not a figure: it is the ask itself, given the size the ask
+       * deserves. Jack, 2026-08-26: "the email, github and linkedin should all
+       * be massive link boxes. There should be a minimal contact form."
+       *
+       * The three addresses used to be a figure shelf, which is the grammar
+       * for a fact you read rather than a door you go through. They are gone
+       * from the stats in lib/v2/content.ts, so they exist once.
+       */
+      return <ContactPlate />;
     default:
       return null;
   }

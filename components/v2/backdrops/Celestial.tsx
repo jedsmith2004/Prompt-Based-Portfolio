@@ -613,6 +613,110 @@ export default function Celestial({
 
     let latOff = 0; // scroll-driven latitude excursion, decays home
     let rollS = 0; // smoothed deck roll
+
+    /*
+     * SHOOTING STARS. Jack, 2026-08-26: "add some shooting stars, every now and
+     * again (1 every 15 or so seconds)."
+     *
+     * Rare on purpose, and rare in a way that cannot fall into a rhythm: the
+     * gap is drawn fresh each time from a range around fifteen seconds, so two
+     * readers never see the same cadence and one reader never learns it. A
+     * meteor on a metronome stops being a thing that happened and becomes a
+     * loop.
+     *
+     * It is a MARK, not a light. Everything else on this plate is drawn in ink
+     * density rather than additive glow so the world reads on paper as well as
+     * on ink, and a glowing streak would be the one thing here that only works
+     * in the dark. The head is a small dense dot and the tail is the same ink
+     * falling off along its path.
+     *
+     * Muted by `quiet()` like every other mark, so one cannot streak through
+     * the middle of the closing plate's type.
+     */
+    const mrand = mulberry32(0x51001a);
+    /** Seconds between meteors, drawn per meteor. */
+    const METEOR_GAP_MIN = 11;
+    const METEOR_GAP_MAX = 20;
+    /** How long one takes to cross, in seconds. */
+    const METEOR_LIFE = 1.05;
+    let meteorNext = METEOR_GAP_MIN + mrand() * (METEOR_GAP_MAX - METEOR_GAP_MIN);
+    let meteorT0 = -99;
+    let mx0 = 0;
+    let my0 = 0;
+    let mdx = 0;
+    let mdy = 0;
+    let mLen = 0;
+    let mBright = 1;
+
+    function spawnMeteor(): void {
+      /* Enters through the limb and crosses a chord of the disc, so it is a
+         thing happening IN the sky rather than a scratch on the canvas. */
+      const a = mrand() * TAU;
+      const r = RAD * (0.86 + mrand() * 0.3);
+      mx0 = cx + Math.cos(a) * r;
+      my0 = cy + Math.sin(a) * r;
+      /* aimed back across the disc, give or take */
+      const toward = a + Math.PI + (mrand() - 0.5) * 1.5;
+      const travel = RAD * (0.62 + mrand() * 0.7);
+      mdx = Math.cos(toward) * travel;
+      mdy = Math.sin(toward) * travel;
+      mLen = RAD * (0.09 + mrand() * 0.1);
+      mBright = 0.62 + mrand() * 0.38;
+    }
+
+    function drawMeteor(tSec: number, INKROW: string[], ACCROW: string[]): void {
+      if (RAD <= 0) return;
+      if (tSec >= meteorNext) {
+        meteorT0 = tSec;
+        spawnMeteor();
+        meteorNext =
+          tSec + METEOR_LIFE + METEOR_GAP_MIN + mrand() * (METEOR_GAP_MAX - METEOR_GAP_MIN);
+      }
+      const u = (tSec - meteorT0) / METEOR_LIFE;
+      if (u < 0 || u > 1) return;
+
+      /* Fast in, slower out, and gone before it reaches the far limb: a meteor
+         that decelerates to a stop is a comet. */
+      const e = 1 - (1 - u) * (1 - u);
+      /* fade in over the first tenth, out over the last third */
+      const fade =
+        (u < 0.1 ? u / 0.1 : 1) * (u > 0.67 ? 1 - (u - 0.67) / 0.33 : 1);
+      const hx = mx0 + mdx * e;
+      const hy = my0 + mdy * e;
+      const dl = Math.hypot(mdx, mdy) || 1;
+      const tx = hx - (mdx / dl) * mLen;
+      const ty = hy - (mdy / dl) * mLen;
+
+      const a = mBright * fade * quiet(hx, hy);
+      if (a < 0.01) return;
+
+      /* The tail is a run of short segments rather than one gradient stroke:
+         the colours on this plate are a prebuilt table of rgba strings indexed
+         by quantised alpha, and building a real gradient per frame would be
+         the one allocation in the loop. Six segments is under the threshold
+         where the steps are visible against a 1.5px line. */
+      const SEGS = 6;
+      const ux = (mdx / dl) * mLen;
+      const uy = (mdy / dl) * mLen;
+      ctx.lineWidth = 1.5;
+      for (let k = 0; k < SEGS; k++) {
+        const f0 = k / SEGS;
+        const f1 = (k + 1) / SEGS;
+        /* squared, so the tail thins away rather than stopping */
+        ctx.strokeStyle = INKROW[lv(a * (1 - f0) * (1 - f0))];
+        ctx.beginPath();
+        ctx.moveTo(hx - ux * f1, hy - uy * f1);
+        ctx.lineTo(hx - ux * f0, hy - uy * f0);
+        ctx.stroke();
+      }
+      void tx;
+      void ty;
+
+      ctx.fillStyle = ACCROW[lv(a * 0.9)];
+      ctx.beginPath();
+      ctx.arc(hx, hy, 1.5, 0, TAU);
+      ctx.fill();
+    }
     let markIdx = -1; // the star the sextant is holding
     let markAt = -1e9;
 
@@ -1068,6 +1172,13 @@ export default function Celestial({
       ctx.fillText(DEGS[dInt], sxp - 26, ry);
       ctx.fillStyle = INK2[lv(0.28 * qs)];
       ctx.fillText(MINS[mInt], sxp - 4, ry);
+
+      /* Last, so it passes in FRONT of the sky and the instruments. A meteor
+         behind the graduated bezel is a bug you only notice once. */
+      ctx.setLineDash(SOLID);
+      ctx.lineCap = 'round';
+      drawMeteor(tSec, INK, ACC);
+      ctx.lineCap = 'butt';
 
       ctx.globalAlpha = 1;
     }
