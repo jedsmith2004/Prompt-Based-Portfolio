@@ -92,8 +92,51 @@ html, body {
   margin: 0;
   padding: 0;
   background: #E4DFD3;
+  /*
+     Safari on iOS inflates the type in some blocks unless it is told not to,
+     and it does it AFTER layout has been reasoned about. On a page with this
+     many `nowrap` mono labels that is a silent way to make a line wider than
+     the box it was measured into. Chrome does not do it at all, which is
+     exactly the shape of "fine on Chrome, not on my phone".
+  */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
+
+/* --------------------------------------------------------------------------
+   THE HORIZONTAL GUARD, AND WHY IT IS ON THE BODY AS WELL.
+
+   Jack, 2026-08-27: "There is still horizontal scroll on the mobile version,
+   not on chrome but on my phone (safari) it's not great."
+
+   The page's own layout is clean — measured at 320 and 375 with this rule
+   lifted, the content is exactly the width of the viewport. What is NOT clean
+   is one animation: the closing plate's envelope flies to
+   `window.innerWidth + 150` (see `collect` in components/v2/ContactPlate.tsx),
+   as a transform on an element that nothing clips. Measured on a 320px
+   viewport the document goes from 320 to 505 wide for the length of the
+   flight. Chrome swallows that because it honours the rule below on the root;
+   iOS Safari is much less willing to, and hands the reader a page they can
+   drag sideways instead.
+
+   So the clip is repeated on the body, where it is not subject to the root's
+   propagation rules at all.
+
+   `clip` AND NOT `hidden`, and this is the part that matters: `overflow-x:
+   hidden` would make the body a scroll container, which forces `overflow-y`
+   to `auto` and takes the viewport away from every `position: sticky`
+   descendant on the site. `clip` does no such thing — it clips and creates
+   nothing — so the sticky plate furniture keeps working. It is also why this
+   is safe to put on the body at all.
+
+   Behind `@supports` because `clip` is Safari 16, and on anything older the
+   root rule is still there doing what it always did.
+   -------------------------------------------------------------------------- */
 html { overflow-x: hidden; }
+
+@supports (overflow: clip) {
+  body { overflow-x: clip; }
+}
 
 .v2 {
   background: var(--paper);
@@ -901,7 +944,30 @@ html { overflow-x: hidden; }
   z-index: 0;
   pointer-events: none;
 }
-.v2-above { position: relative; z-index: 2; }
+/*
+   AND THE PAGE CLIPS ITS OWN CONTENT, which is where the envelope is stopped.
+
+   The guard on `html` and `body` decides whether the VIEWPORT can be dragged.
+   This decides whether there is anything out there to drag to, which is the
+   half that does not depend on a browser honouring anything: the closing
+   plate's envelope flies to `window.innerWidth + 150` and measured 185px of
+   document past a 320px screen, and no guard should have had to catch that.
+
+   `.v2-above` is the right box for it. Its BORDER box is the full width of
+   the viewport at every width — `--rail` is padding, inside it — so this
+   clips exactly at the screen edges and takes nothing legitimate with it: the
+   foot's full-bleed band grows to `-var(--rail)` from a footer that sits
+   inside that same padding, which lands it precisely on these edges rather
+   than past them. Verified at 320, 375 and 1280.
+
+   `clip` again, not `hidden`: `.v2-tech-panel` and `.v2-tech-side` are
+   `position: sticky` inside here, and `hidden` would make this a scroll
+   container and take their scrollport away. `clip` creates nothing.
+
+   The field, the section worlds, the rail, the plate bar and the bird are all
+   siblings of this element rather than children, so none of them is clipped.
+*/
+.v2-above { position: relative; z-index: 2; overflow-x: clip; }
 
 /* ==========================================================================
    hero plate
