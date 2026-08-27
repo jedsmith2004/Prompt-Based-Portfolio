@@ -48,34 +48,139 @@ export const metadata: Metadata = {
     'Unity'
   ],
   authors: [{ name: 'Jack Smith' }],
+  creator: 'Jack Smith',
   alternates: { canonical: '/' },
+  /*
+     Let the crawlers show the whole card. `max-image-preview: large` is the
+     difference between Google rendering the share image at full width and
+     rendering a thumbnail beside the result, and it is off by default — the
+     card is drawn on purpose, so it may as well be seen.
+  */
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+      'max-video-preview': -1
+    }
+  },
+  /* The paper the whole site is printed on, so a mobile browser's chrome
+     stops being white above it. */
+  themeColor: '#E4DFD3',
   openGraph: {
     title: 'Jack Smith — builds from the metal up',
     description:
       'Software rasterizers written from nothing, neural runtimes that never leave your machine, motion models that answer inside the editor.',
     url: 'https://jacksmith.me',
     siteName: 'Jack Smith',
-    /* Logo rather than a screenshot of the page. The card that used to sit
-       here, public/OG_image.png, is a photograph of the OLD site's hero, and
-       it now advertises v2.jacksmith.me to anyone who shares this one. */
-    images: [{ url: 'https://jacksmith.me/Logo.png', width: 1189, height: 1188 }],
+    /*
+       NO `images` HERE ANY MORE, and that is the point rather than an
+       omission. It used to name public/Logo.png — the mark from the Prismic
+       site of December 2024, two sites ago — so every share of this site was
+       illustrated by the one before it. app/opengraph-image.png replaces it
+       and is picked up by file convention, which also means the sub-routes
+       inherit it: /projects, /clippings and all twenty detail pages declare
+       their own titles and descriptions and none of them declared an image,
+       so all of them were carrying that same stale logo.
+
+       See scripts/build-pip-icons.js. The card is drawn from the sparrow
+       sprite, so it cannot fall out of date with the bird the way a hand
+       exported picture falls out of date with the site.
+    */
     locale: 'en_GB',
     type: 'website'
   },
   twitter: {
-    card: 'summary',
+    /* `summary` is the small square card. The image is 1200x630 now, which is
+       the large card's shape, and asking for `summary` would have it cropped
+       to a square thumbnail. */
+    card: 'summary_large_image',
     title: 'Jack Smith — builds from the metal up',
     description:
-      'Software rasterizers written from nothing, neural runtimes that never leave your machine, motion models that answer inside the editor.',
-    images: ['https://jacksmith.me/Logo.png']
+      'Software rasterizers written from nothing, neural runtimes that never leave your machine, motion models that answer inside the editor.'
   }
+};
+
+/* ============================================================================
+   STRUCTURED DATA, so the record is machine readable as well as legible.
+
+   Everything below is already stated on the page in words — the name and the
+   location in the hero eyebrow, the degree in its lede, the three addresses on
+   the closing plate. None of it is a claim the site does not already make out
+   loud, which is the only rule that matters here: structured data that says
+   more than the page says is what a manual action is for.
+
+   `@graph` rather than two separate blocks so the Person and the WebSite can
+   point at each other by id. That link is the whole value of doing this: it
+   tells a crawler that this domain is ONE named person's site rather than a
+   company that happens to mention him, which is what a knowledge panel is
+   assembled from.
+
+   Sourced from lib/v2/content.ts and components/v2/ContactPlate.tsx by hand
+   rather than imported, because those are client modules and this is the
+   document. If the eyebrow or the three addresses change, change them here —
+   there is a test for exactly this drift in nobody's test suite, so the note
+   is the mechanism.
+   ========================================================================== */
+const STRUCTURED_DATA = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'Person',
+      '@id': 'https://jacksmith.me/#jack',
+      name: 'Jack Smith',
+      url: 'https://jacksmith.me',
+      jobTitle: 'Software Engineer',
+      description:
+        'Software engineer working close to the metal: rasterizers, neural runtimes ' +
+        'that stay on the machine, and motion models that answer inside the editor.',
+      alumniOf: {
+        '@type': 'CollegeOrUniversity',
+        name: 'University of Sheffield'
+      },
+      address: {
+        '@type': 'PostalAddress',
+        addressLocality: 'Hemel Hempstead',
+        addressCountry: 'GB'
+      },
+      knowsAbout: [
+        'Computer Graphics',
+        'Machine Learning',
+        'Software Rasterization',
+        'Unity',
+        'TypeScript'
+      ],
+      sameAs: [
+        'https://github.com/jedsmith2004',
+        'https://linkedin.com/in/jack-ed-smith'
+      ]
+    },
+    {
+      '@type': 'WebSite',
+      '@id': 'https://jacksmith.me/#site',
+      url: 'https://jacksmith.me',
+      name: 'Jack Smith',
+      inLanguage: 'en-GB',
+      author: { '@id': 'https://jacksmith.me/#jack' },
+      publisher: { '@id': 'https://jacksmith.me/#jack' }
+    }
+  ]
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <head>
-        <link rel="icon" href="/favicon.ico" sizes="any" />
+        {/* The scalable icon and the apple touch icon are app/icon.svg and
+            app/apple-icon.png, which Next links by file convention. This is
+            the fallback for anything that will not take an SVG icon, and it
+            is declared with a size so a browser that reads both knows this is
+            the 32px raster and the SVG is the one to scale. Both are Pip —
+            see scripts/build-pip-icons.js. */}
+        <link rel="icon" href="/favicon.ico" sizes="32x32" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         {/* Moved out of an `@import` at the top of v2.css, where it could not
@@ -96,6 +201,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body>
+        {/* Ahead of the page, because it is a statement about the document
+            rather than a part of it. `JSON.stringify` and not a template
+            literal: the description carries a colon and an apostrophe, and
+            hand-quoted JSON in a script tag is how those become a parse error
+            nobody notices for a year. */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(STRUCTURED_DATA) }}
+        />
         <div className="v2">{children}</div>
         {/* One canvas, one listener, and no frame loop between clicks. It is
             outside `.v2` because it is a fixed overlay over the whole document
