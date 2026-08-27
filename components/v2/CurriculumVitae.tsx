@@ -39,36 +39,12 @@
    the wrong document. Both come from `origin/master` now.
    ========================================================================== */
 
-export interface CvEdition {
-  /** Path under /public, already URL-encoded where it needs to be. */
-  href: string;
-  /** What to call it. */
-  label: string;
-  /** Who it is for. One line. */
-  forWhom: string;
-  pages: number;
-  kb: number;
-  /** The long one is the default offer. */
-  primary?: boolean;
-}
-
-export const CV_EDITIONS: readonly CvEdition[] = [
-  {
-    href: '/CV%20Jack%20Smith.pdf',
-    label: 'Full CV',
-    forWhom: 'Everything: the degree, the roles, the projects and the awards.',
-    pages: 2,
-    kb: 270,
-    primary: true
-  },
-  {
-    href: '/CV%20Jack%20Smith%20-%20One%20Page.pdf',
-    label: 'One page',
-    forWhom: 'The same career with nothing that needed a second sheet.',
-    pages: 1,
-    kb: 209
-  }
-];
+/* The editions live in lib/v2/cv.ts so the server can read them too; see the
+   header there. Re-exported because Hero and CvPlanks import them from here
+   and there is no reason to make them care where they moved to. */
+export type { CvEdition } from '@/lib/v2/cv';
+export { CV_EDITIONS } from '@/lib/v2/cv';
+import { CV_EDITIONS } from '@/lib/v2/cv';
 
 export interface CurriculumVitaeProps {
   className?: string;
