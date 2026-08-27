@@ -2600,6 +2600,34 @@ export default function Companion({
       inW: -1
     };
 
+    /**
+     * The two rows at the bottom of the chat panel: the rule that closes the
+     * log, and the draft line under it.
+     *
+     * IT IS A FUNCTION BECAUSE TWO PLACES NEED IT. `buildChat` paints the
+     * pixel row and `positionInput` parks the real <input> exactly over it, and
+     * the second one used to derive the same number independently, as
+     * `chatUi.h - 30`. That happened to agree only because 30 was 15 cells and
+     * the row was 15 cells off the bottom; the moment the row moved, the two
+     * would have silently drifted apart and taken the caret, the text
+     * selection and the mobile keyboard anchor with them.
+     *
+     * THE DRAFT IS CENTRED IN THE STRIP, which is the fix. It used to be
+     * pinned a fixed three cells under the rule, which left 4px of air above
+     * it and 12px below at every panel size: the line sat visibly high in the
+     * band it appears to occupy. The strip is measured between the rule and
+     * the paper field's inner bottom edge, and the glyphs are placed in the
+     * middle of it.
+     */
+    function chatInputRows(hCells: number) {
+      /* Unchanged, and it is what the log is allowed to run down to. */
+      const railY = hCells - 4 - GLYPH_H - 4 - 3;
+      const stripTop = railY + 1;
+      const stripBottom = hCells - 2;
+      const slack = Math.max(0, stripBottom - stripTop - GLYPH_H);
+      return { railY, inputTop: stripTop + Math.round(slack / 2) };
+    }
+
     function chatDraft(): string {
       const el = inputRef.current;
       return el ? el.value : '';
@@ -2639,7 +2667,10 @@ export default function Companion({
       const el = inputRef.current;
       if (!el) return;
       const x = Math.round(chatUi.x + 10);
-      const y = Math.round(chatUi.y + chatUi.h - 30);
+      /* Off the same helper the pixels are drawn from, never off a constant
+         that happens to agree with it. See chatInputRows. */
+      const { inputTop } = chatInputRows(Math.floor(chatUi.h / FONT_PX));
+      const y = Math.round(chatUi.y + inputTop * FONT_PX);
       const w = Math.round(chatUi.w - 20);
       if (x === chatUi.inX && y === chatUi.inY && w === chatUi.inW) return;
       chatUi.inX = x;
@@ -2682,8 +2713,12 @@ export default function Companion({
 
       /* log, newest at the bottom, oldest scrolled off the top */
       const logTop = 4 + GLYPH_H + 7;
-      const inputTop = hCells - 4 - GLYPH_H - 4;
-      const room = Math.max(1, Math.floor((inputTop - logTop) / LINE_CELLS));
+      const { railY, inputTop } = chatInputRows(hCells);
+      /* The log may run down to the rule, so the last row's BOTTOM has to
+         clear it: logTop + (room-1)*LINE_CELLS + GLYPH_H <= railY. Written out
+         rather than measured off `inputTop`, which is no longer three cells
+         above the draft now that the draft is centred. */
+      const room = Math.max(1, Math.floor((railY - logTop - GLYPH_H) / LINE_CELLS) + 1);
       const maxChars = Math.max(8, Math.floor((wCells - 10) / ADVANCE));
 
       /*
@@ -2761,7 +2796,7 @@ export default function Companion({
 
       /* input rail */
       g.fillStyle = theme.ink;
-      g.fillRect(3 * P, (inputTop - 3) * P, (wCells - 6) * P, P);
+      g.fillRect(3 * P, railY * P, (wCells - 6) * P, P);
       const draft = chatDraft();
       const shown = draft.length > maxChars ? draft.slice(draft.length - maxChars) : draft;
       if (shown) {
@@ -7543,6 +7578,11 @@ export default function Companion({
              without it `chatUi.h` is still zero: every row calculation then
              collapses to the one-line floor and the hook measures nothing. */
           layoutChat(true);
+          /* Mount the real <input> too. Without this the hook opens only the
+             painted half of the window, and the thing most worth checking —
+             that the invisible field is parked exactly over the pixel row it
+             is pretending to be — is the half that is missing. */
+          setChatting(true);
         },
         /** Read or set the scrollback, in wrapped lines from the bottom. */
         chatScroll: (n?: number) => {
