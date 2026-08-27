@@ -4518,7 +4518,15 @@ html[data-v2-theme='dark']  body { background: #15130E; }
   position: absolute;
   inset: 0;
   will-change: opacity;
-  animation: v2-world-in 460ms 210ms cubic-bezier(0.33, 0, 0.2, 1) both;
+  /* Nothing until it can paint. The entrance used to run on a fixed 210ms
+     delay, and the incoming world's setup is one long synchronous task on the
+     mount frame, so the 460ms was spent across two or three delivered frames
+     and the reader saw a cut. SectionBackdrops adds `is-ready` once the world
+     has actually put a frame up. */
+  opacity: 0;
+}
+.v2-world.is-ready {
+  animation: v2-world-in 460ms cubic-bezier(0.33, 0, 0.2, 1) both;
 }
 @keyframes v2-world-in {
   from { opacity: 0; }
@@ -4541,7 +4549,8 @@ html[data-v2-theme='dark']  body { background: #15130E; }
   /* No crossfade: the swap is instant, and SectionBackdrops drops the outgoing
      world on the same frame rather than waiting out a transition that is not
      going to run. */
-  .v2-world { transition: none; animation: none; opacity: 1; }
+  .v2-world,
+  .v2-world.is-ready { transition: none; animation: none; opacity: 1; }
 }
 
 /* ==========================================================================

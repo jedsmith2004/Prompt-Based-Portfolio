@@ -87,7 +87,28 @@ interface Slot {
   id: string;
   name: BackdropName;
   leaving: boolean;
+  /**
+   * The palette this slot was mounted with, frozen at retirement.
+   *
+   * A world on its way out has nothing to say about the plate the reader is
+   * arriving at, but it was being handed the LIVE palette, and three of the
+   * eight rebuild their entire world when the palette changes. So every plate
+   * change paid for a full teardown and reseed of the world that was already
+   * halfway through leaving, on the same frame as the incoming one's setup.
+   */
+  palette: BackdropPalette;
+  /** Frozen for the same reason. */
+  intensity: number;
 }
+
+/** The five colours the backdrop contract allows. */
+type BackdropPalette = {
+  surface: string;
+  ink: string;
+  ink2: string;
+  accent: string;
+  accent2: string;
+};
 
 let nextKey = 1;
 
@@ -116,6 +137,11 @@ export default function SectionBackdrops({
       sectionPalette.blue
     ]
   );
+
+  /* Read when a slot is created, so a retiring world keeps the colours it was
+     actually drawn in rather than the ones the next plate is moving to. */
+  const paletteRef = useRef(palette);
+  paletteRef.current = palette;
 
   const byId = useMemo(() => {
     const m = new Map<string, SectionWorld>();
@@ -186,12 +212,16 @@ export default function SectionBackdrops({
         return prev.map((s) => (s.key === current.key ? { ...s, leaving: true } : s));
       }
 
+
       const incoming: Slot = {
         key: nextKey++,
         id: wanted.id,
         name: wanted.backdrop,
-        leaving: false
+        leaving: false,
+        palette: paletteRef.current,
+        intensity: byId.get(wanted.id)?.intensity ?? 0.7
       };
+      /* `leaving: true` and NOT a fresh palette: see Slot.palette. */
       const retired = current ? [{ ...current, leaving: true }] : [];
       /* Only ever keep ONE outgoing world. If the reader is scrolling fast
          enough to outrun the fade, the older one goes immediately rather than
@@ -204,7 +234,45 @@ export default function SectionBackdrops({
       }
       return [...retired, incoming];
     });
-  }, [wanted]);
+  }, [wanted, byId]);
+
+  /*
+   * THE ENTRANCE WAITS FOR THE WORLD TO ACTUALLY PAINT.
+   *
+   * > "There should be smooth transitions between backgrounds not a fps spike
+   * >  and a sudden switch."
+   *
+   * The fade was already there. It was not being seen, because it started on a
+   * fixed 210ms delay and the incoming world's setup -- seeding a few thousand
+   * elements, linking shaders, rasterising an atlas -- is one long synchronous
+   * task on the mount frame. The animation ran out its 460ms across two or
+   * three delivered frames, so the reader saw the old world, a stall, and then
+   * the new world already at full strength. A cut, and a dropped frame, from a
+   * transition that was correctly written.
+   *
+   * Two rAFs after mount is a good proxy for "has painted". A frame callback
+   * queued before a long task runs after it, so this cannot fire early; and it
+   * costs nothing, needs no new field on the backdrop contract, and so does
+   * not have to be implemented eight times and kept true in each of them.
+   *
+   * The beat of clear paper the sequential handover asks for is still there.
+   * It is now exactly as long as the new world takes to be ready, which is the
+   * right place to be paying for the setup: nothing is on screen to stutter.
+   */
+  const [readyKey, setReadyKey] = useState(0);
+  const liveKey = slots.find((s) => !s.leaving)?.key ?? 0;
+  useEffect(() => {
+    if (!liveKey) return;
+    let a = 0;
+    let b = 0;
+    a = requestAnimationFrame(() => {
+      b = requestAnimationFrame(() => setReadyKey(liveKey));
+    });
+    return () => {
+      cancelAnimationFrame(a);
+      cancelAnimationFrame(b);
+    };
+  }, [liveKey]);
 
   /* schedule the unmount of anything that is on its way out */
   useEffect(() => {
@@ -310,21 +378,22 @@ export default function SectionBackdrops({
     <div className="v2-worlds" aria-hidden="true" data-world={liveId || undefined}>
       {slots.map((s) => {
         const { Component } = getBackdrop(s.name);
-        const world = byId.get(s.id);
         return (
           <div
             key={s.key}
             ref={(el) => {
               wrapRefs.current.set(s.key, el);
             }}
-            className={`v2-world${s.leaving ? ' is-leaving' : ''}`}
+            className={`v2-world${s.leaving ? ' is-leaving' : ''}${
+              !s.leaving && s.key === readyKey ? ' is-ready' : ''
+            }`}
             data-backdrop={s.name}
           >
             <Component
-              intensity={world?.intensity ?? 0.7}
+              intensity={s.intensity}
               progress={progress}
               velocity={velocity}
-              palette={palette}
+              palette={s.leaving ? s.palette : palette}
               sectionId={s.id}
             />
           </div>

@@ -6988,7 +6988,22 @@ export default function Companion({
      * therefore never re-read: harvested mid-flight or not at all, and left
      * that way. A promise with no implementation for half its cases.
      */
-    document.addEventListener('animationend', remeasureWhenQuiet, true);
+    /*
+     * FILTERED, because it fires for the worlds layer too.
+     *
+     * `.v2-world` runs a keyframe entrance on every backdrop change, and the
+     * worlds layer contains no perch at all -- it is `pointer-events: none`
+     * fixed canvas behind the type. Every plate change was therefore
+     * scheduling a re-measure that walks ninety elements and reads a rect off
+     * each one, which is a forced layout, at the exact moment the incoming
+     * world is doing its setup. Nothing in there can ever change a perch.
+     */
+    const onAnimationEnd = (e: AnimationEvent) => {
+      const t = e.target;
+      if (t instanceof Element && t.closest('.v2-worlds')) return;
+      remeasureWhenQuiet();
+    };
+    document.addEventListener('animationend', onAnimationEnd, true);
     window.addEventListener('pointermove', onMove, { passive: true });
     window.addEventListener('blur', onPointerExit);
     document.documentElement.addEventListener('pointerleave', onPointerExit);
@@ -7450,7 +7465,7 @@ export default function Companion({
       window.removeEventListener('blur', onBlur);
       window.removeEventListener('keydown', onKey);
       document.removeEventListener('transitionend', onTransitionEnd, true);
-      document.removeEventListener('animationend', remeasureWhenQuiet, true);
+      document.removeEventListener('animationend', onAnimationEnd, true);
       document.removeEventListener('visibilitychange', onVis);
       if (motionQuery.removeEventListener) motionQuery.removeEventListener('change', onMotion);
       themeObserver.disconnect();

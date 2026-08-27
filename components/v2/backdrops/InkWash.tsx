@@ -425,7 +425,23 @@ function enableFloat(g: WebGL2RenderingContext): boolean {
  * attachment comes back complete is, and on software rasterisers those two
  * answers differ. So build one and ask.
  */
+/**
+ * Cached, because the answer is a property of the driver and not of the mount.
+ *
+ * This creates a WebGL2 context, allocates a float texture and a framebuffer,
+ * and links two shaders, and it ran EVERY TIME the `cv` world was mounted --
+ * which is every time the reader scrolls onto that plate and every time they
+ * scroll back. All of it on the mount frame, alongside the world's own setup.
+ */
+let probed: boolean | null = null;
+
 function probeWebGL2(): boolean {
+  if (probed !== null) return probed;
+  probed = probeWebGL2Once();
+  return probed;
+}
+
+function probeWebGL2Once(): boolean {
   try {
     const probe = document.createElement('canvas');
     probe.width = 1;

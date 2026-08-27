@@ -584,6 +584,27 @@ export default function InkField({
   const disturbRef = useRef(disturb);
   const depositRef = useRef(deposit);
   const dormantRef = useRef(dormant);
+  /** Live `shapeKey`. A ref, not a dependency: putting it in the wake effect's
+      deps would re-run the whole wake, and re-snap the field, on every plate. */
+  const shapeKeyRef = useRef(shapeKey);
+  /**
+   * The shapeKey the two RETARGETING EFFECTS last built into the target
+   * texture, or undefined.
+   *
+   * Both of them fire on the one render that matters. Arriving at the closing
+   * plate flips `dormant` to false and `shapeKey` in the same commit, and
+   * React flushes passive effects in hook order, so the wake seeds every
+   * particle onto a freshly sampled target set and the shapeKey effect below
+   * then samples a SECOND, independent set from the same silhouette. Every
+   * particle is re-aimed at a random other point of it and the settle the wake
+   * just did is discarded before a single frame is drawn.
+   *
+   * Whichever effect actually built the texture records it here and the other
+   * then has nothing to do. It does NOT track `resize`, which rebuilds the
+   * texture through its own path; this is a handshake between two effects, not
+   * a description of the texture.
+   */
+  const targetKeyRef = useRef<InkFieldProps['shapeKey']>(undefined);
 
   useEffect(() => {
     shapeRef.current = shape;
@@ -593,6 +614,7 @@ export default function InkField({
     disturbRef.current = disturb;
     depositRef.current = deposit;
     dormantRef.current = dormant;
+    shapeKeyRef.current = shapeKey;
   });
 
   /**
@@ -699,8 +721,15 @@ export default function InkField({
        * about it; this is the same field arriving somewhere it has already
        * been.
        */
-      retargetPending.current = false;
-      retargetRef.current?.(true);
+      /* Recorded only if the call can actually happen. The GL teardown nulls
+         retargetRef but not runRef, so a re-run of the [density] effect --
+         StrictMode's double mount being the everyday one -- reaches here with
+         a live `run` and a dead retarget, and marking the shape built anyway
+         would make the effect below skip the rebuild that repairs it. */
+      if (retargetRef.current) {
+        targetKeyRef.current = shapeKeyRef.current;
+        retargetRef.current(true);
+      }
       run.start();
       return;
     }
@@ -1377,12 +1406,15 @@ export default function InkField({
    * fade when it wakes, so the work is hidden by the same transition that was
    * always there.
    */
-  const retargetPending = useRef(false);
   useEffect(() => {
-    if (dormantRef.current) {
-      retargetPending.current = true;
-      return;
-    }
+    if (dormantRef.current) return;
+    /* The wake has already built this shape and put the particles on it.
+       Sampling a second, independent set here re-aims every one of them at a
+       random other point of the same silhouette, which is the whole gather
+       again, in front of the reader, at about five per cent of the settled
+       ink. See targetKeyRef. */
+    if (targetKeyRef.current === shapeKey) return;
+    targetKeyRef.current = shapeKey;
     retargetRef.current?.();
   }, [shapeKey]);
 
