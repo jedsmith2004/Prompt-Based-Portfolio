@@ -3120,6 +3120,15 @@ export default function Companion({
       pointer.x = e.clientX;
       pointer.y = e.clientY;
       pointer.seen = true;
+
+      /* The log follows the finger. Tracked by pointerId so a second touch
+         elsewhere on the page cannot drive the panel. */
+      if (chatDrag.id !== -1 && e.pointerId === chatDrag.id) {
+        const dy = e.clientY - chatDrag.startY;
+        const travel = Math.abs(dy);
+        if (travel > chatDrag.travel) chatDrag.travel = travel;
+        chatDragScroll(dy);
+      }
       /*
        * THE SECOND WATCHDOG, and the one that matters most.
        *
@@ -3217,6 +3226,57 @@ export default function Companion({
      */
     let anger = 0;
     let angerIdleMs = 0;
+
+    /*
+     * DRAGGING THE LOG, which is the only way to read it back on a phone.
+     *
+     * Jack, 2026-08-27: "You can't scroll through pip's chat box by dragging
+     * on mobile".
+     *
+     * The scrollback had exactly one driver — a `wheel` listener — and a phone
+     * has no wheel, so on touch the panel simply had no way to reach anything
+     * above the newest few lines. Everything Pip had said was still there and
+     * none of it was gettable.
+     *
+     * A press inside the panel now arms this instead of focusing the input on
+     * the spot, and the focus moves to the release. That is not a workaround,
+     * it is the better behaviour on touch either way: putting a finger on a
+     * block of text to read it back should not throw the keyboard up over the
+     * half you were trying to read. A press that never travels is still a tap
+     * and still focuses.
+     */
+    const chatDrag = {
+      /** pointerId of the finger on the log, or -1 for nobody. */
+      id: -1,
+      /** Press origin and the scrollback it started from. */
+      startY: 0,
+      startScroll: 0,
+      /** Furthest travelled, px. Decides drag from tap on release. */
+      travel: 0
+    };
+
+    /** Lines the log is scrolled back, given a drag of `dy` px from the press. */
+    function chatDragScroll(dy: number) {
+      const max = Math.max(0, chatUi.rows - chatUi.room);
+      if (max <= 0) return;
+      /* One rendered line per line of travel, so the type follows the finger:
+         LINE_CELLS cells at FONT_PX each is the exact pitch buildChat lays the
+         log out on. Down reveals older, which is the direction the content
+         moves under the finger. */
+      const lines = Math.round(dy / (LINE_CELLS * FONT_PX));
+      const next = Math.max(0, Math.min(max, chatDrag.startScroll + lines));
+      if (next !== chat.current.scroll) chat.current.scroll = next;
+    }
+
+    /** True if a chat drag was live and has now been dealt with. */
+    function endChatDrag(): boolean {
+      if (chatDrag.id === -1) return false;
+      const tapped = chatDrag.travel < DRAG_SLOP;
+      chatDrag.id = -1;
+      /* A tap is still a tap: it puts the caret in the draft line. */
+      if (tapped) inputRef.current?.focus();
+      return true;
+    }
 
     const drag = {
       /** a press has landed on him but has not yet travelled DRAG_SLOP */
@@ -4636,7 +4696,18 @@ export default function Companion({
          the same gesture that opened it. */
       if (chat.current.open) {
         if (inChatBox(e.clientX, e.clientY)) {
-          inputRef.current?.focus();
+          /* Not when the press is on the real <input>: that element owns its
+             own caret and its own selection drag, and scrolling the log out
+             from under a reader who is selecting their own draft would be a
+             worse bug than the one this fixes. */
+          if (e.target !== inputRef.current) {
+            chatDrag.id = e.pointerId;
+            chatDrag.startY = e.clientY;
+            chatDrag.startScroll = chat.current.scroll;
+            chatDrag.travel = 0;
+          } else {
+            inputRef.current?.focus();
+          }
           return;
         }
         if (bird.clock - chatUi.openedAt > 120) closeChat();
@@ -4668,6 +4739,7 @@ export default function Companion({
     }
 
     function onUp() {
+      if (endChatDrag()) return;
       if (!drag.pressed) return;
       if (drag.active) {
         releaseDrag();
@@ -4681,6 +4753,7 @@ export default function Companion({
 
     /** A cancelled gesture is a release, not an escape. */
     function onCancel() {
+      if (chatDrag.id !== -1) chatDrag.id = -1;
       if (!drag.pressed) return;
       if (drag.active) releaseDrag();
       drag.pressed = false;
@@ -7617,6 +7690,30 @@ export default function Companion({
     };
     window.addEventListener('wheel', onWheel, { passive: false });
 
+    /*
+     * AND THE SAME PROMISE FOR A FINGER.
+     *
+     * `onMove` drives the drag, but it is registered passive — it has to be,
+     * it runs on every pointermove on the page and a non-passive listener
+     * there would make the whole site's scrolling wait on it. So the
+     * preventDefault lives here, on touchmove, where it is scoped to the one
+     * gesture that needs it.
+     *
+     * Without it the panel is anchored in screen space while the page scrolls
+     * away underneath, which reads as the log refusing to move and the rest of
+     * the site sliding for no reason.
+     *
+     * Only while a chat drag is actually live, and only when the log has
+     * somewhere to go: a panel with nothing to scroll back to lets the page
+     * scroll normally, which is exactly what the wheel above already does.
+     */
+    const onTouchMove = (e: TouchEvent) => {
+      if (chatDrag.id === -1) return;
+      if (chatUi.rows - chatUi.room <= 0) return;
+      e.preventDefault();
+    };
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+
     window.addEventListener('pointerdown', onDown);
     window.addEventListener('pointerup', onUp);
     window.addEventListener('pointercancel', onCancel);
@@ -8136,6 +8233,7 @@ export default function Companion({
       window.removeEventListener('blur', onPointerExit);
       document.documentElement.removeEventListener('pointerleave', onPointerExit);
       window.removeEventListener('wheel', onWheel);
+      window.removeEventListener('touchmove', onTouchMove);
       window.removeEventListener('pointerdown', onDown);
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('pointercancel', onCancel);
