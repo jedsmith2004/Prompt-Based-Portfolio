@@ -1504,10 +1504,28 @@ export default function Companion({
     busy: false,
     version: 0,
     log: [] as ChatMsg[],
+    /**
+     * How many WRAPPED LINES the window is scrolled back from the newest.
+     *
+     * Lines rather than messages, because the panel is a fixed grid of text
+     * rows and a message can be one row or nine. Zero is pinned to the bottom,
+     * which is where it returns whenever anything new is said.
+     */
+    scroll: 0,
     perch: CHAT_PERCHES[0]
   });
   /* Announced to screen readers, which cannot read a canvas. */
   const [srLog, setSrLog] = useState<ChatMsg[]>([]);
+
+  /**
+   * The log's line geometry, published out of the frame loop.
+   *
+   * `chatUi` is a local of the one big effect and nothing outside it can see
+   * it, but the input's key handler is JSX and needs the same two numbers to
+   * clamp a page. A ref is the whole bridge: written once per repaint, read
+   * only on a keystroke, and it never causes a render.
+   */
+  const chatMetrics = useRef({ rows: 0, room: 0 });
 
   const closeChat = useCallback(() => {
     if (!chat.current.open) return;
@@ -1519,6 +1537,10 @@ export default function Companion({
     const c = chat.current;
     if (!q.trim() || c.busy) return;
     c.log.push({ me: true, text: q.slice(0, 240) });
+    /* Back to the bottom. Asking something is a request to see the answer to
+       it, so a reader who had scrolled up to re-read is brought forward rather
+       than left watching an old exchange while a new one arrives underneath. */
+    c.scroll = 0;
     c.version++;
     c.busy = true;
     setSrLog(c.log.slice(-6));
@@ -1534,6 +1556,7 @@ export default function Companion({
     }
     c.log.push({ me: false, text: answer });
     if (c.log.length > 40) c.log.splice(0, c.log.length - 40);
+    c.scroll = 0;
     c.version++;
     c.busy = false;
     setSrLog(c.log.slice(-6));
@@ -2562,6 +2585,12 @@ export default function Companion({
       lastVersion: -1,
       lastDraft: NO_DRAFT,
       lastBusy: false,
+      lastScroll: -1,
+      /* Written by buildChat, read by the wheel and the keys: how many lines
+         the log came to and how many of them fit. Clamping the scroll needs
+         both and neither is knowable outside the layout. */
+      rows: 0,
+      room: 0,
       caretCells: 0,
       openedAt: 0,
       /* last written <input> geometry, so the style is only touched on a
@@ -2657,18 +2686,40 @@ export default function Companion({
       const room = Math.max(1, Math.floor((inputTop - logTop) / LINE_CELLS));
       const maxChars = Math.max(8, Math.floor((wCells - 10) / ADVANCE));
 
-      /* Build the display lines back to front, then draw the tail that fits. */
+      /*
+       * Build the display lines back to front, newest first, then draw the
+       * window the scroll offset asks for.
+       *
+       * THE WHOLE LOG IS WRAPPED, not just enough to fill the panel. The old
+       * loop stopped at `room + 8` lines, which was right when the only thing
+       * that could ever be shown was the tail — but a reader scrolling back
+       * through a long answer needs lines that were never built. The cost is
+       * one wrap pass over a conversation that is bounded at 14 messages by
+       * the API route, and it only happens on a repaint.
+       */
       const rows: Array<{ text: string; me: boolean }> = [];
       const log = chat.current.log;
-      for (let i = log.length - 1; i >= 0 && rows.length < room + 8; i--) {
+      for (let i = log.length - 1; i >= 0; i--) {
         const m = log[i];
         const n = wrapText(m.text, maxChars, CHAT_LINES);
         for (let k = n - 1; k >= 0; k--) rows.push({ text: CHAT_LINES[k], me: m.me });
       }
       if (chat.current.busy) rows.unshift({ text: 'thinking', me: false });
-      const take = Math.min(room, rows.length);
+
+      /* Clamped HERE rather than in the wheel handler, because the ceiling
+         moves: a resize renarrows the wrap and a new answer adds lines, and
+         both can strand the offset past the end of a log it was valid for. */
+      const maxScroll = Math.max(0, rows.length - room);
+      if (chat.current.scroll > maxScroll) chat.current.scroll = maxScroll;
+      const scroll = chat.current.scroll;
+      chatUi.rows = rows.length;
+      chatUi.room = room;
+      chatMetrics.current.rows = rows.length;
+      chatMetrics.current.room = room;
+
+      const take = Math.min(room, rows.length - scroll);
       for (let i = 0; i < take; i++) {
-        const row = rows[take - 1 - i];
+        const row = rows[scroll + take - 1 - i];
         const y = logTop + i * LINE_CELLS;
         if (row.me) {
           const x = wCells - 4 - textCells(row.text);
@@ -2680,6 +2731,32 @@ export default function Companion({
           g.fillStyle = theme.verm;
           g.fillRect(4 * P, y * P, P, GLYPH_H * P);
         }
+      }
+
+      /*
+       * THE SCROLLBAR, and it only exists when there is something to scroll.
+       *
+       * A rail down the right margin with a thumb sized to the fraction of the
+       * log on screen. It is the only thing telling a reader the panel goes
+       * back at all — without it a conversation that has run off the top looks
+       * like a conversation that was lost.
+       *
+       * Drawn in cells like everything else in this panel, so it lines up with
+       * the text grid rather than sitting a half pixel off it.
+       */
+      if (rows.length > room) {
+        const trackX = wCells - 3;
+        const trackTop = logTop;
+        const trackH = room * LINE_CELLS;
+        g.fillStyle = theme.ink3;
+        g.fillRect(trackX * P, trackTop * P, P, trackH * P);
+        const thumbH = Math.max(2, Math.round((room / rows.length) * trackH));
+        /* scroll counts UP from the bottom, so the thumb runs the other way */
+        const travel = trackH - thumbH;
+        const from = maxScroll > 0 ? 1 - scroll / maxScroll : 1;
+        const thumbTop = trackTop + Math.round(travel * from);
+        g.fillStyle = theme.verm;
+        g.fillRect(trackX * P, thumbTop * P, P, thumbH * P);
       }
 
       /* input rail */
@@ -4179,6 +4256,9 @@ export default function Companion({
       cutBit();
       chat.current.open = true;
       chat.current.perch = CHAT_PERCHES[(Math.random() * CHAT_PERCHES.length) | 0];
+      /* A reopened chat keeps its log but not its scroll: the newest exchange
+         is what the reader left off on. */
+      chat.current.scroll = 0;
       chat.current.version++;
       chatUi.openedAt = bird.clock;
       chatUi.lastVersion = -1;
@@ -6959,11 +7039,13 @@ export default function Companion({
           chatUi.dirty ||
           chatUi.lastVersion !== chat.current.version ||
           chatUi.lastDraft !== draft ||
-          chatUi.lastBusy !== chat.current.busy
+          chatUi.lastBusy !== chat.current.busy ||
+          chatUi.lastScroll !== chat.current.scroll
         ) {
           chatUi.lastVersion = chat.current.version;
           chatUi.lastDraft = draft;
           chatUi.lastBusy = chat.current.busy;
+          chatUi.lastScroll = chat.current.scroll;
           buildChat();
         }
         ctx!.drawImage(chatCanvas, Math.round(chatUi.x), Math.round(chatUi.y));
@@ -7173,6 +7255,33 @@ export default function Companion({
     window.addEventListener('pointermove', onMove, { passive: true });
     window.addEventListener('blur', onPointerExit);
     document.documentElement.addEventListener('pointerleave', onPointerExit);
+    /*
+     * THE WHEEL, over the chat panel only.
+     *
+     * `passive: false` because it has to be able to preventDefault: a reader
+     * scrolling back through an answer must not also drag the page out from
+     * under the panel, which is anchored in screen space and would slide away
+     * with the bird still attached to it.
+     *
+     * The hit test is `inChatBox`, the same one the pointer already uses:
+     * the panel is painted on the shared canvas and has no element to hang a
+     * listener on. Anywhere outside it the event is left completely alone, so
+     * the page scrolls exactly as it always did.
+     */
+    const onWheel = (e: WheelEvent) => {
+      const c = chat.current;
+      if (!inChatBox(e.clientX, e.clientY)) return;
+      const max = Math.max(0, chatUi.rows - chatUi.room);
+      if (max <= 0) return;
+      /* One line per notch, by sign rather than by magnitude: deltaY is in
+         wildly different units between a mouse wheel, a trackpad and a
+         high-resolution wheel, and a panel this short only ever wants a line. */
+      const next = Math.max(0, Math.min(max, c.scroll + (e.deltaY > 0 ? -1 : 1)));
+      e.preventDefault();
+      if (next !== c.scroll) c.scroll = next;
+    };
+    window.addEventListener('wheel', onWheel, { passive: false });
+
     window.addEventListener('pointerdown', onDown);
     window.addEventListener('pointerup', onUp);
     window.addEventListener('pointercancel', onCancel);
@@ -7414,6 +7523,32 @@ export default function Companion({
           chat.current.open = false;
           setMode('idle');
         },
+        /*
+         * Open the panel on a canned transcript.
+         *
+         * The chat is the one part of this rig that cannot be exercised at all
+         * without a live API key, which is how a stream parser that recited
+         * raw SSE frames back at the reader — `data: {"content":"What"}` —
+         * shipped without anybody seeing it. With this, the panel, its
+         * wrapping, its scrolling and its scrollbar can all be driven offline.
+         */
+        chatDemo: (texts: string[]) => {
+          chat.current.open = true;
+          chat.current.log = texts.map((text, i) => ({ me: i % 2 === 0, text }));
+          chat.current.scroll = 0;
+          chat.current.version++;
+          setMode('chat');
+          startAnim(chat.current.perch, 0);
+          /* The panel's box is computed on open by the real openChat path, and
+             without it `chatUi.h` is still zero: every row calculation then
+             collapses to the one-line floor and the hook measures nothing. */
+          layoutChat(true);
+        },
+        /** Read or set the scrollback, in wrapped lines from the bottom. */
+        chatScroll: (n?: number) => {
+          if (typeof n === 'number') chat.current.scroll = Math.max(0, n);
+          return chat.current.scroll;
+        },
         /* Which cycled props are showing right now, for the same reason. */
         cycled: () => cycledProps(chat.current.perch, bird.clock).slice(),
         rareState: () => ({ sinceRare, pityAt, seen: Array.from(seenRare) }),
@@ -7636,6 +7771,7 @@ export default function Companion({
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('blur', onPointerExit);
       document.documentElement.removeEventListener('pointerleave', onPointerExit);
+      window.removeEventListener('wheel', onWheel);
       window.removeEventListener('pointerdown', onDown);
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('pointercancel', onCancel);
@@ -7677,6 +7813,34 @@ export default function Companion({
             } else if (e.key === 'Escape') {
               e.preventDefault();
               closeChat();
+            } else if (
+              e.key === 'PageUp' ||
+              e.key === 'PageDown' ||
+              (e.key === 'Home' && e.ctrlKey) ||
+              (e.key === 'End' && e.ctrlKey)
+            ) {
+              /*
+               * Paging the transcript from the keyboard. The input holds focus
+               * the whole time the chat is open, so these would otherwise go
+               * to the page behind it and scroll the document away.
+               *
+               * PageUp/PageDown rather than the arrows, and Ctrl for the ends,
+               * because plain arrows and Home/End move the caret inside the
+               * draft and taking those away would make the field hard to edit.
+               */
+              e.preventDefault();
+              const c = chat.current;
+              const max = Math.max(0, chatMetrics.current.rows - chatMetrics.current.room);
+              const page = Math.max(1, chatMetrics.current.room - 1);
+              const next =
+                e.key === 'PageUp'
+                  ? c.scroll + page
+                  : e.key === 'PageDown'
+                    ? c.scroll - page
+                    : e.key === 'Home'
+                      ? max
+                      : 0;
+              c.scroll = Math.max(0, Math.min(max, next));
             }
           }}
         />
