@@ -1,370 +1,408 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
-import { projects, Project } from '../../lib/projects-data';
-import { AnimationManager } from '../../lib/animations';
+/* ============================================================================
+   /projects — the full index.
+
+   Two things, in the order they answer questions.
+
+   THE CASE, at the top, holding all fifteen. Jack: "There should be a way to
+   see all the projects, maybe on a rotating basis, or a clever layout, from
+   the top of the screen with the carousel in view." So the case wears its
+   'sheet' dress here: the stage on the left, every project as a tile on the
+   right, and the entry for whatever is turned to the front directly under the
+   object it belongs to.
+
+   THAT ENTRY USED TO BE TWO. There was a caption under the stage and a raised
+   panel below the case, and Jack: "the project entry appears twice, I want the
+   higher one (under the turnstile) to be the main one, compress the
+   information from the big entry underneath into that smaller one with links."
+   So the panel is gone and the caption grew into it: the whole description,
+   the stack, the project's own page and everywhere else it lives.
+
+   Losing the panel takes the CHOICE with it. The case had two positions, a
+   cursor and a choice, for one reason: something below had to know when a
+   reader meant it. With the entry attached to the cursor there is nothing left
+   for a choice to open, and a second mark that can drift out of step with the
+   first is a mark that lies. The case reports its cursor instead, and the
+   catalogue marks the row it is showing.
+
+   THE CATALOGUE, below, unchanged: everything, plainly, filterable. It is the
+   scanning view and the entry above is the reading view, which is why the two
+   look nothing alike despite coming from the same record.
+   ========================================================================== */
+
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { projects, type Project } from '@/lib/projects-data';
+import ProjectCase from '@/components/v2/ProjectCase';
+import Companion from '@/components/v2/Companion';
+import { useSpine } from '@/components/v2/useSpine';
+import { askJack } from '@/lib/v2/ask';
+import CurvedLoop from '@/components/v2/text/CurvedLoop';
+import './projects.css';
 
-export default function AllProjectsPage() {
-  const [filter, setFilter] = useState<string>('all');
-  const [search, setSearch] = useState<string>('');
-  const [showAllTech, setShowAllTech] = useState(false);
+/* Newest first. The dates are human strings like 'May 2026', so parse rather
+   than sort lexically, which would put April before January. */
+const MONTHS: Record<string, number> = {
+  january: 0, february: 1, march: 2, april: 3, may: 4, june: 5,
+  july: 6, august: 7, september: 8, october: 9, november: 10, december: 11,
+  jan: 0, feb: 1, mar: 2, apr: 3, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9,
+  nov: 10, dec: 11
+};
 
-  useEffect(() => {
-    AnimationManager.initScrollAnimations();
-    AnimationManager.initPersistentReveals();
-  }, []);
-
-  // Stable square configs (avoids hydration mismatch)
-  const squares = useMemo(() => {
-    const count = 22;
-    const arr: { left: number; top: number; size: number; dx: number; dy: number; dur: number; delay: number; }[] = [];
-    for (let i = 0; i < count; i++) {
-      const size = 40 + Math.random() * 90; // 40-130px
-      arr.push({
-        left: Math.random() * 100,
-        top: Math.random() * 100,
-        size,
-        dx: (Math.random() * 120 - 60),
-        dy: (Math.random() * 120 - 60),
-        dur: 18 + Math.random() * 24, // 18-42s
-        delay: Math.random() * 10
-      });
-    }
-    return arr;
-  }, []);
-
-  const sortedTech = useMemo(() => {
-    const counts: Record<string, number> = {};
-    projects.forEach(p => p.tech.forEach(t => { counts[t] = (counts[t] || 0) + 1; }));
-    return Object.entries(counts)
-      .sort((a,b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-      .map(([tech]) => tech);
-  }, []);
-
-  const filtered = useMemo(() => {
-    return projects.filter(p => {
-      const matchesFilter = filter === 'all' || p.tech.includes(filter);
-      const s = search.toLowerCase();
-      const matchesSearch = !s || p.title.toLowerCase().includes(s) || p.description.toLowerCase().includes(s) || p.tech.some(t => t.toLowerCase().includes(s));
-      return matchesFilter && matchesSearch;
-    });
-  }, [filter, search]);
-
-  // Re-run lift animation binding when filtered list changes
-  useEffect(() => {
-    AnimationManager.animateLiftCards('.project-card');
-  }, [filtered]);
-
-  const visibleTech = sortedTech.slice(0,5);
-  const remainingCount = sortedTech.length - visibleTech.length;
-
-  return (
-    <div className="min-h-screen relative overflow-hidden pt-32 pb-24 text-white bg-[#0A0A0A]">
-      {/* Animated Small Squares Background */}
-      <div className="pointer-events-none absolute inset-0">
-        {/* Subtle static grid baseline */}
-        <div className="absolute inset-0 opacity-[0.12] animated-grid-squares" />
-        {/* Squares layer */}
-        <div className="absolute inset-0">{
-          squares.map((sq, i) => (
-            <div
-              key={i}
-              className="absolute rounded-md bg-[linear-gradient(135deg,rgba(59,130,246,0.18),rgba(239,68,68,0.18))] border border-white/5 backdrop-blur-[2px] shadow-[0_0_0_1px_rgba(255,255,255,0.02)] mix-blend-screen will-change-transform square-anim"
-              style={{
-                left: `${sq.left}%`,
-                top: `${sq.top}%`,
-                width: sq.size,
-                height: sq.size,
-                // Custom properties consumed by CSS keyframes
-                ['--dx' as any]: `${sq.dx}px`,
-                ['--dy' as any]: `${sq.dy}px`,
-                ['--dur' as any]: `${sq.dur}s`,
-                ['--delay' as any]: `${sq.delay}s`
-              }}
-            />
-          ))
-        }</div>
-        {/* Intersection highlight pass (moving radial that reveals overlaps) */}
-        <div className="absolute inset-0 pointer-events-none mix-blend-color-dodge opacity-40 [background:radial-gradient(circle_at_var(--mx,50%)_var(--my,50%),rgba(59,130,246,0.35),transparent_55%)] animate-orb-pointer" />
-        {/* Vignette */}
-        <div className="absolute inset-0 [background:radial-gradient(circle_at_center,transparent_60%,rgba(0,0,0,0.65))]" />
-      </div>
-
-      {/* Back Button */}
-      <div className="absolute top-6 left-6 z-30 animate-on-scroll">
-        <Link href="/" className="group inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 hover:border-blue-400/50 transition-all backdrop-blur-md">
-          <svg className="w-4 h-4 text-gray-300 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-          <span className="text-sm font-medium tracking-wide text-gray-300 group-hover:text-white">Back</span>
-        </Link>
-      </div>
-
-      <div className="max-w-6xl mx-auto px-6 relative z-10">
-        <header className="animate-on-scroll mb-14">
-          <h1 className="text-5xl md:text-6xl font-extrabold tracking-tight mb-5">
-            <span className="text-white">All</span>{' '}
-            <span className="bg-gradient-to-r from-blue-400 to-red-400 bg-clip-text text-transparent">Projects</span>
-          </h1>
-          <p className="text-lg md:text-xl text-gray-400 leading-relaxed max-w-2xl">
-            A vertical timeline of shipped and evolving work. Each build pushes experimentation with AI, interaction, and edge performance.
-          </p>
-        </header>
-
-        {/* Filters */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6 mb-12 animate-on-scroll">
-          <div className="flex flex-wrap gap-2 items-center">
-            <button onClick={() => setFilter('all')} className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all border ${filter === 'all' ? 'bg-blue-600/80 border-blue-400 text-white shadow-[0_0_0_1px_#3b82f680,0_0_15px_-4px_#ef4444]' : 'bg-white/5 border-white/10 hover:border-blue-400/40 hover:text-blue-300'}`}>All</button>
-            {visibleTech.map(tech => (
-              <button key={tech} onClick={() => setFilter(tech)} className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all border ${filter === tech ? 'bg-red-600/80 border-red-400 text-white shadow-[0_0_0_1px_rgba(239,68,68,0.5),0_0_15px_-4px_rgba(59,130,246,0.55)]' : 'bg-white/5 border-white/10 hover:border-red-400/40 hover:text-red-300'}`}>{tech}</button>
-            ))}
-            {remainingCount > 0 && (
-              <button onClick={() => setShowAllTech(true)} className="px-4 py-1.5 rounded-full text-xs font-medium transition-all border bg-white/5 border-white/10 hover:border-red-400/40 text-gray-300 hover:text-red-300">+{remainingCount} more</button>
-            )}
-          </div>
-
-          <div className="relative w-full md:w-72 group">
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search..."
-              className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/5 border border-white/10 focus:border-blue-500/60 outline-none transition-all placeholder:text-gray-500 backdrop-blur-md text-sm"
-            />
-            <svg className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M5 11a6 6 0 1112 0 6 6 0 01-12 0z" /></svg>
-          </div>
-        </div>
-
-        {/* Vertical Cards */}
-        <div className="space-y-10">
-          {filtered.map((project, idx) => (
-            <ProjectCard key={project.id} project={project} index={idx} />
-          ))}
-        </div>
-
-        {filtered.length === 0 && (
-          <div className="text-center text-gray-500 mt-20 animate-on-scroll">
-            <p>No projects match your criteria.</p>
-          </div>
-        )}
-      </div>
-
-      {/* All tech modal/panel */}
-      {showAllTech && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-6" onClick={() => setShowAllTech(false)}>
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-          <div className="relative w-full max-w-xl bg-white/10 border border-white/20 rounded-2xl p-8 overflow-hidden" onClick={e => e.stopPropagation()}>
-            <h2 className="text-xl font-semibold mb-6">Filter by Technology</h2>
-            <div className="flex flex-wrap gap-2 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
-              {sortedTech.map(t => (
-                <button
-                  key={t}
-                  onClick={() => { setFilter(t); setShowAllTech(false); }}
-                  className={`px-4 py-2 rounded-full text-xs font-medium border transition-all ${filter === t ? 'bg-blue-600/80 border-blue-400 text-white' : 'bg-white/5 border-white/10 hover:border-red-400/40 hover:text-red-300 text-gray-300'}`}
-                >
-                  {t}
-                </button>
-              ))}
-            </div>
-            <div className="mt-6 flex justify-end">
-              <button onClick={() => setShowAllTech(false)} className="px-5 py-2 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 text-sm">Close</button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+function dateKey(d: string): number {
+  const m = d.trim().toLowerCase().match(/^([a-z]+)\s+(\d{4})$/);
+  if (!m) return -1; // 'Coming soon' and friends sort to the end
+  const month = MONTHS[m[1]];
+  const year = Number(m[2]);
+  if (month === undefined || !Number.isFinite(year)) return -1;
+  return year * 12 + month;
 }
 
-function ProjectCard({ project, index }: { project: Project; index: number }) {
-  if (project.stealth) {
-    const Lock = ({ className }: { className?: string }) => (
-      <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-      </svg>
-    );
-    return (
-      <div
-        className="project-card reveal-once relative group rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-xl overflow-hidden transition-all hover:border-blue-500/40 hover:bg-white/[0.06]"
-        data-reveal-delay={(index * 0.08).toFixed(2)}
-      >
-        <div className="absolute -right-24 -top-24 w-72 h-72 rounded-full bg-gradient-to-br from-blue-500/15 to-red-500/15 blur-3xl opacity-60 group-hover:opacity-100 transition-opacity" />
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-blue-400/10 to-transparent stealth-scan" />
-        <div className="pointer-events-none absolute inset-0 stealth-grid opacity-40" />
+/* The bird's lines on this page. It is an index, so he talks about the set
+   rather than about any one of them. */
+const WHISPERS: Record<string, string[]> = {
+  'proj-index': [
+    'Turn the case. He modelled every one of those objects by hand.',
+    'Fifteen. He will tell you which three he would keep.',
+    'Whatever is facing you, its entry is right underneath.'
+  ],
+  'proj-catalogue': [
+    'The whole list. Filter it if you know what you are after.',
+    'Newest first, which is not the same as best first.'
+  ]
+};
 
-        <div className="relative p-10 md:p-14">
-          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-5 mb-6">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-3 flex-wrap">
-                <h2 className="text-3xl md:text-4xl font-bold tracking-tight group-hover:text-blue-300 transition-colors">
-                  {project.title}
-                </h2>
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold uppercase tracking-wider bg-gradient-to-r from-blue-500/20 to-red-500/20 text-gray-200 border border-white/15">
-                  <Lock className="w-3.5 h-3.5" /> Coming Soon
-                </span>
-              </div>
-              <p className="text-gray-300/90 leading-relaxed text-sm md:text-base max-w-2xl mt-3">
-                {project.description}
-              </p>
-            </div>
-            <div className="flex items-center gap-2 text-sm font-medium text-gray-400 whitespace-nowrap shrink-0">
-              <Lock className="w-4 h-4" />
-              <span>{project.date}</span>
-            </div>
-          </div>
+export default function V2Projects() {
+  const [tag, setTag] = useState<string | null>(null);
+  /**
+   * WHAT THE CASE IS SHOWING, and WHAT WE LAST ASKED IT TO SHOW.
+   *
+   * Two different facts, and it matters that they are two. `cursorId` comes
+   * back OUT of the case every time the ring turns, by any means, and is what
+   * the catalogue marks. `turnTo` goes IN, and only ever from a row number
+   * down there.
+   *
+   * `turnTo` is an object rather than a bare id because a bare id cannot be
+   * asked for twice: `setTurnTo(p.id)` with the id it already held is a React
+   * bail-out, so the row number would do nothing at all in exactly the case a
+   * reader would press it, when they had since turned the case somewhere else.
+   * A fresh object each press, and the case keys on its identity.
+   */
+  const [cursorId, setCursorId] = useState<string | null>(null);
+  const [turnTo, setTurnTo] = useState<{ key: string } | null>(null);
+  const caseRef = useRef<HTMLDivElement | null>(null);
 
-          <div className="grid md:grid-cols-5 gap-8 mt-8">
-            <div className="md:col-span-2 space-y-4">
-              <h3 className="text-xs uppercase tracking-wider text-gray-400">Tech Stack</h3>
-              <div className="flex flex-wrap gap-2">
-                <span className="redaction-bar h-6 w-20 rounded-full border border-white/10 inline-block" />
-                <span className="redaction-bar h-6 w-14 rounded-full border border-white/10 inline-block" />
-                <span className="redaction-bar h-6 w-24 rounded-full border border-white/10 inline-block" />
-                <span className="redaction-bar h-6 w-16 rounded-full border border-white/10 inline-block" />
-              </div>
-            </div>
-            <div className="md:col-span-3 space-y-4">
-              <h3 className="text-xs uppercase tracking-wider text-gray-400">Key Features</h3>
-              <div className="space-y-2.5">
-                <div className="redaction-bar h-3 w-full rounded" />
-                <div className="redaction-bar h-3 w-11/12 rounded" />
-                <div className="redaction-bar h-3 w-4/5 rounded" />
-              </div>
-            </div>
-          </div>
+  const { velocityRef } = useSpine(['proj-index', 'proj-catalogue']);
 
-          <div className="mt-10 flex flex-wrap gap-4">
-            <span className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/5 text-sm font-medium text-gray-400 border border-white/10 cursor-default select-none">
-              <Lock className="w-5 h-5" /> Coming Soon
-            </span>
-          </div>
-        </div>
+  const sorted = useMemo(
+    () => projects.slice().sort((a, b) => dateKey(b.date) - dateKey(a.date)),
+    []
+  );
+
+  /* Only offer tags that would actually narrow anything. */
+  const tags = useMemo(() => {
+    const count = new Map<string, number>();
+    projects.forEach((p) => p.tech.forEach((t) => count.set(t, (count.get(t) ?? 0) + 1)));
+    return Array.from(count.entries())
+      .filter(([, n]) => n >= 2)
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([t]) => t);
+  }, []);
+
+  const shown = useMemo(
+    () => (tag ? sorted.filter((p) => p.tech.includes(tag)) : sorted),
+    [sorted, tag]
+  );
+
+  const onCursor = useCallback((id: string) => setCursorId(id), []);
+
+  /* From the catalogue. Never a toggle: pressing a row number is a request to
+     go and look at that one, and turning the case away from it down here would
+     be a strange answer to it. */
+  const onShowInCase = useCallback((id: string) => {
+    setTurnTo({ key: id });
+  }, []);
+
+  const ask = useCallback((q: string) => askJack(q), []);
+
+  /*
+   * The case is held still while the cursor moves.
+   *
+   * `onCursor` fires on every notch of the wheel and every arrow key, and the
+   * only thing on this page that cares is the bar in the catalogue's margin.
+   * Without this the case would re-render from above on each one, on top of
+   * the re-render it is already doing for itself, for a mark five hundred
+   * pixels away. Memoising the element rather than the component keeps the
+   * reason next to the state that caused it.
+   */
+  const theCase = useMemo(
+    () => (
+      <div ref={caseRef}>
+        <ProjectCase
+          className="v2-proj-case"
+          variant="index"
+          onCursor={onCursor}
+          chosenKey={turnTo ?? undefined}
+        />
       </div>
-    );
-  }
-  return (
-    <div
-      className="project-card reveal-once relative group rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-xl overflow-hidden transition-all hover:border-blue-500/40 hover:bg-white/[0.06]"
-      data-reveal-delay={(index * 0.08).toFixed(2)}
-    >
-      {/* Removed left accent bar */}
-      <div className="absolute -right-24 -top-24 w-72 h-72 rounded-full bg-gradient-to-br from-blue-500/10 to-red-500/10 blur-3xl opacity-0 group-hover:opacity-60 transition-opacity" />
+    ),
+    [onCursor, turnTo]
+  );
 
-      <div className="relative p-10 md:p-14">{/* increased padding from p-8 md:p-12 */}
-        {/* Header with title left, status/date right */}
-        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-5 mb-6">
-          <div className="flex-1 min-w-0">
-            <h2 className="text-3xl md:text-4xl font-bold tracking-tight group-hover:text-blue-300 transition-colors">{/* was text-2xl md:text-3xl */}
-              {project.title}
-            </h2>
-            <p className="text-gray-300/90 leading-relaxed text-sm md:text-base max-w-2xl mt-3">
-              {project.description}
+  /*
+   * WHERE A ROW NUMBER PUTS YOU.
+   *
+   * At the top of the case, because the whole point of pressing one is to go
+   * and look at the object. The entry travels with it, being part of the same
+   * plate now, which is the other half of why the raised panel is not missed:
+   * there is nothing left that can be on screen without the thing it describes.
+   *
+   * Nothing here scrolls when the case is turned by its own controls. A reader
+   * working the arrows is already looking at it.
+   */
+  useEffect(() => {
+    if (!turnTo) return;
+    caseRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }, [turnTo]);
+
+  return (
+    <>
+      <main className="v2-above v2-projects">
+        <div className="v2-wrap">
+          <div className="v2-proj-head">
+            <p className="v2-eyebrow">Index / Every project</p>
+            <Link href="/" className="v2-proj-back">Back to the front</Link>
+          </div>
+          <hr className="v2-rule-hard" />
+
+          {/* Deliberately tight. Everything between the top of the page and
+              the stage is a tax on Jack's "with the carousel in view", so the
+              title and the lede share one row and the case raises no masthead
+              of its own. */}
+          <div className="v2-proj-masthead" id="proj-index">
+            <h1 className="v2-display v2-proj-title">Everything, plainly</h1>
+            {/* Two facts and an instruction. The sentence about the objects
+                being modelled and drawn by the same pipeline moved out with
+                the case's `note`: see the comment on ProjectCase's sheet
+                dress, and Jack, 2026-08-27, "the projects page has some mega
+                unnecessary prose all over". */}
+            <p className="v2-lede v2-proj-lede">
+              {projects.length} projects, newest first. Turn the case; the entry
+              under it follows.
             </p>
           </div>
-          <div className="flex items-center md:items-start gap-4 md:flex-row md:text-right shrink-0">
-            {project.status && (
-              <span className={`px-3 py-1 rounded-full text-[10px] font-semibold tracking-wide uppercase border shadow-sm whitespace-nowrap ${project.status === 'completed' ? 'bg-blue-500/15 text-blue-300 border-blue-500/30' : 'bg-red-500/15 text-red-300 border-red-500/30'}`}>
-                {project.status === 'completed' ? 'Completed' : 'In Progress'}
-              </span>
-            )}
-            {project.date && (
-              <div className="flex items-center gap-2 text-sm font-medium text-gray-300 whitespace-nowrap">
-                {/* Monochrome calendar icon (inherits text color) */}
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                  <line x1="16" y1="2" x2="16" y2="6" />
-                  <line x1="8" y1="2" x2="8" y2="6" />
-                  <line x1="3" y1="10" x2="21" y2="10" />
-                </svg>
-                <span>{project.date}</span>
-              </div>
-            )}
-          </div>
         </div>
 
-        {/* Tech & Features */}
-        <div className="grid md:grid-cols-5 gap-8 mt-8">
-          <div className="md:col-span-2 space-y-4">
-            <h3 className="text-xs uppercase tracking-wider text-gray-400">Tech Stack</h3>
-            <div className="flex flex-wrap gap-2">
-              {project.tech.map(t => (
-                <span key={t} className="px-3 py-1.5 rounded-full text-[10px] md:text-xs bg-blue-500/15 text-blue-300 border border-blue-500/30">
-                  {t}
-                </span>
-              ))}
-            </div>
-          </div>
-          <div className="md:col-span-3 space-y-4">
-            <h3 className="text-xs uppercase tracking-wider text-gray-400">Key Features</h3>
-            <ul className="grid sm:grid-cols-2 gap-2 text-[13px] text-gray-300">
-              {(project.features || []).map(f => (
-                <li key={f} className="relative pl-4 leading-snug">
-                  <span className="absolute left-0 top-1.5 w-1.5 h-1.5 rounded-full bg-gradient-to-r from-blue-400 to-red-400" />
-                  {f}
-                </li>
-              ))}
-              {(!project.features || project.features.length === 0) && (
-                <li className="italic text-gray-500">Feature list coming soon...</li>
-              )}
-            </ul>
-          </div>
-        </div>
+        {theCase}
 
-        {/* Actions */}
-        <div className="mt-10 flex flex-wrap gap-4">
-          {project.github ? (
-            <a
-              href={project.github}
-              target="_blank"
-              className="group/action inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-sm font-medium text-white transition-all"
+        {/* The rule between the two views, with the stack running along it.
+            It is the one thing the index never says in one place: what the
+            fifteen are actually built out of. Same list the filters below are
+            built from, so the ribbon cannot name a technology you then cannot
+            filter by. See components/v2/text/CurvedLoop.tsx. */}
+        <CurvedLoop items={tags} className="v2-proj-ribbon" />
+
+        <div className="v2-wrap" id="proj-catalogue">
+          <div className="v2-proj-filters" role="group" aria-label="Filter by technology">
+            <button
+              type="button"
+              className={tag === null ? 'is-on' : undefined}
+              onClick={() => setTag(null)}
+              aria-pressed={tag === null}
             >
-              <svg viewBox="0 0 24 24" className="w-5 h-5" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 00-3.16 19.49c.5.09.68-.22.68-.48 0-.24-.01-.87-.01-1.71-2.78.6-3.37-1.34-3.37-1.34-.46-1.16-1.12-1.47-1.12-1.47-.92-.63.07-.62.07-.62 1.02.07 1.56 1.05 1.56 1.05.9 1.54 2.36 1.1 2.94.84.09-.65.35-1.1.63-1.35-2.22-.25-4.56-1.11-4.56-4.95 0-1.09.39-1.98 1.03-2.68-.1-.26-.45-1.29.1-2.68 0 0 .84-.27 2.75 1.02A9.56 9.56 0 0112 6.8c.85.004 1.71.12 2.51.35 1.9-1.29 2.74-1.02 2.74-1.02.55 1.39.2 2.42.1 2.68.64.7 1.03 1.59 1.03 2.68 0 3.85-2.34 4.7-4.57 4.95.36.31.68.92.68 1.85 0 1.34-.01 2.42-.01 2.75 0 .26.18.57.69.47A10 10 0 0012 2z"/></svg>
-              <span>Source</span>
-            </a>
-          ) : (
-            <button disabled className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/5 text-sm font-medium text-gray-500 border border-white/10 cursor-not-allowed">
-              <svg viewBox="0 0 24 24" className="w-5 h-5" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 00-3.16 19.49c.5.09.68-.22.68-.48 0-.24-.01-.87-.01-1.71-2.78.6-3.37-1.34-3.37-1.34-.46-1.16-1.12-1.47-1.12-1.47-.92-.63.07-.62.07-.62 1.02.07 1.56 1.05 1.56 1.05.9 1.54 2.36 1.1 2.94.84.09-.65.35-1.1.63-1.35-2.22-.25-4.56-1.11-4.56-4.95 0-1.09.39-1.98 1.03-2.68-.1-.26-.45-1.29.1-2.68 0 0 .84-.27 2.75 1.02A9.56 9.56 0 0112 6.8c.85.004 1.71.12 2.51.35 1.9-1.29 2.74-1.02 2.74-1.02.55 1.39.2 2.42.1 2.68.64.7 1.03 1.59 1.03 2.68 0 3.85-2.34 4.7-4.57 4.95.36.31.68.92.68 1.85 0 1.34-.01 2.42-.01 2.75 0 .26.18.57.69.47A10 10 0 0012 2z"/></svg>
-              <span>No Source</span>
+              All
             </button>
-          )}
-          {project.linkedin && (
-            <a
-              href={project.linkedin}
-              target="_blank"
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#0077b5]/20 hover:bg-[#0077b5]/30 border border-[#0077b5]/40 text-sm font-medium text-[#0077b5] hover:text-[#00a0dc] transition-all"
-            >
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
-              <span>LinkedIn</span>
-            </a>
-          )}
-          {project.demo && (
-            <a
-              href={project.demo}
-              target="_blank"
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-red-600 hover:from-blue-500 hover:to-red-500 text-sm font-medium text-white transition-all"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
-              <span>Live</span>
-            </a>
-          )}
-          {!project.demo && project.paper && (
-            <a
-              href={project.paper}
-              target="_blank"
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-red-600 hover:from-blue-500 hover:to-red-500 text-sm font-medium text-white transition-all"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
-              <span>Read Dissertation</span>
-            </a>
-          )}
-          {!project.demo && !project.paper && (
-            <button disabled className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/5 text-sm font-medium text-gray-500 border border-white/10 cursor-not-allowed">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-              <span>No Demo</span>
-            </button>
-          )}
+            {tags.map((t) => (
+              <button
+                key={t}
+                type="button"
+                className={tag === t ? 'is-on' : undefined}
+                onClick={() => setTag(tag === t ? null : t)}
+                aria-pressed={tag === t}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+
+          <p className="v2-data v2-proj-count" aria-live="polite">
+            Showing {shown.length} of {projects.length}
+          </p>
+
+          <ol className="v2-proj-list">
+            {shown.map((p, i) => (
+              <ProjectRow
+                key={p.id}
+                project={p}
+                index={i + 1}
+                chosen={p.id === cursorId}
+                onShowInCase={onShowInCase}
+              />
+            ))}
+          </ol>
         </div>
-      </div>{/* end padded container */}
-    </div>
+      </main>
+
+      {/*
+        PIP, WHO WAS NOT HERE.
+
+        Jack: "In the all projects page, firstly, there is no pip". He was
+        absent for no better reason than that the Companion is mounted per page
+        and this page never imported it. Every prop is optional, so the whole
+        fix is the mount plus the two things he actually needs: somewhere to
+        stand, which the case's stage and the page's headings already declare
+        through the perch contract, and something to say.
+      */}
+      <Companion whispers={WHISPERS} velocityRef={velocityRef} onAsk={ask} />
+    </>
   );
 }
+
+/* -------------------------------------------------------------------------- */
+/* the catalogue                                                               */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * MEMOISED, because `chosen` now changes under it constantly.
+ *
+ * The bar in the margin follows the case's cursor, which moves on every arrow
+ * key and every notch of a sideways wheel. Fifteen rows of real markup
+ * re-rendering for a three-pixel rule on one of them is a poor trade, and the
+ * only thing standing between here and that trade is the callback: an inline
+ * `() => onShowInCase(p.id)` is a new function on every render and would defeat
+ * this outright. So the row is handed the id back instead.
+ */
+const ProjectRow = memo(function ProjectRow({
+  project: p,
+  index,
+  chosen,
+  onShowInCase
+}: {
+  project: Project;
+  index: number;
+  chosen: boolean;
+  onShowInCase: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  /*
+   * There is no redacted row any more, on purpose.
+   *
+   * This used to special-case `p.stealth` into a name, a vague line and three
+   * black bars. Recensorium launched in August 2026 and nothing in the data
+   * sets that flag now, so the branch was dead code that drew a redaction over
+   * the best thing on the page — the kind of dead code that comes back. It is
+   * gone. If something genuinely undisclosed ever needs listing, it wants a
+   * deliberate treatment rather than a resurrected one.
+   */
+
+  const links: Array<{ href: string; label: string }> = [];
+  if (p.demo) links.push({ href: p.demo, label: 'Live' });
+  if (p.github) links.push({ href: p.github, label: 'Source' });
+  if (p.paper) links.push({ href: p.paper, label: 'Paper' });
+  if (p.linkedin) links.push({ href: p.linkedin, label: 'Write-up' });
+
+  return (
+    /*
+     * data-perch. Jack, 2026-08-27: "On the all projects page, in the 'all
+     * projects' listing, pip can barely land on anything."
+     *
+     * He could not, and the catalogue is the single longest stretch of page on
+     * the site: fifteen rows, several thousand pixels, and until now not one
+     * declared surface in any of it. The bird was crossing it with nothing to
+     * stand on and falling off the bottom of the screen.
+     *
+     * A row is a table row and the list draws a hairline along the top of each
+     * one, so the row's own border-box top IS the visible mark and it takes no
+     * inset — the same treatment the shelf cells and the ledger entries get.
+     * (The rule is drawn as each row's `border-bottom`, so row N's box top sits
+     * exactly on row N-1's rule; the first row's is `.v2-proj-list`'s own
+     * `border-top`. Every row is therefore correct, including the first.)
+     *
+     * The project name is declared separately and as TEXT, because a display
+     * line two words long inside a column eight hundred pixels wide is mostly
+     * empty paper, and standing him on the box would put him in the middle of
+     * it. See THE PERCH CONTRACT in components/v2/Companion.tsx.
+     */
+    <li
+      className={`v2-proj-row${open ? ' is-open' : ''}${chosen ? ' is-chosen' : ''}`}
+      data-perch
+    >
+      {/* The number is the way back UP to the case. A row and a specimen are
+          the same project seen twice, and until now the catalogue could only
+          send you off the page. */}
+      <button
+        type="button"
+        className="v2-proj-num"
+        onClick={() => onShowInCase(p.id)}
+        aria-label={`Show ${p.title} in the case`}
+      >
+        {String(index).padStart(2, '0')}
+      </button>
+      <div className="v2-proj-main">
+        <h2
+          className="v2-proj-name"
+          data-perch
+          data-perch-text
+          /* Measured on .v2-proj-name's face at its 1.12 line-height, the same
+             way every other inset in the tree was. */
+          data-perch-inset="0.13em"
+        >
+          {p.title}
+          {p.status === 'in-progress' ? <em> in progress</em> : null}
+        </h2>
+        <p className="v2-proj-desc">{p.description}</p>
+
+        <ul className="v2-proj-tech">
+          {p.tech.slice(0, 8).map((t) => (
+            <li key={t}>{t}</li>
+          ))}
+          {p.tech.length > 8 ? <li className="is-more">+{p.tech.length - 8}</li> : null}
+        </ul>
+
+        {p.features?.length ? (
+          <>
+            <button
+              type="button"
+              className="v2-proj-toggle"
+              onClick={() => setOpen((o) => !o)}
+              aria-expanded={open}
+            >
+              {open ? 'Fewer details' : `What it does (${p.features.length})`}
+            </button>
+            {open ? (
+              <ul className="v2-proj-features">
+                {p.features.map((f) => (
+                  <li key={f}>{f}</li>
+                ))}
+              </ul>
+            ) : null}
+          </>
+        ) : null}
+
+        {/* The page for this project always comes first, and it is the only
+            link here that is internal: everything else leaves the site. A row
+            in an index should be able to open the thing it is indexing. */}
+        {/* The links row is a run of underlined mono: the underline is a real
+            line and it is what he stands on. */}
+        <p className="v2-proj-links" data-perch data-perch-inset="1.15em">
+          <Link href={`/projects/${p.id}`} className="is-lead">
+            The full page
+          </Link>
+          {links.map((l) => (
+            <a
+              key={l.label}
+              href={l.href}
+              target={l.href.startsWith('/') ? undefined : '_blank'}
+              rel={l.href.startsWith('/') ? undefined : 'noreferrer noopener'}
+            >
+              {l.label}
+            </a>
+          ))}
+        </p>
+      </div>
+      <span className="v2-proj-meta">{p.date}</span>
+    </li>
+  );
+});

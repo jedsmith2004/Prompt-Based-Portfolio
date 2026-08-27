@@ -1984,7 +1984,7 @@ export function SpecimenCase({
       {/*
         THE HEADING EXISTS EVEN WHEN IT IS NOT DRAWN.
 
-        With `head` off the case rendered no h2 at all, so on /v2/projects the
+        With `head` off the case rendered no h2 at all, so on /projects the
         next heading after the page's h1 was the citation's h3: a skipped
         level, and a citation that reads as a subsection of nothing. The
         heading is still the region's accessible name either way, which is

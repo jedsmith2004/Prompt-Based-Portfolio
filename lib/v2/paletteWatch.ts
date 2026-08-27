@@ -75,10 +75,12 @@
  * The colours, resolved once per change and shared by every subscriber.
  *
  * `get` is the whole interface. It answers from the published snapshot where
- * there is one, and from the document where there is not -- /v2/awards and
- * /v2/skills stand outside the spine and set `data-v2-theme` by hand without
- * ever mounting usePalette. Even then it is ONE acquisition shared across the
- * batch rather than one per figure.
+ * there is one, and from the document where there is not. The A/B bench routes
+ * were the case that proved it: they stood outside the spine and set
+ * `data-v2-theme` by hand without ever mounting usePalette. Those routes left
+ * with the move to the apex, and the fallback stays, because any page that
+ * mounts a figure without the hook needs it. Even then it is ONE acquisition
+ * shared across the batch rather than one per figure.
  */
 export interface PaletteTokens {
   get(name: string, fallback: string): string;
@@ -99,10 +101,11 @@ let published: Record<string, string> | null = null;
  * delivered the snapshot already describes what the document now says.
  *
  * `null` UNPUBLISHES, and usePalette's teardown must call it. This is module
- * state and the hook is not on every page: /v2/awards and /v2/skills stand
- * outside the spine and set `data-v2-theme` by hand without ever mounting it.
- * Left set, the spine's last plate would still be answering for a page that is
- * asking the document for its own colours -- the same bug in a quieter coat.
+ * state and the hook is not guaranteed to be on the next page: the bench routes
+ * set `data-v2-theme` by hand without ever mounting it, and any page like them
+ * would do the same. Left set, the spine's last plate would still be answering
+ * for a page that is asking the document for its own colours -- the same bug in
+ * a quieter coat.
  */
 export function publishPalette(tokens: Record<string, string> | null): void {
   published = tokens;
@@ -137,9 +140,8 @@ function ensureObserver(): void {
   });
   observer.observe(document.documentElement, {
     attributes: true,
-    /* `data-v2-theme` as well: /v2/awards and /v2/skills stand outside the
-       spine and set only that one, in a mount effect that lands after a
-       figure's first paint. NOT `class` and NOT `style` -- usePalette touches
+    /* `data-v2-theme` as well: a page outside the spine sets only that one,
+       in a mount effect that lands after a figure's first paint. NOT `class` and NOT `style` -- usePalette touches
        both of those on the root during a mode change, so watching them means
        three notifications where one is correct. */
     attributeFilter: [

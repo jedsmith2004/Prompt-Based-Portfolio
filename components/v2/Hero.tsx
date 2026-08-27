@@ -11,10 +11,15 @@
 
 import { useEffect, useState } from 'react';
 import { HighlightedCopy, type Stat } from './SpineSection';
-import { CV_EDITIONS } from './CurriculumVitae';
+import CvPlanks from './CvPlanks';
+import CountUp from './text/CountUp';
+import RotatingText from './text/RotatingText';
+import { StrokeText } from './text/MaskedText';
 
 export interface HeroProps {
   eyebrowLeft: string;
+  /** Turned between, after the name. See HeroContent.roles. */
+  roles: string[];
   eyebrowRight: string;
   /** One entry per display line. Kept short so the plate scale holds. */
   lines: string[];
@@ -26,6 +31,7 @@ export interface HeroProps {
 
 export default function Hero({
   eyebrowLeft,
+  roles,
   eyebrowRight,
   lines,
   lede,
@@ -45,27 +51,20 @@ export default function Hero({
       <div className="v2-hero-pattern" aria-hidden="true">
         <i /><i /><i /><i />
       </div>
-      <nav className="v2-cv-hanger" aria-label="Curriculum vitae downloads">
-        <span className="v2-cv-rail" data-perch aria-hidden="true" />
-        <span className="v2-cv-rope is-left" aria-hidden="true" />
-        <span className="v2-cv-rope is-right" aria-hidden="true" />
-        {[...CV_EDITIONS].sort((a, b) => a.pages - b.pages).map((cv) => (
-          <a
-            key={cv.href}
-            href={cv.href}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={cv.primary ? 'is-lead' : undefined}
-          >
-            <strong>{cv.pages}</strong>
-            <span>page CV</span>
-            <i aria-hidden="true">PDF ↗</i>
-          </a>
-        ))}
-      </nav>
+      {/* Two boards on ropes, integrated rather than keyframed: they fall in,
+          the ropes snap taut, and they swing themselves down to rest at
+          different rates because their ropes are different lengths. Point at
+          one and it takes the shove. See components/v2/CvPlanks.tsx. */}
+      <CvPlanks />
       <div className="v2-wrap v2-hero-inner">
         <div className="v2-hero-meta">
-          <span>{eyebrowLeft}</span>
+          <span>
+            {eyebrowLeft} <b aria-hidden="true">/</b>{' '}
+            {/* Every phrase in here is an appointment on the CV. See
+                HeroContent.roles in lib/v2/content.ts for why that is a rule
+                and not a preference. */}
+            <RotatingText items={roles} hold={2800} />
+          </span>
           <span>{eyebrowRight}</span>
         </div>
 
@@ -96,13 +95,23 @@ export default function Hero({
         <hr className="v2-rule-hard" data-perch />
 
         <h1 className="v2-hero-title" data-perch data-perch-text data-perch-inset="0.04em">
+          {/*
+            THE SECOND LINE IS HOLLOW.
+
+            The thesis is two lines and they are not two items on a list: the
+            first is what he does and the second is where he takes it. Set at
+            the same weight they read as a pair of slogans. Set solid then
+            outlined they read as a statement and its echo, which is the actual
+            relationship, and it costs one CSS property. See StrokeText in
+            components/v2/text/MaskedText.tsx.
+          */}
           {lines.map((line, i) => (
             <span className="v2-line" key={line}>
               <span
                 className="v2-line-in v2-display"
                 style={{ '--d': `${120 + i * 110}ms` } as React.CSSProperties}
               >
-                {line}
+                {i === 1 ? <StrokeText>{line}</StrokeText> : line}
               </span>
             </span>
           ))}
@@ -116,7 +125,7 @@ export default function Hero({
             data-perch-text
             data-perch-inset="0.33em"
           >
-            <HighlightedCopy text={lede} />
+            <HighlightedCopy text={lede} section="top" />
           </p>
 
           <div
@@ -127,7 +136,9 @@ export default function Hero({
                 each cell's box edge is already the visible line: no inset */}
             {stats.map((s) => (
               <div key={s.label} data-perch>
-                <b className={s.tone ? `is-${s.tone}` : undefined}>{s.value}</b>
+                <b className={s.tone ? `is-${s.tone}` : undefined}>
+                  <CountUp value={s.value} />
+                </b>
                 <small>{s.label}</small>
               </div>
             ))}

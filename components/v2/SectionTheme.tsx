@@ -55,7 +55,7 @@
    legal as well.
 
    The measured tables live beside the class definitions at the end of
-   app/v2/v2.css. Do not change a hex there without re-measuring.
+   app/v2.css. Do not change a hex there without re-measuring.
    ========================================================================== */
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react';

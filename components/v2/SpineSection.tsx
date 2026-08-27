@@ -10,6 +10,9 @@
    ========================================================================== */
 
 import { Fragment, useEffect, useRef, useState } from 'react';
+import { EMPHASIS } from '@/lib/v2/content';
+import DecryptedText from './text/DecryptedText';
+import CountUp from './text/CountUp';
 
 export interface Stat {
   value: string;
@@ -67,43 +70,89 @@ function KineticTitle({ text }: { text: string }) {
 }
 
 
-const EMPHASIS = [
-  'Computer Science',
-  'first class',
-  'software rasterizer',
-  'SVM written by hand',
-  'Nothing leaves the machine',
-  'local Python backend',
-  'more than 300',
-  'six countries',
-  'without a rope',
-  'own hardware',
-  'no signal'
-] as const;
+/* ============================================================================
+   THE EMPHASIS PASS.
 
-/** Pulls a small set of concrete claims out of long copy without changing it. */
-export function HighlightedCopy({ text }: { text: string }) {
-  const escaped = EMPHASIS.map((phrase) => phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  const parts = text.split(new RegExp('(\\b(?:' + escaped.join('|') + ')\\b)', 'gi'));
-  let hit = 0;
-  return (
-    <>
-      {parts.map((part, i) => {
-        const important = EMPHASIS.some((phrase) => phrase.toLowerCase() === part.toLowerCase());
-        if (!important) return <Fragment key={part + '-' + i}>{part}</Fragment>;
-        const style = hit++ % 3;
-        return (
-          <mark
-            key={part + '-' + i}
-            className={'v2-em v2-em-' + (style + 1)}
-            data-word={part}
-          >
-            {part}
-          </mark>
-        );
-      })}
-    </>
-  );
+   Jack, 2026-08-27: "The text highlighting is good but feels a bit random.
+   Keep it consistent with two for each section ... I don't like the squiggly
+   underlined text, it feels like a typo!"
+
+   It was random, and the randomness had a cause worth writing down. The old
+   version held ONE flat list of phrases for the whole site and dressed each
+   hit with `hit++ % 3`, so the treatment a phrase received depended on how
+   many OTHER phrases from that list happened to appear earlier in the same
+   paragraph. The same claim could be vermilion on one plate and wavy on the
+   next, a plate containing four listed phrases got four marks, and its
+   neighbour containing none got none. Nothing about it was authored.
+
+   Now the marks are authored per plate, in lib/v2/content.ts, next to the copy
+   they mark, and there are exactly two: the CLAIM in vermilion and the
+   MECHANISM on a blue wash. The third treatment, the wavy underline, is gone
+   entirely rather than restyled. A squiggle under a phrase means one thing to
+   everyone who has used a word processor, and it is "this is wrong".
+
+   The hero's second mark is `live` instead: the phrase resolves out of noise.
+   See DecryptedText.
+
+   A phrase that is not found in the text is SKIPPED SILENTLY AND DELIBERATELY.
+   The alternative is matching a shortened form somewhere else in the sentence,
+   which is how emphasis quietly ends up on the wrong clause after an edit.
+   ========================================================================== */
+
+interface Mark {
+  at: number;
+  len: number;
+  tone: 'verm' | 'blue' | 'live';
+}
+
+/** Where each authored phrase actually is, in order, without overlaps. */
+function locate(text: string, section: string): Mark[] {
+  const authored = EMPHASIS[section];
+  if (!authored?.length) return [];
+  const found: Mark[] = [];
+  for (const e of authored) {
+    const at = text.indexOf(e.phrase);
+    if (at < 0) continue;
+    found.push({ at, len: e.phrase.length, tone: e.tone });
+  }
+  found.sort((a, b) => a.at - b.at);
+  /* Two marks that overlap would produce nested <mark>s and a broken split.
+     The earlier one wins, which is the one the author listed first. */
+  const out: Mark[] = [];
+  let cursor = 0;
+  for (const m of found) {
+    if (m.at < cursor) continue;
+    out.push(m);
+    cursor = m.at + m.len;
+  }
+  return out;
+}
+
+export interface HighlightedCopyProps {
+  text: string;
+  /** Section id, or 'top' for the hero. Keys into EMPHASIS. */
+  section: string;
+}
+
+/** Sets the plate's two authored claims off, and changes nothing else. */
+export function HighlightedCopy({ text, section }: HighlightedCopyProps) {
+  const marks = locate(text, section);
+  if (!marks.length) return <>{text}</>;
+
+  const out: React.ReactNode[] = [];
+  let cursor = 0;
+  marks.forEach((m, i) => {
+    if (m.at > cursor) out.push(<Fragment key={`t${i}`}>{text.slice(cursor, m.at)}</Fragment>);
+    const phrase = text.slice(m.at, m.at + m.len);
+    out.push(
+      <mark key={`m${i}`} className={`v2-em v2-em-${m.tone}`} data-word={phrase}>
+        {m.tone === 'live' ? <DecryptedText text={phrase} /> : phrase}
+      </mark>
+    );
+    cursor = m.at + m.len;
+  });
+  if (cursor < text.length) out.push(<Fragment key="tail">{text.slice(cursor)}</Fragment>);
+  return <>{out}</>;
 }
 
 export interface SpineSectionProps {
@@ -179,7 +228,12 @@ export default function SpineSection({
             data-perch-text
             data-perch-inset="0.38em"
           >
-            {eyebrow}
+            {/* The plate number and its rule arrive out of noise. It is mono,
+                it is uppercase, and it is the one line on the plate that is
+                machinery rather than prose, so it is the one place a decode
+                reads as the page addressing itself rather than as decoration.
+                See components/v2/text/DecryptedText.tsx. */}
+            <DecryptedText text={eyebrow} duration={620} delay={140} />
           </p>
           {aside ? <div className="v2-section-aside">{aside}</div> : null}
         </div>
@@ -210,7 +264,7 @@ export default function SpineSection({
               data-perch-text
               data-perch-inset="0.33em"
             >
-              <HighlightedCopy text={lede} />
+              <HighlightedCopy text={lede} section={id} />
             </p>
           ) : null}
         </div>
@@ -221,7 +275,13 @@ export default function SpineSection({
                 each cell's box edge is already the visible line: no inset */}
             {stats.map((s) => (
               <div key={s.label} className="v2-shelf-cell" data-perch>
-                <b className={s.tone ? `is-${s.tone}` : undefined}>{s.value}</b>
+                {/* The figure counts to its value the first time the shelf
+                    is on screen. Only where the value is ONE number: see
+                    parseFigure in components/v2/text/CountUp.tsx, which leaves
+                    '4 / 4', 'First', '.obj' and the years alone. */}
+                <b className={s.tone ? `is-${s.tone}` : undefined}>
+                  <CountUp value={s.value} />
+                </b>
                 <small>{s.label}</small>
               </div>
             ))}

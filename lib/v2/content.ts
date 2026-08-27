@@ -66,6 +66,17 @@ export interface Section {
 
 export interface HeroContent {
   eyebrowLeft: string;
+  /**
+   * The job titles the eyebrow turns between, after the name.
+   *
+   * EVERY ONE OF THESE HAS TO BE AN APPOINTMENT THE RECORD ALREADY HOLDS. A
+   * rotator is a machine for making claims cheaply, and the only thing keeping
+   * this one honest is that each entry corresponds to an entry in ROLES in
+   * components/v2/CareerLine.tsx. Nothing aspirational goes in here: what he
+   * is LOOKING FOR is on the closing plate, in the first person, where it
+   * belongs.
+   */
+  roles: string[];
   eyebrowRight: string;
   /** Two or three short display lines. Each must survive plate scale. */
   lines: string[];
@@ -89,7 +100,8 @@ export type Whispers = Record<string, string[]>;
 /* --------------------------------------------------------------------- hero */
 
 export const HERO: HeroContent = {
-  eyebrowLeft: 'JACK SMITH / SOFTWARE ENGINEER',
+  eyebrowLeft: 'JACK SMITH',
+  roles: ['SOFTWARE ENGINEER', 'FOUNDER, RECENSORIUM', 'FULL-STACK DEVELOPER'],
   eyebrowRight: 'HEMEL HEMPSTEAD, UK / OFTEN IN LONDON',
   lines: ['From the metal up.', 'Out to the edge.'],
   lede:
@@ -170,11 +182,11 @@ export const SECTIONS: Section[] = [
     eyebrow: '04 / DO NOT LEAVE IT BROKEN',
     title: 'Shipped, handed over, still running',
     lede:
-      'I run a small web studio, started while I was at university, covering requirements, design, deployment and the domain transfer nobody enjoys. A short stint at an early-stage AI startup in London ended with an internal API over their disjoint systems, rewritten Cloudflare Workers, a dashboard, a CLI and an MCP server.',
+      'I run a small web studio, started while I was at university, covering requirements, design, deployment and the domain transfer nobody enjoys. Two weeks at an early-stage AI startup in London were enough to leave an internal API over their disjoint systems, rewritten Cloudflare Workers, a dashboard, a CLI and an MCP server.',
     shape: 'scatter',
     stats: [
       { value: '1st', label: 'hackSheffield 9, best repository', tone: 'verm' },
-      { value: '5', label: 'tools left behind in London' },
+      { value: '5', label: 'tools left behind in London, in two weeks' },
       { value: '2025', label: 'web studio founded', tone: 'blue' }
     ]
   },
@@ -188,7 +200,7 @@ export const SECTIONS: Section[] = [
     stats: [
       { value: '6', label: 'countries', tone: 'blue' },
       { value: '20', label: 'stops between Split and Tagounite' },
-      { value: '27', label: 'days documented on the way down', tone: 'verm' }
+      { value: '30', label: 'days on the road, 27 of them filmed', tone: 'verm' }
     ]
   },
   {
@@ -237,6 +249,87 @@ export const SECTIONS: Section[] = [
      */
   }
 ];
+
+/* --------------------------------------------------------------- emphasis */
+
+/*
+   TWO MARKS PER PLATE, AND THE SAME TWO KINDS EVERY TIME.
+
+   Jack, 2026-08-27: "The text highlighting is good but feels a bit random.
+   Keep it consistent with two for each section ... I don't like the squiggly
+   underlined text, it feels like a typo!"
+
+   It WAS random. The old system held one flat list of phrases and dressed each
+   hit with `hit++ % 3`, so which treatment a phrase got depended on how many
+   other phrases happened to appear earlier in the same paragraph. The same
+   claim could be vermilion on one read and wavy-underlined on another, and a
+   plate whose lede contained four listed phrases got four marks while its
+   neighbour got none.
+
+   So emphasis is authored per plate, here, next to the copy it marks:
+
+     verm   the claim of the plate, ruled underneath in vermilion
+     blue   the mechanism that makes the claim true, on a blue wash
+
+   Exactly two, in that order, on every plate. `phrase` must appear in that
+   plate's lede verbatim or nothing is marked, which is deliberate: an
+   emphasis that has drifted off its sentence should disappear rather than
+   silently match somewhere else.
+
+   The hero is the one exception, and it is Jack's: "On the splash page, have
+   just the orange underlined text, like 'Computer Science', and the blue one,
+   or one of the animations from above." The second mark there is `live`,
+   which resolves out of scrambled characters when the plate is read. It is on
+   "no signal" because that is what the sentence is about.
+*/
+
+export type EmphasisTone = 'verm' | 'blue' | 'live';
+
+export interface Emphasis {
+  /** Verbatim substring of the lede. Case-sensitive. */
+  phrase: string;
+  tone: EmphasisTone;
+}
+
+/** Keyed by section id, plus `top` for the hero. Two entries each. */
+export const EMPHASIS: Record<string, readonly Emphasis[]> = {
+  top: [
+    { phrase: 'Computer Science', tone: 'verm' },
+    { phrase: 'no signal', tone: 'live' }
+  ],
+  'from-scratch': [
+    { phrase: 'software rasterizer', tone: 'verm' },
+    { phrase: 'SVM written by hand', tone: 'blue' }
+  ],
+  models: [
+    { phrase: 'Nothing leaves the machine', tone: 'verm' },
+    { phrase: 'local Python backend', tone: 'blue' }
+  ],
+  recensorium: [
+    { phrase: 'never picks what it reviews', tone: 'verm' },
+    { phrase: 'money can never buy a score', tone: 'blue' }
+  ],
+  delivery: [
+    { phrase: 'Two weeks', tone: 'verm' },
+    { phrase: 'a small web studio', tone: 'blue' }
+  ],
+  road: [
+    { phrase: 'Twenty stops', tone: 'verm' },
+    { phrase: 'a week volunteering', tone: 'blue' }
+  ],
+  practice: [
+    { phrase: 'fall off, change one thing, go again', tone: 'verm' },
+    { phrase: 'the same habit as debugging', tone: 'blue' }
+  ],
+  cv: [
+    { phrase: 'two sides', tone: 'verm' },
+    { phrase: 'whichever you are actually going to read', tone: 'blue' }
+  ],
+  contact: [
+    { phrase: 'technical enough to be uncomfortable', tone: 'verm' },
+    { phrase: 'AI research, full-stack engineering', tone: 'blue' }
+  ]
+};
 
 /* -------------------------------------------------------- featured projects */
 

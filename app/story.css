@@ -1,0 +1,395 @@
+/* ==========================================================================
+   story.css — one long read on a dressed plate.
+
+   Shared by /projects/[id] and /clippings/[id]. Both are the same object: a
+   masthead, a standfirst, an article, and a way onward, over a backdrop world
+   in that page's own palette. Everything here is `.v2-story-*` and none of it
+   knows what it is describing.
+
+   Deliberately narrower than the spine. A project page is READING, not
+   scanning: one column of type at a comfortable measure, with the world
+   showing either side of it rather than underneath every word. The spine's
+   two-column head would be wrong here, because there is no figure competing
+   with the copy for the right-hand column.
+   ========================================================================== */
+
+.v2-story {
+  padding: clamp(28px, 5vh, 64px) 0 clamp(60px, 12vh, 140px);
+}
+
+.v2-story-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px 24px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.v2-story-back {
+  font-family: var(--f-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  text-decoration: none;
+  border-bottom: 1px solid var(--rule-firm);
+  padding-bottom: 2px;
+}
+.v2-story-back:hover { color: var(--ink); border-bottom-color: currentColor; }
+
+.v2-story-title {
+  /* One notch under the spine's plate titles. The project's name is the
+     subject here, not the argument, and it has to survive being long. */
+  font-size: clamp(38px, 6.4vw, 86px);
+  line-height: 0.92;
+  letter-spacing: -0.03em;
+  margin: clamp(22px, 3vw, 40px) 0 0;
+  max-width: 17ch;
+  text-wrap: balance;
+}
+
+.v2-story-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 26px;
+  margin: 18px 0 0;
+  font-family: var(--f-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.v2-story-meta .is-live { color: var(--verm-text); }
+
+.v2-story-lede {
+  margin: clamp(20px, 2.6vw, 34px) 0 0;
+  max-width: 62ch;
+}
+
+.v2-story-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin: clamp(22px, 3vw, 36px) 0 0;
+}
+.v2-story-links a {
+  font-family: var(--f-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  text-decoration: none;
+  border: 1px solid var(--rule-firm);
+  padding: 9px 15px;
+  transition: background 0.2s var(--ease), color 0.2s var(--ease), border-color 0.2s var(--ease);
+}
+.v2-story-links a:hover { background: var(--ink); color: var(--paper-hi); border-color: var(--ink); }
+.v2-story-links a.is-lead { border-color: var(--verm); color: var(--verm-text); }
+.v2-story-links a.is-lead:hover { background: var(--verm); color: var(--paper-hi); }
+
+/* ==========================================================================
+   THE ARTICLE
+
+   > "Every project page needs a massive revamp, with it's own background,
+   >  screenshots, stories, articles within them."
+
+   The page is a long read now, so it is set like one: a single column at a
+   real measure, the screenshot and the shelf of facts before it as the way in,
+   and one line pulled large a third of the way down. Everything sits over a
+   live world, so every plane that carries type has to be opaque enough to be
+   read against whatever it happens to be drawing behind.
+   ========================================================================== */
+
+/* --- the screenshots ------------------------------------------------------ */
+.v2-story-fig {
+  margin: clamp(34px, 5vw, 62px) 0 0;
+  /* A hard border and a flat offset shadow rather than a soft one: this is the
+     same paper-and-ink vocabulary as the clippings, and a blur would be the
+     only gaussian on the whole site. */
+  border: 1px solid var(--ink);
+  background: var(--paper-2);
+  padding: clamp(8px, 1vw, 14px);
+  box-shadow: 6px 6px 0 var(--rule);
+}
+.v2-story-fig.is-wide { max-width: 100%; }
+.v2-story-fig.is-inset { max-width: min(560px, 100%); }
+.v2-story-fig img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--rule);
+}
+.v2-story-fig figcaption {
+  font-family: var(--f-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  /* on --paper-2: --ink-3 is 4.50:1 */
+  color: var(--ink-3);
+  margin-top: 10px;
+  max-width: 72ch;
+}
+
+/* --- the shelf of facts --------------------------------------------------- */
+/* Deliberately NOT a stats bar. Every value here is written down somewhere in
+   the repository, which is why there are three or four of them and not six:
+   a project with nothing measured gets no shelf rather than a padded one. */
+.v2-story-shelf {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1px;
+  margin: clamp(34px, 5vw, 60px) 0 0;
+  padding: 0;
+  background: var(--rule);
+  border: 1px solid var(--rule-firm);
+}
+.v2-story-shelf > div {
+  background: var(--paper);
+  padding: clamp(13px, 1.6vw, 18px) clamp(14px, 1.8vw, 20px);
+}
+.v2-story-shelf dt {
+  font-family: var(--f-display);
+  font-variation-settings: 'wdth' 92, 'opsz' 28;
+  font-size: clamp(20px, 2.3vw, 28px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.v2-story-shelf dd {
+  font-family: var(--f-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 7px 0 0;
+  line-height: 1.35;
+}
+
+/* --- the body ------------------------------------------------------------- */
+.v2-story-article {
+  margin-top: clamp(46px, 7vw, 96px);
+  border-top: 1px solid var(--rule-firm);
+  padding-top: clamp(16px, 2vw, 26px);
+}
+.v2-story-sec + .v2-story-sec { margin-top: clamp(32px, 4.4vw, 58px); }
+.v2-story-sec p {
+  font-family: var(--f-read);
+  font-size: clamp(16px, 1.75vw, 19px);
+  font-weight: 300;
+  line-height: 1.68;
+  color: var(--ink-2);
+  /* The one number on this page that is about reading rather than about the
+     record. Anything wider and the eye loses the line return. */
+  max-width: 66ch;
+  margin: 0;
+}
+.v2-story-sec p + p { margin-top: clamp(14px, 1.6vw, 20px); }
+/* Tighter above its own heading than the gap between sections, so a heading
+   belongs to what follows it rather than floating between two things. */
+.v2-story-sec .v2-story-h2 { margin-bottom: clamp(12px, 1.6vw, 18px); }
+
+/* --- the pull ------------------------------------------------------------- */
+.v2-story-pull {
+  margin: clamp(26px, 3.4vw, 44px) 0 0;
+  padding: 0 0 0 clamp(16px, 2vw, 26px);
+  border-left: 3px solid var(--verm);
+  font-family: var(--f-display);
+  font-variation-settings: 'wdth' 94, 'opsz' 30;
+  font-size: clamp(20px, 2.5vw, 30px);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.22;
+  color: var(--ink);
+  max-width: 24ch;
+}
+
+/* --------------------------------------------------------------------------
+   THE CITATION, on a clipping page only.
+
+   It looks like the pull quote and is doing the opposite job, which is why it
+   is a separate rule rather than a modifier: the pull is a line of MY prose
+   lifted out and made larger, and this is a sentence I did not write, set
+   smaller and boxed and attributed. Given the same treatment they would read
+   as two quotations of equal standing from the same voice, and only one of
+   them is the record.
+   -------------------------------------------------------------------------- */
+/* The citation and its seal share a row on a wide screen and stack on a narrow
+   one. The seal is `flex: none` so it never squeezes the quotation, and it is
+   the first thing dropped when there is not room for both side by side. */
+.v2-story-award {
+  display: flex;
+  align-items: center;
+  gap: clamp(18px, 3vw, 40px);
+}
+.v2-story-award .v2-story-cite { flex: 1 1 auto; }
+.v2-story-award .v2-seal { flex: 0 0 auto; }
+@media (max-width: 700px) {
+  .v2-story-award { flex-direction: column; align-items: flex-start; }
+}
+
+.v2-story-cite {
+  margin: clamp(22px, 3vw, 34px) 0 0;
+  padding: clamp(14px, 2vw, 20px) clamp(16px, 2.2vw, 24px);
+  border-left: 2px solid var(--rule-hard);
+  background: color-mix(in srgb, var(--paper-hi) 62%, transparent);
+  max-width: 62ch;
+}
+.v2-story-cite p {
+  margin: 0;
+  font-family: var(--f-read);
+  font-weight: 300;
+  font-size: clamp(15px, 1.5vw, 17px);
+  line-height: 1.62;
+  color: var(--ink);
+}
+.v2-story-cite cite {
+  display: block;
+  margin-top: 10px;
+  font-family: var(--f-mono);
+  font-style: normal;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+@media (max-width: 620px) {
+  .v2-story-fig { box-shadow: 4px 4px 0 var(--rule); }
+  .v2-story-pull { max-width: none; }
+  .v2-story-cite { max-width: none; }
+}
+
+/* --- the blocks ---------------------------------------------------------- */
+
+.v2-story-block {
+  margin-top: clamp(46px, 7vw, 96px);
+  border-top: 1px solid var(--rule-firm);
+  padding-top: clamp(16px, 2vw, 26px);
+}
+.v2-story-h2 {
+  font-family: var(--f-display);
+  font-variation-settings: 'wdth' 92, 'opsz' 30;
+  font-size: clamp(20px, 2.2vw, 27px);
+  font-weight: 700;
+  letter-spacing: -0.022em;
+  line-height: 1.1;
+  color: var(--ink);
+  margin: 0 0 clamp(18px, 2.4vw, 30px);
+}
+
+/* The numbered points. A hanging figure in the gutter and the sentence set at
+   a reading measure: the same furniture the spine uses for its figure shelf,
+   turned on its side. */
+.v2-story-points {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: clamp(14px, 1.8vw, 22px);
+  max-width: 74ch;
+}
+.v2-story-points li {
+  display: grid;
+  grid-template-columns: 3.4em 1fr;
+  gap: 4px 12px;
+  align-items: baseline;
+  border-top: 1px solid var(--rule);
+  padding-top: clamp(12px, 1.6vw, 18px);
+}
+.v2-story-points li i {
+  font-family: var(--f-mono);
+  font-style: normal;
+  font-size: 11.5px;
+  letter-spacing: 0.12em;
+  color: var(--verm-text);
+  font-variant-numeric: tabular-nums;
+}
+.v2-story-points li span {
+  font-family: var(--f-read);
+  font-weight: 300;
+  font-size: clamp(15px, 1.5vw, 17px);
+  line-height: 1.62;
+  color: var(--ink-2);
+}
+@media (max-width: 620px) {
+  .v2-story-points li { grid-template-columns: 1fr; }
+}
+
+.v2-story-tech {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+}
+.v2-story-tech li {
+  font-family: var(--f-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  border: 1px solid var(--rule);
+  padding: 5px 9px;
+}
+
+/* --- newer / older ------------------------------------------------------- */
+
+.v2-story-nav {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(16px, 3vw, 40px);
+  margin-top: clamp(54px, 8vw, 110px);
+  border-top: 2px solid var(--rule-hard);
+  padding-top: clamp(18px, 2.4vw, 30px);
+}
+.v2-story-nav a {
+  display: grid;
+  gap: 6px;
+  text-decoration: none;
+  color: var(--ink);
+}
+.v2-story-nav a.is-next { text-align: right; }
+.v2-story-nav a i {
+  font-family: var(--f-mono);
+  font-style: normal;
+  font-size: 11.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.v2-story-nav a span {
+  font-family: var(--f-display);
+  font-variation-settings: 'wdth' 92, 'opsz' 28;
+  font-size: clamp(17px, 2vw, 24px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.12;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.2s var(--ease), color 0.2s var(--ease);
+}
+.v2-story-nav a:hover span { color: var(--verm-text); border-bottom-color: var(--verm); }
+@media (max-width: 620px) {
+  .v2-story-nav { grid-template-columns: 1fr; }
+  .v2-story-nav a.is-next { text-align: left; }
+}
+
+.v2-story-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 22px;
+  margin-top: clamp(28px, 4vw, 46px);
+  font-family: var(--f-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.v2-story-foot a {
+  color: var(--ink-3);
+  text-decoration: none;
+  border-bottom: 1px solid var(--rule-firm);
+  padding-bottom: 2px;
+}
+.v2-story-foot a:hover { color: var(--ink); border-bottom-color: currentColor; }

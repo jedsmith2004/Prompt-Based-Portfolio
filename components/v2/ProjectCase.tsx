@@ -7,7 +7,7 @@
    >  but we can think of something else for them."
 
    So the case is the PROJECTS treatment now. It sits at the head of the index
-   at /v2/projects, which is the page whose whole job is to hold all of them at
+   at /projects, which is the page whose whole job is to hold all of them at
    once; the highlight reel on the spine keeps its own job, which is the
    opposite one — a single project, large, with its neighbours blurred either
    side. Same pipeline, same grain, different question.
@@ -561,7 +561,7 @@ function outboundLinks(p: Project): Array<{ href: string; label: string }> {
 export interface ProjectCaseProps {
   className?: string;
   /**
-   * 'index'  the head of /v2/projects. Every project on screen beside the
+   * 'index'  the head of /projects. Every project on screen beside the
    *          carousel, and choosing one raises its entry below.
    * 'reel'   the spine. Three objects, arrows, and the way in.
    *
@@ -694,14 +694,24 @@ export default function ProjectCase({
        * case is in `listLabel`, where a screen reader gets it and the sighted
        * reader gets the arrows instead.
        */
-      note={
-        reel
-          ? undefined
-          : 'Not fifteen screenshots. Each object is modelled from vertices and drawn by the same ' +
-            'hand-rolled pipeline that draws the rest of this site, then quantised to a grid of ' +
-            'characters. Where a project has a physical fact in it, that is the object: a pipe, a ' +
-            'wall calendar, a fan of cards. Turn the case and the entry under it follows.'
-      }
+      /*
+       * NO NOTE ON EITHER DRESS NOW.
+       *
+       * Jack, 2026-08-27: "the projects page has some mega unnecessary prose
+       * all over."
+       *
+       * The sheet's note was four lines explaining that the objects are
+       * modelled from vertices, drawn by the same hand-rolled pipeline as the
+       * rest of the site, and quantised to a grid of characters — standing
+       * directly above fifteen objects visibly doing exactly that. It was the
+       * page describing a thing the reader was already looking at, which is
+       * the definition of the prose he means. The last sentence of it, how to
+       * work the case, was a duplicate of `listLabel` and of the arrows.
+       *
+       * The reel lost its standfirst for the same reason a dress ago; this is
+       * the other half of that decision arriving.
+       */
+      note={undefined}
       /*
        * THE WAY OUT OF THE CASE, and it is a different way on each dress.
        *
@@ -722,10 +732,10 @@ export default function ProjectCase({
         if (reel) {
           return (
             <p className="v2-case-go" data-perch>
-              <Link href={`/v2/projects/${entry.key}`} className="is-lead">
+              <Link href={`/projects/${entry.key}`} className="is-lead">
                 Open {entry.title}
               </Link>
-              <Link href="/v2/projects">Every project</Link>
+              <Link href="/projects">Every project</Link>
             </p>
           );
         }
@@ -744,7 +754,7 @@ export default function ProjectCase({
               </ul>
             ) : null}
             <p className="v2-case-go" data-perch>
-              <Link href={`/v2/projects/${entry.key}`} className="is-lead">
+              <Link href={`/projects/${entry.key}`} className="is-lead">
                 The full page
               </Link>
               {(p ? outboundLinks(p) : []).map((l) => (

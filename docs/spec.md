@@ -8,6 +8,22 @@ in [research.md](research.md).
 
 ---
 
+## 0. Three addresses, and the name that does not match
+
+Since 2026-08-27 this site is at **jacksmith.me**. The two before it are
+kept: **v2.jacksmith.me** is the AI question-box site, frozen on the
+`site/v2-archive` branch of this repository, and **v1.jacksmith.me** is the
+Prismic and Three.js one from December 2024, in `jedsmith2004/OLD_portfolio`.
+
+**The repository still calls THIS site v2** — `app/v2.css`,
+`components/v2/`, `lib/v2/`, and every document in `docs/`. That name was
+true while it was a rebuild living at `/v2` behind the old site, and it was
+kept rather than rewritten through a hundred and fifty imports for no
+behaviour change. The rule: **v2 in a path means this design; v2 in a URL
+means the archive.**
+
+---
+
 ## 1. Who it is for and what it has to do
 
 Jack Smith, graduated 2026 with a first from Sheffield, now in Hemel Hempstead
@@ -68,10 +84,17 @@ was paying twice to be harder to read.
 direct consequence of the line above: with the field gone there is room for the
 world to be the subject rather than a texture behind one.
 
-Plus `/v2/projects` — a fifteen-object **ProjectCase** over the filtered
-chronological index — and four benches: `/v2/backdrops` (keys 1-8), `/v2/awards`
-(keys 1-4), `/v2/skills` (keys 1-2) and `/v2/story` (keys 1-3), indexed at
-`/v2/bench`.
+Plus `/projects` — a fifteen-object **ProjectCase** over the filtered
+chronological index — and `/projects/[id]`, fifteen pages generated at build
+time from `lib/v2/projectStories.ts`.
+
+**The four benches are gone as routes.** `/v2/backdrops` (keys 1-8),
+`/v2/awards` (keys 1-4), `/v2/skills` (keys 1-2) and `/v2/story` (keys 1-3),
+indexed at `/v2/bench`, were removed when the site took the apex on
+2026-08-27: every question they held had been answered, and they were
+working documents for one reader rather than pages. Their verdicts are in
+[ab-log.md](ab-log.md) and every component they mounted is still in
+`components/v2/`, so any of them can be stood back up in a file.
 
 **The case and the reel are not the same treatment twice.** The case answers
 *what is all of it* and belongs on the index; the reel answers *what is this
@@ -210,7 +233,7 @@ past the edge for 260ms. Inside the edge fifths he hops back toward the middle
 
 ## 5. Design system
 
-**Palette** (`app/v2/v2.css`). Paper `#E4DFD3`, ink `#17140F`, ink-2 `#443E34`,
+**Palette** (`app/v2.css`). Paper `#E4DFD3`, ink `#17140F`, ink-2 `#443E34`,
 ink-3 `#655C4F` (darkened from `#7C7364` for AA), ink-4 `#7C7364` decorative
 only, vermilion `#B5402F` display-only, `--verm-text #9E3524` for small text,
 blue `#2A4C7D`.

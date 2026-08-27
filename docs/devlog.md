@@ -8,6 +8,70 @@ See also: [spec.md](spec.md) · [plan.md](plan.md) · [ab-log.md](ab-log.md) · 
 
 ---
 
+## 2026-08-27 (latest) — the site takes the apex
+
+Jack: *"Lets get v2 of the portfolio as the main site, and the old portfolio
+under a sub-domain like the old old one."*
+
+Three sites, and the naming is the trap in the whole job. What this repository
+calls v2 is now **jacksmith.me**. What the world was calling jacksmith.me is now
+**v2.jacksmith.me**. The Prismic site that was at old-portfolio.jacksmith.me is
+now **v1.jacksmith.me**. So the directories `components/v2` and `lib/v2` are this
+site, and the address v2 is the one before it. They were not renamed: a hundred
+and fifty import paths changed to alter nothing that runs is a bad trade, and the
+rule is written at the top of `app/layout.tsx` and in section 0 of the spec
+instead.
+
+**The old site is frozen rather than kept.** `site/v2-archive` branches from
+`master` as it stood, which was the old site and nothing else, because none of
+the v2 work had been merged yet. Its one commit points `metadataBase`, the
+OpenGraph url and both card images at v2.jacksmith.me, sets the whole branch
+noindex, and replaces a robots.txt that advertised the apex's sitemap. Two
+copies of the same bio competing for the same queries helps neither.
+
+**What moved.** `app/v2/page.tsx` and its two stylesheets to `app/`,
+`app/v2/projects/*` to `app/projects/*`, and `app/v2/layout.tsx` merged into the
+root layout, which lost `globals.css`, the Inter font and the flat near-black on
+`<body>` along with the site those belonged to. Fourteen `href="/v2/..."` links
+became root paths. The old site's thirteen components, all fifty of
+`components/ui`, `hooks/`, `lib/utils.ts`, `lib/animations.ts` and
+`components.json` are gone: nothing outside them imported any of it.
+
+**Two things that would have shipped broken, both found by looking rather than
+reasoning:**
+
+- **The body margin was Tailwind's.** `globals.css` left with the old site, and
+  with it the preflight that was quietly zeroing the body margin and holding the
+  horizontal overflow. Every plate would have gained an 8px gutter. The reset is
+  now four lines at the top of `app/v2.css`, which also paints the paper ground
+  for the frame before `usePalette` writes `data-v2-theme`.
+- **A redirect would have eaten the totem.** The obvious rule is
+  `/v2/:path* → /:path*`. Next matches redirects **before** the filesystem, so
+  that one would also have caught `/v2/totem_of_undying.png`, which is a real
+  file that Pip's easter egg loads. The asset moved to `public/`, and the
+  redirects are listed one path at a time.
+
+**The benches are gone as routes.** `/v2/bench`, `/v2/awards`, `/v2/backdrops`,
+`/v2/skills` and `/v2/story` were working documents for one reader, and at the
+apex they would have been `/awards` and `/skills`, which read as sections of the
+site. Every component they mounted is still in `components/v2/`. All five paths
+redirect to the home page.
+
+**SEO, which had been noindex for the whole build.** The root layout and the
+fifteen project pages are indexable, each project page carries its own canonical,
+`/projects` got a layout because the index is a client component and could not
+carry a title of its own, and `public/sitemap.xml` — two hand-written URLs
+describing the old site — was replaced by `app/sitemap.ts`, generated from
+`lib/projects-data.ts`. Seventeen URLs, in step by construction.
+
+**Not done, and deliberately.** The OpenGraph card is the logo. `public/OG_image.png`
+is a photograph of the OLD site's hero, so it now advertises v2.jacksmith.me to
+anyone who shares this one, and a replacement wants a screenshot of this page.
+And `package.json` still carries gsap, framer-motion, every Radix package and
+Tailwind: after the deletion the only runtime imports left in the tree are react,
+next and `@vercel/analytics`, but pruning the manifest is a different change with
+a different way of going wrong.
+
 ## 2026-08-27 (latest) - two entries for one project, and the harness that could not see it
 
 Jack: *"On /projects, the project entry appears twice, I want the higher one

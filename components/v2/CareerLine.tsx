@@ -202,14 +202,14 @@ const ROLES: readonly Role[] = [
      */
     id: 'ucd',
     index: '02',
-    short: 'UCD, his own studio',
+    short: 'UCD, my own studio',
     from: 2025,
     to: 2025,
     period: '2025',
     role: 'Full Stack Developer',
-    org: 'UCD, his own web studio',
+    org: 'UCD, my own web studio',
     note:
-      'His own studio, run for real clients. Discovery, design, the full-stack build, deployment and the maintenance afterwards, the whole lifecycle carried by one pair of hands.',
+      'My own studio, run for real clients. Discovery, design, the full-stack build, deployment and the maintenance afterwards, the whole lifecycle on one pair of hands.',
   },
   {
     id: 'startup',
@@ -219,14 +219,23 @@ const ROLES: readonly Role[] = [
     to: 2026,
     partial: true,
     period: '2026',
-    /* "The AI startup was only in the first part of 2026." The record still
-       has no months, so the bar stays hatched: what is known is that it did
-       not fill the year, and where inside the year is his word, not a date. */
-    caveat: 'Early 2026, months not recorded',
+    /*
+     * TWO WEEKS, not the year. Jack, 2026-08-27: "The AI startup in London
+     * lasted for 2 weeks, not the whole year."
+     *
+     * The bar was already hatched, and the caveat already said the months were
+     * not recorded, but a hatched bar filling a whole cell on a nine-year axis
+     * still READS as most of a year — which is a considerably larger claim
+     * than the truth, and one nobody would make on purpose. The duration is
+     * now stated outright in the caveat, where it cannot be misread, and the
+     * hatch means what it should always have meant: a fortnight inside a cell
+     * that is the smallest the axis can draw.
+     */
+    caveat: 'Two weeks, early 2026',
     role: 'Software Engineer, short term',
     org: 'Early-stage AI startup, London',
     note:
-      'An internal API laid over systems that did not talk to each other. He rewrote several Cloudflare Workers including the GitHub syncing, then delivered a dashboard, a CLI and an MCP server on top of it.',
+      'Two weeks, and an internal API laid over systems that did not talk to each other. I rewrote several Cloudflare Workers including the GitHub syncing, then delivered a dashboard, a CLI and an MCP server on top of it.',
   },
   {
     /*
@@ -321,7 +330,6 @@ export interface CareerLineProps {
 
 export default function CareerLine({ className }: CareerLineProps) {
   const headingId = useId();
-  const captionId = useId();
   const degreeId = useId();
   const rootRef = useRef<HTMLElement | null>(null);
 
@@ -402,8 +410,7 @@ export default function CareerLine({ className }: CareerLineProps) {
           {ROLE_COUNT_WORD} roles and a degree on one time axis, a column to the
           year. They do not queue up behind each other: the studio was taking
           real clients while the dissertation was still open, and by {peakYear}{' '}
-          there were {peak} things running at once. The plate is drawn at the
-          resolution the record actually has, which is the year.
+          there were {peak} things running at once.
         </p>
       </header>
 
@@ -579,7 +586,7 @@ export default function CareerLine({ className }: CareerLineProps) {
           onBlur={() => setLit((c) => (c === DEGREE.id ? null : c))}
         >
           <span className="v2-career-degreeline-key">Underneath all of it</span>
-          BSc Computer Science, University of Sheffield, 2023 to 2026. He
+          BSc Computer Science, University of Sheffield, 2023 to 2026. I
           graduated with a first. Every role above sits inside that span.
         </p>
 
@@ -612,18 +619,18 @@ export default function CareerLine({ className }: CareerLineProps) {
           ))}
         </ol>
 
-        <figcaption className="v2-career-caption" id={captionId}>
-          <span className="v2-career-caption-rule" />
-          One column is one calendar year. The record keeps years and not
-          months, so a bar fills the cells it touches and claims nothing inside
-          them: a filled cell means that year, not the whole of it. The hatched
-          bar was short term within 2026 and its months were never written down.
-          An open terminus means no end date on the record rather than an end
-          date left off. The bracket under the degree marks the year he
-          graduated for the same reason, an interval rather than a point.
-          Hovering or focusing a role draws its start and end down through the
-          other tracks.
-        </figcaption>
+        {/*
+          THE CAPTION IS GONE. Jack, 2026-08-27: "It also doesn't need that
+          last prose 'One column is one calendar year....'"
+
+          It was eight lines of mono explaining the plate's own conventions to
+          a reader who had already read the plate: that a column is a year,
+          that a hatched bar is shorter than its cell, that an open terminus
+          means no end date. Every one of those is either obvious from looking
+          at it or now stated in the entry it belongs to — the fortnight in
+          London is written into that role's caveat rather than deduced from a
+          hatch pattern via a footnote.
+        */}
       </figure>
     </section>
   );

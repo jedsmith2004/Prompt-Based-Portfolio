@@ -48,6 +48,8 @@ import Companion from './Companion';
 import { dressFor } from '@/lib/v2/projectPages';
 import { askJack } from '@/lib/v2/ask';
 import { storyFor } from '@/lib/v2/projectStories';
+import ScrollReveal from './text/ScrollReveal';
+import ShinyText from './text/ShinyText';
 
 export interface ProjectStoryProps {
   project: Project;
@@ -157,7 +159,7 @@ export default function ProjectStory({
             <p className="v2-eyebrow">
               {String(index).padStart(2, '0')} <b>/</b> {String(total).padStart(2, '0')} PROJECT
             </p>
-            <Link href="/v2/projects" className="v2-story-back">
+            <Link href="/projects" className="v2-story-back">
               Every project
             </Link>
           </div>
@@ -208,7 +210,11 @@ export default function ProjectStory({
                   target={l.href.startsWith('/') ? undefined : '_blank'}
                   rel={l.href.startsWith('/') ? undefined : 'noreferrer noopener'}
                 >
-                  {l.label}
+                  {/* The sheen is on the lead link only, and only on hover:
+                      it is the one thing on the page a reader is most likely
+                      to be looking for. See ShinyText for why nothing here
+                      runs at rest. */}
+                  {l.lead ? <ShinyText>{l.label}</ShinyText> : l.label}
                 </a>
               ))}
             </p>
@@ -263,8 +269,13 @@ export default function ProjectStory({
                   >
                     {sec.heading}
                   </h2>
+                  {/* Set word by word as the column is scrolled through, the
+                      same as the clipping articles. These two page types are
+                      the only long reads on the site and they should behave
+                      identically; the spine's plates are short and already
+                      have a masked title doing the arriving. */}
                   {sec.body.map((para) => (
-                    <p key={para.slice(0, 40)}>{para}</p>
+                    <ScrollReveal key={para.slice(0, 40)} text={para} />
                   ))}
                   {/* The pull sits after the SECOND section rather than at the
                       top, because it is a line lifted out of the article and a
@@ -317,7 +328,7 @@ export default function ProjectStory({
         <div className="v2-wrap">
           <nav className="v2-story-nav" aria-label="Other projects">
             {prev ? (
-              <Link href={`/v2/projects/${prev.id}`} className="is-prev" data-perch>
+              <Link href={`/projects/${prev.id}`} className="is-prev" data-perch>
                 <i aria-hidden="true">Newer</i>
                 <span>{prev.title}</span>
               </Link>
@@ -325,7 +336,7 @@ export default function ProjectStory({
               <span />
             )}
             {next ? (
-              <Link href={`/v2/projects/${next.id}`} className="is-next" data-perch>
+              <Link href={`/projects/${next.id}`} className="is-next" data-perch>
                 <i aria-hidden="true">Older</i>
                 <span>{next.title}</span>
               </Link>
@@ -335,8 +346,8 @@ export default function ProjectStory({
           </nav>
 
           <div className="v2-story-foot" data-perch>
-            <Link href="/v2">Back to the front</Link>
-            <Link href="/v2/projects">Every project</Link>
+            <Link href="/">Back to the front</Link>
+            <Link href="/projects">Every project</Link>
           </div>
         </div>
       </main>

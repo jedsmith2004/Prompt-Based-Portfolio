@@ -372,7 +372,7 @@ function objectFor(desc: string): Solid[] {
  * intent for whoever draws the next one.
  *
  * A second object can go back in when there is a treatment that can hold it.
- * The trophy-case plate on /v2/awards puts five on one ellipse legibly, and it
+ * The trophy-case plate (AwardsCase) puts five on one ellipse legibly, and it
  * does that by giving each one its own plinth and a lot more cells.
  */
 function buildScene(collage: readonly string[]): Solid[] {
@@ -1082,10 +1082,10 @@ export default function HighlightReel({ className, height = 400 }: HighlightReel
           components/v2/Companion.tsx.
         */}
         <p className="v2-reel-go" data-perch>
-          <Link href={`/v2/projects/${project.id}`} className="is-lead">
+          <Link href={`/projects/${project.id}`} className="is-lead">
             Open {project.title}
           </Link>
-          <Link href="/v2/projects">Every project</Link>
+          <Link href="/projects">Every project</Link>
         </p>
       </div>
 

@@ -44,208 +44,33 @@
    ========================================================================== */
 
 import { useEffect, useId, useRef } from 'react';
+import Link from 'next/link';
 import { mulberry32, rgba, toRgb } from './backdrops/types';
 import { onPaletteChange, paletteTokens, type PaletteTokens } from '@/lib/v2/paletteWatch';
+/* The stories moved to lib/v2/clippings.ts when they gained a second and third
+   consumer: this wall, the index at /clippings, and one article page each. See
+   the header of that file. */
+import {
+  STORIES,
+  POSTINGS,
+  T_TOP,
+  T_RIGHT,
+  T_BOTTOM,
+  T_LEFT,
+  type Story,
+  type Fastener
+} from '@/lib/v2/clippings';
 
 /* ------------------------------------------------------------------- types */
 
 type Rgb = [number, number, number];
 type Ctx = CanvasRenderingContext2D;
 
-/** Torn-edge bitmask: 1 top, 2 right, 4 bottom, 8 left. */
-const T_TOP = 1;
-const T_RIGHT = 2;
-const T_BOTTOM = 4;
-const T_LEFT = 8;
-
 const TAU = Math.PI * 2;
-
-/** How the cutting is fixed to the wall. */
-type Fastener = 'tape' | 'tape2' | 'pin';
-
-/** How much room the story is given on the wall. */
-type Weight = 'lead' | 'story' | 'brief';
-
-/** The halftone block: where a photograph would have run. */
-type Cut = 'wide' | 'block' | null;
-
-interface Story {
-  id: string;
-  /** The award title, set as the headline. */
-  headline: string;
-  /** 'Cash Prize', '1st Place'. Runs in the dateline, in vermilion. */
-  place: string;
-  date: string;
-  /** Machine-readable form of `date`, for <time>. */
-  iso: string;
-  /** The citation, verbatim from public/context.json. */
-  citation: string;
-  /**
-   * A phrase inside `citation` to set off, the way a reader underlines the
-   * line that made them keep the cutting. Must appear in `citation` exactly.
-   */
-  emph?: string;
-  badges: string[];
-  weight: Weight;
-  cut: Cut;
-  /** Pinned by hand, so nothing is square. Fixed, never random at runtime. */
-  rot: number;
-  /** Seeds the tear, the grain and the creases. */
-  seed: number;
-  torn: number;
-  fastener: Fastener;
-}
-
-interface Posting {
-  role: string;
-  company: string;
-  period: string;
-  /** One line, compressed from the description in public/context.json. */
-  line: string;
-}
 
 export interface AwardsClippingsProps {
   className?: string;
 }
-
-/* ------------------------------------------------------------------- data */
-
-/* Five awards, in the order they were won. Titles, places, dates, citations
-   and badges are lifted straight from public/context.json -> awards[]. The
-   only editorial act is the headline for the first: its title carries "Cash
-   Prize" and the dateline already says so, so it is not set twice. */
-const STORIES: Story[] = [
-  {
-    id: 'lens',
-    headline: 'Snapchat Lens Competition',
-    place: 'Cash Prize',
-    date: 'March 2022',
-    iso: '2022-03',
-    citation:
-      'Created a Snapchat lens used over 1 million times, securing £1500 for school technology resources as a top-performing creative entry.',
-    emph: 'used over 1 million times',
-    badges: ['AR', 'INNOVATION', 'IMPACT'],
-    weight: 'lead',
-    cut: 'block',
-    rot: -1.2,
-    seed: 10427,
-    torn: T_BOTTOM | T_RIGHT,
-    fastener: 'tape2'
-  },
-  {
-    id: 'dragons',
-    headline: "Dragon's Apprentice Challenge",
-    place: '1st Place',
-    date: 'March 2022',
-    iso: '2022-03',
-    citation:
-      'Led a winning charity venture that multiplied a £100 seed fund through events including a balloon race, auction, and milkshake stand, and received a creativity award.',
-    emph: 'multiplied a £100 seed fund',
-    badges: ['LEADERSHIP', 'CHARITY', 'ENTREPRENEUR'],
-    weight: 'story',
-    cut: null,
-    rot: 1.5,
-    seed: 20915,
-    torn: T_LEFT | T_BOTTOM,
-    fastener: 'tape'
-  },
-  {
-    id: 'speaking',
-    headline: 'Public Speaking Competition',
-    place: '2nd Place',
-    date: 'March 2023',
-    iso: '2023-03',
-    citation:
-      'Delivered a talk on the legalisation of psychedelics to an audience including an RAF Officer, a police lieutenant, and an advisor to the Prime Minister.',
-    emph: 'an advisor to the Prime Minister',
-    badges: ['ADVOCACY', 'COMMUNICATION', 'STAGE'],
-    weight: 'story',
-    /* No picture. `cut: 'wide'` fell through to the bare `.v2-clip-cut`
-       band, which is a full-measure block 118px tall dropped between the
-       headline and the citation -- 136px of nothing in the middle of four
-       lines of copy, on exactly this cutting and one other, and on no others.
-       There has never been an `.is-cut-wide` rule to make it behave.
-
-       > "It's only the public speaking competition and engineering you're
-       >  hired ones that had the gaps in their text!"
-
-       Those two, and those two only, are the ones that carried it. */
-    cut: null,
-    rot: -1.6,
-    seed: 31338,
-    torn: T_TOP | T_RIGHT,
-    fastener: 'pin'
-  },
-  {
-    id: 'hacksheffield',
-    headline: 'hackSheffield 9',
-    place: '1st Place',
-    date: 'November 2024',
-    iso: '2024-11',
-    citation:
-      'Won best GitHub repository award by engineering strong project structure, documentation, and developer experience, resulting in the top-scoring repository.',
-    emph: 'best GitHub repository award',
-    badges: ['OPEN-SOURCE', 'ENGINEERING', 'DX'],
-    weight: 'story',
-    cut: null,
-    rot: 1.1,
-    seed: 44201,
-    torn: T_TOP | T_LEFT,
-    fastener: 'tape'
-  },
-  {
-    id: 'hired',
-    headline: "Engineering You're Hired",
-    place: '3rd Place',
-    date: 'March 2025',
-    iso: '2025-03',
-    citation:
-      'Designed a pipe inspection and repair concept using decentralised swarm robotics, contributing swarm behaviour mechanics and AI-based visual inspection ideas.',
-    emph: 'decentralised swarm robotics',
-    badges: ['SWARM', 'ROBOTICS', 'AI'],
-    weight: 'brief',
-    /* No picture. `cut: 'wide'` fell through to the bare `.v2-clip-cut`
-       band, which is a full-measure block 118px tall dropped between the
-       headline and the citation -- 136px of nothing in the middle of four
-       lines of copy, on exactly this cutting and one other, and on no others.
-       There has never been an `.is-cut-wide` rule to make it behave.
-
-       > "It's only the public speaking competition and engineering you're
-       >  hired ones that had the gaps in their text!"
-
-       Those two, and those two only, are the ones that carried it. */
-    cut: null,
-    rot: -1.7,
-    seed: 51066,
-    torn: T_TOP | T_BOTTOM,
-    fastener: 'pin'
-  }
-];
-
-/* The appointments column. A press wall carries one, set narrow beside the
-   stories: who took which post, and when. Roles, companies and periods are
-   verbatim from public/context.json -> experience[]; each line is a
-   compression of that entry's own description, nothing added. */
-const POSTINGS: Posting[] = [
-  {
-    role: 'Missions Engineer',
-    company: 'Project Falcon',
-    period: '2023 to 2024',
-    line: 'Real-time analytics dashboard on scalable backend infrastructure.'
-  },
-  {
-    role: 'Full Stack Developer',
-    company: 'UCD',
-    period: '2025 to present',
-    line: 'Founded a web studio. Discovery and design through deployment.'
-  },
-  {
-    role: 'Software Engineer',
-    company: 'AI startup, London',
-    period: '2026',
-    line: 'Internal API, Cloudflare Workers, a CLI, a dashboard, an MCP server.'
-  }
-];
 
 /* ------------------------------------------------------------------- paint */
 
@@ -794,7 +619,12 @@ function Cutting({ story, z }: { story: Story; z: number }) {
       ref={hostRef}
       className={`v2-clip is-${story.weight}${story.cut ? ` has-cut is-cut-${story.cut}` : ''}`}
       style={{ '--rot': `${story.rot}deg`, '--z': z } as React.CSSProperties}
-      tabIndex={0}
+      /*
+       * NO `tabIndex` ANY MORE. The cutting used to be a focusable div that
+       * went nowhere, which is the worst of both: a tab stop that does not
+       * reward being tabbed to. It has a destination now, so the HEADLINE is
+       * the link and it is the only focusable thing on the sheet.
+       */
       aria-labelledby={headId}
       /*
        * data-perch. This plate is three and a half thousand pixels tall and
@@ -821,8 +651,20 @@ function Cutting({ story, z }: { story: Story; z: number }) {
           <time dateTime={story.iso}>{story.date}</time>
         </p>
 
+        {/*
+          THE HEADLINE IS THE DOOR. Jack, 2026-08-27: "The newspaper clippings
+          should lead to their own article/blog pages on this site."
+
+          A real anchor round the headline rather than a click handler on the
+          sheet, so it is a link in every sense: middle-clickable, openable in
+          a new tab, announced as a link, and reachable by keyboard in reading
+          order. The rest of the cutting is made clickable by a stretched
+          `::after` on this anchor (see `.v2-clip-head a` in v2.css), which
+          gives the whole sheet the hit area without inventing a second
+          control that does the same thing.
+        */}
         <h3 className="v2-clip-head" id={headId}>
-          {story.headline}
+          <Link href={`/clippings/${story.id}`}>{story.headline}</Link>
         </h3>
 
         {story.cut ? <span className="v2-clip-cut" ref={cutRef} aria-hidden="true" /> : null}
@@ -834,6 +676,13 @@ function Cutting({ story, z }: { story: Story; z: number }) {
             <li key={b}>{b}</li>
           ))}
         </ul>
+
+        {/* The affordance. `aria-hidden` because the headline link already
+            says where it goes, and a screen reader does not need to be told
+            "read the story" a second time by a decoration. */}
+        <p className="v2-clip-more" aria-hidden="true">
+          Read the story →
+        </p>
       </div>
     </li>
   );

@@ -827,7 +827,7 @@ export default function SkillConstellation({
           {projects.map((c) => (
             <Link
               key={c.id}
-              href={`/v2/projects/${c.id}`}
+              href={`/projects/${c.id}`}
               prefetch={false}
               className={`v2-const-card${highlightedProjects.includes(c.id) ? ' is-on' : ''}`}
               aria-label={`Read the ${c.title} project story`}

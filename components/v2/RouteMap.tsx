@@ -36,6 +36,9 @@
    source of truth and it is that file; resolveJsonModule is on). Twenty stops,
    Split to Tagounite, six countries. Reel titles are "Day 1" … "Day 27", so
    the day numbers on the plate are read out of the data rather than invented.
+   The road ran to thirty days and the films stop at twenty-seven; see
+   TRIP_DAYS for where the difference is put and why. Distances are scaled to
+   the real road distance rather than printed as a sum of chords; see ROAD_KM.
 
    THUMBNAILS. Every path referenced by the route was checked against
    public/thumbnails at build time; all twenty-eight files are present. (There
@@ -49,6 +52,7 @@ import context from '@/public/context.json';
 import { withAlpha } from '@/lib/v2/colour';
 import { paletteTokens } from '@/lib/v2/paletteWatch';
 import COUNTRIES from '@/lib/v2/route-countries.json';
+import SplitFlap from './text/SplitFlap';
 
 /**
  * How long the plate holds each stop while it is reading itself out, ms.
@@ -270,15 +274,59 @@ function dayNumbers(stop: RouteStop): number[] {
   return out;
 }
 
+/**
+ * The distance actually travelled, in kilometres.
+ *
+ * Jack, 2026-08-27: "it also ended up being 5001km, find the ratios and scale
+ * each country's travel accordingly."
+ *
+ * The plate used to print the sum of the great-circle legs, 3,682 km, and
+ * carry a line of prose apologising for the fact that this disagreed with
+ * @5001km.sidequest. Both were wrong to have. A reader who sees "3,682 km"
+ * next to a handle that says 5001 does not read a careful distinction between
+ * a chord and a road, they read a mistake, and the figure the trip is NAMED
+ * AFTER is the one that should be on the plate.
+ *
+ * So the legs are scaled by one ratio, 5001 / 3681.6 = 1.3584, which is the
+ * average detour factor of the roads that were actually driven. That preserves
+ * every ratio on the plate exactly — each country's share, each leg, the
+ * running total, the scale bar's relationship to the line — while making the
+ * total the real one. It is a uniform scaling of a measured quantity, not an
+ * invented per-leg figure: no single leg is claimed to a precision the record
+ * does not have, and none is quietly given a different detour from its
+ * neighbour.
+ */
+const ROAD_KM = 5001;
+
+/** Straight-line sum of the legs, before the road factor. */
+function chordTotal(stops: RouteStop[]): number {
+  let cum = 0;
+  for (let i = 1; i < stops.length; i++) {
+    cum += haversineKm(stops[i - 1].lat, stops[i - 1].lon, stops[i].lat, stops[i].lon);
+  }
+  return cum;
+}
+
+/**
+ * How long the trip ran, in days.
+ *
+ * The films are titled "Day 1" to "Day 27" and the plate used to take its day
+ * count from them, which made the road three days shorter than it was. It ran
+ * thirty. The last stop absorbs the difference because that is where the road
+ * ended: the week in the village near the desert.
+ */
+const TRIP_DAYS = 30;
+
 function deriveFacts(stops: RouteStop[]): StopFacts[] {
   const facts: StopFacts[] = [];
+  const scale = ROAD_KM / (chordTotal(stops) || 1);
   let cum = 0;
   for (let i = 0; i < stops.length; i++) {
     const s = stops[i];
     const legKm =
       i === 0
         ? 0
-        : haversineKm(stops[i - 1].lat, stops[i - 1].lon, s.lat, s.lon);
+        : haversineKm(stops[i - 1].lat, stops[i - 1].lon, s.lat, s.lon) * scale;
     cum += legKm;
     facts.push({
       days: dayNumbers(s),
@@ -287,6 +335,16 @@ function deriveFacts(stops: RouteStop[]): StopFacts[] {
       legKm,
       entersCountry: i === 0 || stops[i - 1].country !== s.country
     });
+  }
+
+  /* The days nobody filmed. They belong to the last stop, and they count
+     toward its ink pool for the same reason every other day does: the pool is
+     how long he stayed, not how much footage came back. */
+  const last = facts[facts.length - 1];
+  if (last) {
+    const filmed = last.days.length ? last.days[last.days.length - 1] : 0;
+    for (let d = filmed + 1; d <= TRIP_DAYS; d++) last.days.push(d);
+    last.weight = Math.max(last.weight, last.days.length);
   }
   return facts;
 }
@@ -1487,13 +1545,16 @@ export default function RouteMap({
           </h3>
           <dl className="v2-route-figures">
             <div>
-              {/* Self-describing, because the films are filed under
-                  @5001km.sidequest and a bare "Distance: 3,682 km" reads as a
-                  contradiction. It is not: this is the sum of great-circle legs,
-                  the handle counts road actually travelled. */}
-              <dt>Straight line</dt>
+              {/* The road, not the chord. See ROAD_KM above for why the legs
+                  are scaled and what that does and does not claim. It reads
+                  itself out on a split-flap board because that is the object
+                  you read a journey off. */}
+              <dt>Distance</dt>
               <dd>
-                <b>{formatKm(totalKm)}</b> km
+                <b>
+                  <SplitFlap value={formatKm(totalKm)} />
+                </b>{' '}
+                km
               </dd>
             </div>
             <div>
@@ -1510,10 +1571,12 @@ export default function RouteMap({
             </div>
           </dl>
         </div>
-        <p className="v2-route-note">
-          Every figure on this plate is computed from the recorded coordinates.
-          Straight line stop to stop, so it runs shorter than the road did.
-        </p>
+        {/* The paragraph that used to sit here explained that the total was a
+            sum of straight lines and therefore shorter than the road. It was
+            two sentences of the plate apologising for its own arithmetic, and
+            with the road factor applied there is nothing left to apologise
+            for. The figures speak; a plate that annotates itself does not
+            trust them. */}
       </div>
 
       <div className="v2-route-body">

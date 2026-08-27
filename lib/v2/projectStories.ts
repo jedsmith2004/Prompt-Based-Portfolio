@@ -418,8 +418,8 @@ export const PROJECT_STORIES: Record<string, ProjectStoryContent> = {
       {
         heading: 'From hackathon to app',
         body: [
-          'It started at hackSheffield 9 in November 2024, where Jack\'s four-person ' +
-          'team took first place for Best GitHub Repo, an award for project structure, ' +
+          'It started at hackSheffield 9 in November 2024, where our four-person team ' +
+          'took first place for Best GitHub Repo, an award for project structure, ' +
           'documentation and developer experience. Neighbourly is what that entry ' +
           'became once it had to survive being deployed: a SvelteKit 5 front end, a ' +
           'Flask and SQLAlchemy API, and PostgreSQL on Neon, completed in January 2026.',
@@ -461,8 +461,9 @@ export const PROJECT_STORIES: Record<string, ProjectStoryContent> = {
   },
   'interactive-ai-portfolio': {
     standfirst:
-      'The site this page belongs to. Its hero is a question box, answered by a ' +
-      'model handed a system prompt assembled from Jack\'s own structured data.',
+      'The second version of this site, kept at v2.jacksmith.me now that this one ' +
+      'has the apex. Its hero is a question box, answered by a model handed a ' +
+      'system prompt assembled from my own structured data.',
     shelf: [
       { value: 'DeepSeek', label: 'the only provider' },
       { value: '14', label: 'messages of history sent' },
@@ -491,7 +492,7 @@ export const PROJECT_STORIES: Record<string, ProjectStoryContent> = {
           'project with its tech, links and dates, the experience, the awards and the ' +
           'contact details into one string.',
           'The guardrails come in near the end, marked as overriding everything above ' +
-          'them. They are the sharp edges: Jack has graduated, so never say final year; ' +
+          'them. They are the sharp edges: I have graduated, so never say final year; ' +
           'Recensorium is deployed but pre-launch, so never imply users or growth; ' +
           'MotionGen is not on the Asset Store; if you do not know a number, say so ' +
           'rather than estimating it.',
@@ -538,13 +539,13 @@ export const PROJECT_STORIES: Record<string, ProjectStoryContent> = {
       {
         heading: 'Eight plates and a hero',
         body: [
-          'A rebuild is running alongside it at /v2, a scroll spine of a hero and eight ' +
-          'plates. Each plate has its own palette and its own world running behind the ' +
-          'type, and no world is used twice. The interactive pieces are the thing ' +
-          'itself rather than a picture of one: a trained 784-64-10 network you can ' +
-          'draw a digit into, and the real coordinates of the hitchhiking route. A ' +
-          'pixel sparrow called Pip perches on marked up furniture and rides the page ' +
-          'as it scrolls.',
+          'The rebuild that replaced it is the page you are reading: a scroll spine of ' +
+          'a hero and eight plates. Each plate has its own palette and its own world ' +
+          'running behind the type, and no world is used twice. The interactive pieces ' +
+          'are the thing itself rather than a picture of one: a trained 784-64-10 ' +
+          'network you can draw a digit into, and the real coordinates of the ' +
+          'hitchhiking route. A pixel sparrow called Pip perches on marked up ' +
+          'furniture and rides the page as it scrolls.',
         ]
       },
     ],
@@ -598,7 +599,7 @@ export const PROJECT_STORIES: Record<string, ProjectStoryContent> = {
         body: [
           'The project is marked in progress and dated July 2025. It sits in a longer ' +
           'line of local inference work: MotionGen runs its models entirely locally ' +
-          'inside the Unity editor, and Jack gives the wider ambition as private, local ' +
+          'inside the Unity editor, and what I am actually aiming at is private, local ' +
           'AI tools for individuals and businesses.',
         ]
       },
@@ -661,9 +662,9 @@ export const PROJECT_STORIES: Record<string, ProjectStoryContent> = {
       {
         heading: 'The studio behind it',
         body: [
-          'This came out of UCD, the small web studio Jack founded and ran himself, ' +
-          'delivering websites and SEO to local Sheffield businesses while he was still ' +
-          'at university. He carried the whole lifecycle on those jobs: client ' +
+          'This came out of UCD, the small web studio I founded and ran on my own, ' +
+          'delivering websites and SEO to local Sheffield businesses while I was still ' +
+          'at university. I carried the whole lifecycle on those jobs: client ' +
           'discovery, design, the full-stack build, deployment, and the maintenance ' +
           'afterwards. The studio ran for 2025 and is closed.',
         ]
@@ -791,10 +792,9 @@ export const PROJECT_STORIES: Record<string, ProjectStoryContent> = {
         heading: 'Finding the leak',
         body: [
           'Leak detection was specified as three sensing methods rather than one: ' +
-          'vision, LiDAR and ultrasonic. The award entry on his CV credits him with the ' +
-          'swarm behaviour mechanics and the AI-based visual inspection ideas, which is ' +
-          'the vision part of that stack. Engineering You\'re Hired placed the project ' +
-          'third in March 2025.',
+          'vision, LiDAR and ultrasonic. My part of it was the swarm behaviour ' +
+          'mechanics and the AI-based visual inspection, which is the vision half of ' +
+          'that stack. It placed third at Engineering You\'re Hired in March 2025.',
         ]
       },
       {
@@ -804,8 +804,8 @@ export const PROJECT_STORIES: Record<string, ProjectStoryContent> = {
           'the awkward cases: rescuing a stuck unit, taking a corner, handling a ' +
           'disconnection, recovering afterwards. Around those sat CAD concepts, CFD ' +
           'simulations, electrical and technical drawings, and a business plan aimed at ' +
-          'industry. Jack learned Blender from scratch inside the hack week to produce ' +
-          'the system animations, which is how the design got explained.',
+          'industry. I learned Blender from scratch inside the hack week to produce the ' +
+          'system animations, which is how the design got explained at all.',
         ]
       },
     ],
@@ -826,7 +826,7 @@ export const PROJECT_STORIES: Record<string, ProjectStoryContent> = {
   },
   'old-personal-portfolio': {
     standfirst:
-      'The portfolio before this one: a Next.js site with its content in Prismic, ' +
+      'The first version of this site: a Next.js build with its content in Prismic, ' +
       'and Three.js with custom GLSL in the hero. Shipped December 2024.',
     shelf: [
       { value: 'Dec 2024', label: 'shipped' },
@@ -835,13 +835,13 @@ export const PROJECT_STORIES: Record<string, ProjectStoryContent> = {
     ],
     sections: [
       {
-        heading: 'The site before this one',
+        heading: 'The first version',
         body: [
           'A personal site on Next.js and React in TypeScript, with the content living ' +
           'in Prismic rather than in the repository. Tailwind and PostCSS handled the ' +
           'styling, Cloudflare handled image delivery, GSAP handled the motion, and ' +
           'Three.js put 3D on the page. It shipped in December 2024, it kept its own ' +
-          'address at old-portfolio.jacksmith.me, and the source is public.',
+          'address at v1.jacksmith.me, and the source is public.',
         ]
       },
       {
@@ -1036,9 +1036,9 @@ export const PROJECT_STORIES: Record<string, ProjectStoryContent> = {
         body: [
           'The vector and matrix types are the real subject. Writing them puts the ' +
           'transforms, the perspective projection and the camera rotation into visible ' +
-          'code rather than into a call. Jack\'s own account of the project is exactly ' +
-          'that: implementing the full pipeline, projection and z-buffering included, ' +
-          'gave him a deeper understanding of how GPUs operate at a low level.',
+          'code rather than into a call. That was the whole point of it: implementing ' +
+          'the full pipeline, projection and z-buffering included, is what gave me a ' +
+          'deeper understanding of how a GPU actually operates at a low level.',
         ]
       },
       {

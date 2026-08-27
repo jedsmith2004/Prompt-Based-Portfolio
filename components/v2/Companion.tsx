@@ -1624,7 +1624,10 @@ export default function Companion({
        than approximated in the sprite alphabet so every source pixel survives. */
     const totemTexture = new Image();
     totemTexture.decoding = 'async';
-    totemTexture.src = '/v2/totem_of_undying.png';
+    /* Was /v2/totem_of_undying.png. It moved out of public/v2 when the site
+       took the apex: /v2 is the archive's address now, and a redirect from it
+       would have eaten the request for this file. */
+    totemTexture.src = '/totem_of_undying.png';
 
     /* Rasterised once, like everything else the compositor draws. Null means
        the swap can never engage, which is the correct way for it to fail. */
@@ -4328,8 +4331,16 @@ export default function Companion({
      * set is signed off rather than five numbers to remember to put back.
      * ---------------------------------------------------------------------- */
 
-    /** Turn this off when the set pieces have been seen and signed off. */
-    const BIT_IMPATIENT = true;
+    /**
+     * Turn this off when the set pieces have been seen and signed off.
+     *
+     * SIGNED OFF, 2026-08-27. Jack: "Make the easter egg animations less
+     * common again, I'm happy with them." So this is the one line going back,
+     * exactly as the note above promised it would be: the gates, the odds and
+     * the cooldown all return to their authored values at once rather than
+     * five numbers being remembered individually.
+     */
+    const BIT_IMPATIENT = false;
     /** What IMPATIENT does to the wait, the odds and the quiet after. */
     const RUSH = BIT_IMPATIENT
       ? { settle: 0.18, rate: 5, cool: 0.15, bttf: 0.1 }
@@ -4456,6 +4467,29 @@ export default function Companion({
       bit.ay = bird.y;
       bit.bx = bird.x;
       bit.by = bird.y;
+
+      /*
+       * AND THEN IMMEDIATELY MOVE THEM OFF HIM, BEFORE ANYTHING IS DRAWN.
+       *
+       * Jack, 2026-08-27: "When the easter eggs appear, like the car or
+       * creeper, they flash behind pip before the animation starts."
+       *
+       * They did, and the four lines above are why. The set pieces are rolled
+       * from the main loop AFTER `tickBit` has already run for this frame, so
+       * a bit started here got no tick until the NEXT frame -- and the draw
+       * pass in between painted the creeper and the DeLorean at the seed
+       * coordinates, which are the bird's own. One frame of a whole car
+       * sitting on top of him, every single time, before it jumped off the
+       * side of the page to begin its entrance properly.
+       *
+       * The seeds stay, because they are what makes the fields defined for a
+       * bit whose tick has not been written yet. They are simply no longer
+       * what anybody sees: `placeBit` runs the timeline at t = 0, which puts
+       * the creeper at the top of its fall and the car off the edge of the
+       * screen, without firing any of the beats.
+       */
+      placeBit();
+
       bird.alpha = 1;
       setMode('bit');
       startAnim('lookAtViewer');
@@ -4497,6 +4531,40 @@ export default function Companion({
       } else {
         bit.t = Math.max(bit.t, BIT_LEN[bit.name] - BIT_FADE_MS);
       }
+    }
+
+    /**
+     * Put the actors where the timeline says they are RIGHT NOW, and do not
+     * run any of the beats.
+     *
+     * Every tick function below is written placement-first: it computes the
+     * props' positions and only then hits `if (!bit.holds) return;` before the
+     * part that starts animations and makes him talk. `holds` is therefore
+     * already the exact seam between "where things are" and "what things do",
+     * and this borrows it for one call so a bit can be positioned without
+     * being performed.
+     */
+    function placeBit() {
+      const held = bit.holds;
+      bit.holds = false;
+      switch (bit.name) {
+        case 'creeper':
+          tickCreeper();
+          break;
+        case 'bttf':
+          tickBttf();
+          break;
+        case 'lantern':
+          tickLantern();
+          break;
+        case 'gift':
+          tickGift();
+          break;
+        case 'egg':
+          tickEgg();
+          break;
+      }
+      bit.holds = held;
     }
 
     function tickBit(dt: number) {
