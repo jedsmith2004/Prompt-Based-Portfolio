@@ -37,7 +37,9 @@
    ========================================================================== */
 
 import { useMemo } from 'react';
+import Link from 'next/link';
 import { projects as PROJECTS, type Project } from '@/lib/projects-data';
+import { FEATURED_PROJECTS } from '@/lib/v2/content';
 import {
   SpecimenCase,
   box,
@@ -515,24 +517,60 @@ function monthKey(date: string): number {
   return Number(m[2]) * 12 + mi;
 }
 
+/**
+ * The one written line about each project, where there is one.
+ *
+ * FEATURED_PROJECTS carries a `hook` for the five the spine used to lead with:
+ * a sentence written to be read, rather than the opening of a catalogue entry.
+ * Preferring it costs nothing and reads better than truncating a description
+ * at its first full stop, which is what the other ten still get.
+ */
+const HOOKS: Record<string, string> = Object.fromEntries(
+  FEATURED_PROJECTS.map((f) => [f.id, f.hook])
+);
+
 export interface ProjectCaseProps {
   className?: string;
+  /**
+   * 'index'  the head of /v2/projects. Every project on screen beside the
+   *          carousel, and choosing one raises its entry below.
+   * 'reel'   the spine. Three objects, arrows, and the way in.
+   *
+   * > "can you just lift the carousel from the 'all projects' page but only
+   * >  keep the two either side and be able to use the arrow buttons and the
+   * >  horizontal scroll if the user has it"
+   *
+   * So it is one component with two dresses rather than two components that
+   * drift. The reel is the same fifteen objects, the same pipeline and the
+   * same ring: it just lights a window of three and hands you the arrows.
+   */
+  variant?: 'index' | 'reel';
+  /** Fires when a project is CHOSEN. See SpecimenCase.onChoose. */
+  onChoose?: (id: string, index: number) => void;
+  /** The chosen project's id, if the caller tracks one. */
+  chosenId?: string;
 }
 
-export default function ProjectCase({ className }: ProjectCaseProps) {
+export default function ProjectCase({
+  className,
+  variant = 'index',
+  onChoose,
+  chosenId
+}: ProjectCaseProps) {
   const entries = useMemo<readonly CaseEntry[]>(() => {
     const sorted = PROJECTS.slice().sort((a, b) => monthKey(b.date) - monthKey(a.date));
     return sorted.map((p) => {
       const spec = specFor(p);
       /* The index below already carries the full description; the citation
-         gets the first sentence, which is the one that says what it is. */
+         gets the hook if the project has one and the first sentence if not,
+         which is the one that says what it is. */
       const dot = p.description.indexOf('. ');
       return {
         key: p.id,
         meta: p.status === 'in-progress' ? 'In progress' : 'Shipped',
         title: p.title,
         date: p.date,
-        body: dot > 40 ? p.description.slice(0, dot + 1) : p.description,
+        body: HOOKS[p.id] ?? (dot > 40 ? p.description.slice(0, dot + 1) : p.description),
         badges: p.tech.slice(0, 5),
         specimen: spec.label,
         build: spec.build
@@ -540,23 +578,73 @@ export default function ProjectCase({ className }: ProjectCaseProps) {
     });
   }, []);
 
+  const reel = variant === 'reel';
+
   return (
     <SpecimenCase
       className={className}
-      idPrefix="v2-case-projects"
+      idPrefix={reel ? 'v2-case-reel' : 'v2-case-projects'}
       entries={entries}
-      listLabel="Projects. Use the arrow keys to turn the case."
-      eyebrow={
-        <>
-          Projects / <b>{entries.length} on the shelf</b>
-        </>
+      arrows
+      /* The index page has its own masthead directly above this, and the point
+         of the sheet is that the carousel is reachable from the top. */
+      head={reel}
+      layout={reel ? 'reel' : 'sheet'}
+      /* Two either side, and no more. See SpecimenCaseProps.window. */
+      window={reel ? 2 : undefined}
+      onChoose={onChoose ? (e, i) => onChoose(e.key, i) : undefined}
+      chosenKey={chosenId}
+      listLabel={
+        reel
+          ? 'Projects. Drag sideways or use the arrow keys to turn the case.'
+          : 'Projects. Use the arrow keys to turn the case, and enter to open one.'
       }
-      heading="Fifteen projects, fifteen objects."
+      eyebrow={
+        reel ? (
+          <>
+            Projects / <b>{entries.length}, newest first</b>
+          </>
+        ) : (
+          <>
+            Projects / <b>{entries.length} on the shelf</b>
+          </>
+        )
+      }
+      heading={reel ? 'Turn the case.' : 'Fifteen projects, fifteen objects.'}
       note={
-        'Not fifteen screenshots. Each object is modelled from vertices and drawn by the same ' +
-        'hand-rolled pipeline that draws the rest of this site, then quantised to a grid of ' +
-        'characters. Where a project has a physical fact in it, that is the object: a pipe, a ' +
-        'wall calendar, a fan of cards. Choose one and it turns to face you.'
+        reel
+          ? 'The same case that stands at the head of the index, holding three at a time. Each ' +
+            'object is modelled from vertices and drawn by the same hand-rolled pipeline that ' +
+            'draws the rest of this site, then quantised to a grid of characters. Use the ' +
+            'arrows, the arrow keys, or a sideways scroll.'
+          : 'Not fifteen screenshots. Each object is modelled from vertices and drawn by the same ' +
+            'hand-rolled pipeline that draws the rest of this site, then quantised to a grid of ' +
+            'characters. Where a project has a physical fact in it, that is the object: a pipe, a ' +
+            'wall calendar, a fan of cards. Choose one and its entry opens below.'
+      }
+      citationFoot={
+        reel
+          ? (entry) => (
+              /*
+               * THE WAY IN, carried over from the reel this replaced.
+               *
+               * Jack, 2026-08-26: "there is no link to each project (each
+               * should have its own custom page) ... there is also no link to
+               * an 'all projects' page."
+               *
+               * Both of them, in the part of the case that is about ONE
+               * project, because the first is where you go if the object in
+               * front of you interested you and the second is where you go if
+               * it did not.
+               */
+              <p className="v2-case-go" data-perch>
+                <Link href={`/v2/projects/${entry.key}`} className="is-lead">
+                  Open {entry.title}
+                </Link>
+                <Link href="/v2/projects">Every project</Link>
+              </p>
+            )
+          : undefined
       }
     />
   );

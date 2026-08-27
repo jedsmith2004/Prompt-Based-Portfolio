@@ -8,7 +8,113 @@ See also: [spec.md](spec.md) · [plan.md](plan.md) · [ab-log.md](ab-log.md) · 
 
 ---
 
-## 2026-08-26 (latest) — the easter eggs nobody could reach
+## 2026-08-27 (latest) — one case, three dresses, and 4,200 words that did not exist
+
+Three of Jack's asks turned out to be one component and one missing file.
+
+**The carousel he wanted was already written.** *"The projects section carousel
+doesn't work, can you just lift the carousel from the 'all projects' page but
+only keep the two either side and be able to use the arrow buttons and the
+horizontal scroll if the user has it."* `SpecimenCase` already drew a ring of
+modelled objects and `/v2/projects` already used it. So the spine mounts the
+same component now, in a `reel` dress, and `HighlightReel.tsx` has no importers
+left. Retiring it is its own job, because its arrow and link CSS is shared with
+the case now rather than duplicated.
+
+**"Two either side" needed three things fixed before it meant two either side.**
+
+1. The case's falloff is 2.4 slots lit over 1.3 more to fade. At five entries
+   that reaches past the whole ring and is therefore invisible, which is why it
+   had never been wrong before. Asked for a window of two it drew a *third*
+   neighbour each side at nearly full strength. A caller-set window fades over
+   one slot: lit at 2, gone at 3.
+2. `measureBounds` walked every object on the ring, including the hidden back
+   half, so the plate was framing something nobody ever sees. Again invisible at
+   five, where nothing is hidden.
+3. The shelf is a full ellipse. It ran the entire width under three objects and
+   set the horizontal bounds on its own, which meant **narrowing the window made
+   the objects smaller**, the exact opposite of the request.
+
+All three were latent and all three were harmless at five entries. That is the
+shape of this whole file: nothing was broken until something asked a question
+the code had never been asked.
+
+**A cursor and a choice are different things.** *"You should be able to
+select/cycle through the carousel itself without selecting the project down
+below ... When a project is selected, it's article entry should come up."* The
+case had one `index` read by four consumers, so where you were LOOKING and what
+you had CHOSEN could not differ. They can now. Arrows, the sideways wheel and
+roving focus move the cursor and the citation follows it, because the citation
+is the caption for whatever is turned toward you. Only a click or Enter chooses,
+and only a choice raises the entry.
+
+**The sideways wheel, and not stealing the page.** `deltaX` only, and only when
+it beats `deltaY`, with the guard *before* `preventDefault` so a vertical wheel
+is never even nominally consumed. It accumulates against a 90px stride, because
+one notch of a tilt wheel is about 40px and a trackpad emits a stream of 2s;
+stepping per event makes the mouse useless and the trackpad ungovernable.
+
+**Pip was missing from the index for no reason at all.** The Companion is
+mounted per page and that page never imported it. Every prop is optional.
+
+### The project pages: the content was the work
+
+*"Every project page needs a massive revamp, with it's own background,
+screenshots, stories, articles within them."*
+
+The page had **372 words to render across all fifteen projects**, nine of them
+under 110. Rebuilding the renderer would have produced fifteen better-arranged
+versions of the same paragraph. So `lib/v2/projectStories.ts` is about 4,200
+words: written by five agents against `lib/projects-data.ts`,
+`public/context.json`, this repository's own source and the screenshots in
+`public/`, then fact-checked by five more against the same sources with a brief
+to CUT anything unsourced rather than soften it. It shows: one checker cut a
+sentence about a scoring model detecting collusion because nothing in the data
+describes one, and another cut three lines of restatement.
+
+**One invented number got through the fact-check, and the check that caught it
+was not a reading.** I grepped every numeral in the finished corpus against the
+source files: the AlexNet study was "Graded 95%", in the standfirst, the shelf
+and a section, and that figure is written down nowhere. It slipped my own first
+spot-check too, because `95` appears in the sources — as MNIST's PCA variance.
+Cut.
+
+The same sweep flagged "an FPS figure near 75" on the rasterizer, which looked
+like exactly the same kind of invention. It is not: it is legible in the corner
+of `public/3d-rasterizer-engine.png`, along with the camera's x, y and z. **The
+difference between the two was one Read of an image**, not an argument about
+which was more plausible.
+
+### A regression I shipped two commits ago
+
+`.v2-world` is `opacity: 0` until `SectionBackdrops` adds `is-ready` — that was
+the fix for the backdrop swap stutter, and it is right. `ProjectStory` mounts
+its world **by hand** rather than through that component. So every one of the
+fifteen project pages has been rendering an invisible backdrop since that
+commit, on a set of pages whose entire premise is *"its own custom background."*
+It runs the same two-rAF gate now.
+
+Nothing caught it. The perf work was measured properly, before and after, on the
+spine; the pages that mount the same CSS class through a different path were not
+in the measurement and were not looked at. **A CSS contract enforced by one
+component is not a contract.**
+
+### Smaller
+
+- `askJack` in `lib/v2/ask.ts`. The same stream-reading helper was written out
+  byte-identically in two places and was about to be written a third time.
+- The clipwall diagnosis in `plan.md` was wrong and is now recorded as wrong.
+  I read *"massive gaps in the newspaper cutouts"* as gaps in the wall and
+  rebuilt the layout; Jack meant gaps in the TEXT of two specific clippings.
+- The headless capture harness photographs the case as a blank plate at some
+  scroll offsets even though the canvas has content. Confirmed with
+  `getImageData` rather than believed either way: the awards case reads 1,644
+  differing samples and the projects case 581, both before and after the fit
+  changes. Two hours were nearly spent debugging a compositing artefact.
+
+---
+
+## 2026-08-26 — the easter eggs nobody could reach
 
 > *"Can you make the easter eggs more common in general, and way more common
 > right now, I want to see them and I'm waiting ages!"*

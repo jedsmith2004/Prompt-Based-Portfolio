@@ -19,12 +19,26 @@
    the mode is whatever its plate settles in and nothing ever moves it. That is
    also why usePalette is handed a constant mode here.
 
-   Everything on the page comes from lib/projects-data.ts. Nothing is written
-   twice: the index at /v2/projects and this page are the same records read two
-   ways.
+   THE PAGE IS AN ARTICLE NOW.
+
+   > "Every project page needs a massive revamp, with it's own background,
+   >  screenshots, stories, articles within them."
+
+   The background was already here and is unchanged. The other three were not,
+   and no amount of work on this file would have produced them: the page had
+   exactly one paragraph of prose to render, the `description` from
+   lib/projects-data.ts, and nine of the fifteen are under 110 words. So the
+   story lives in lib/v2/projectStories.ts, which is about 4,200 words written
+   against the record and the source rather than against the genre, and this
+   file lays it out.
+
+   The record is still the record. Dates, status, links, technologies and the
+   feature list all come from lib/projects-data.ts exactly as before, and a
+   project with no article in projectStories falls back to its description, so
+   adding a project still gives you a page rather than a hole.
    ========================================================================== */
 
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import type { Project } from '@/lib/projects-data';
 import { getBackdrop } from './backdrops/registry';
@@ -32,6 +46,8 @@ import { usePalette } from './usePalette';
 import { useSpine } from './useSpine';
 import Companion from './Companion';
 import { dressFor } from '@/lib/v2/projectPages';
+import { askJack } from '@/lib/v2/ask';
+import { storyFor } from '@/lib/v2/projectStories';
 
 export interface ProjectStoryProps {
   project: Project;
@@ -92,29 +108,39 @@ export default function ProjectStory({
   }, [p.demo, p.github, p.paper, p.linkedin]);
 
   const whispers = useMemo(() => whispersFor(p), [p]);
+  const story = useMemo(() => storyFor(p.id), [p.id]);
 
-  const ask = useCallback(async (q: string): Promise<string> => {
-    const res = await fetch('/api/ask', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: q, history: [] })
+  /*
+   * THE WORLD HAS TO SAY IT IS READY, because `.v2-world` starts at opacity 0.
+   *
+   * SectionBackdrops gates the entrance on two rAFs so the fade is not spent
+   * inside the incoming world's setup task -- see the note on `is-ready` in
+   * v2.css. This page mounts its world by hand rather than through that
+   * component, so it has to do the same thing, and without it the backdrop
+   * here never becomes visible at all.
+   */
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    let a = 0;
+    let b = 0;
+    a = requestAnimationFrame(() => {
+      b = requestAnimationFrame(() => setReady(true));
     });
-    if (!res.ok || !res.body) throw new Error(String(res.status));
-    const reader = res.body.getReader();
-    const dec = new TextDecoder();
-    let acc = '';
-    for (;;) {
-      const r = await reader.read();
-      if (r.done) break;
-      acc += dec.decode(r.value, { stream: true });
-    }
-    return acc.trim() || 'I did not catch that. Ask me another way.';
+    return () => {
+      cancelAnimationFrame(a);
+      cancelAnimationFrame(b);
+    };
   }, []);
+
+  const ask = useCallback((q: string) => askJack(q), []);
 
   return (
     <>
       <div className="v2-worlds" aria-hidden="true" data-world={p.id}>
-        <div className="v2-world" data-backdrop={dress.world}>
+        <div
+          className={`v2-world${ready ? ' is-ready' : ''}`}
+          data-backdrop={dress.world}
+        >
           <World
             intensity={dress.intensity}
             progress={progress}
@@ -159,13 +185,17 @@ export default function ProjectStory({
             </span>
           </div>
 
+          {/* The standfirst where there is one: it was written to be the
+              first thing read, and the description then does its proper job
+              further down as the opening of the article rather than as a
+              summary of a page that is standing right there. */}
           <p
             className="v2-lede v2-story-lede"
             data-perch
             data-perch-text
             data-perch-inset="0.33em"
           >
-            {p.description}
+            {story ? story.standfirst : p.description}
           </p>
 
           {links.length ? (
@@ -184,6 +214,68 @@ export default function ProjectStory({
             </p>
           ) : null}
         </div>
+
+        {story?.figures.length ? (
+          <div className="v2-wrap">
+            {/* THE SCREENSHOTS. Only ones that exist: three projects have no
+                image in the data and get no figure rather than a placeholder,
+                and one of those says so in its own copy. */}
+            {story.figures.map((f) => (
+              <figure key={f.src} className={`v2-story-fig is-${f.size}`}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={f.src} alt={f.caption} loading="lazy" decoding="async" />
+                <figcaption data-perch data-perch-inset="0.2em">{f.caption}</figcaption>
+              </figure>
+            ))}
+          </div>
+        ) : null}
+
+        {story?.shelf.length ? (
+          <div className="v2-wrap">
+            {/* Facts, not metrics. Everything on this shelf is written down
+                somewhere in the repository; nothing here is an estimate and
+                nothing is a number about how many people use anything. */}
+            <dl className="v2-story-shelf">
+              {story.shelf.map((f) => (
+                <div key={f.label} data-perch>
+                  <dt>{f.value}</dt>
+                  <dd>{f.label}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        ) : null}
+
+        {story ? (
+          <div className="v2-wrap">
+            <div className="v2-story-article">
+              {story.sections.map((sec, i) => (
+                <section key={sec.heading} className="v2-story-sec">
+                  <h2
+                    className="v2-story-h2"
+                    data-perch
+                    data-perch-text
+                    data-perch-inset="0.1em"
+                  >
+                    {sec.heading}
+                  </h2>
+                  {sec.body.map((para) => (
+                    <p key={para.slice(0, 40)}>{para}</p>
+                  ))}
+                  {/* The pull sits after the SECOND section rather than at the
+                      top, because it is a line lifted out of the article and a
+                      quotation from something the reader has not reached yet
+                      is just a subtitle in bigger type. */}
+                  {story.pull && i === 1 ? (
+                    <blockquote className="v2-story-pull" data-perch>
+                      {story.pull}
+                    </blockquote>
+                  ) : null}
+                </section>
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         {p.features?.length ? (
           <div className="v2-wrap">

@@ -82,6 +82,128 @@
 .v2-story-links a.is-lead { border-color: var(--verm); color: var(--verm-text); }
 .v2-story-links a.is-lead:hover { background: var(--verm); color: var(--paper-hi); }
 
+/* ==========================================================================
+   THE ARTICLE
+
+   > "Every project page needs a massive revamp, with it's own background,
+   >  screenshots, stories, articles within them."
+
+   The page is a long read now, so it is set like one: a single column at a
+   real measure, the screenshot and the shelf of facts before it as the way in,
+   and one line pulled large a third of the way down. Everything sits over a
+   live world, so every plane that carries type has to be opaque enough to be
+   read against whatever it happens to be drawing behind.
+   ========================================================================== */
+
+/* --- the screenshots ------------------------------------------------------ */
+.v2-story-fig {
+  margin: clamp(34px, 5vw, 62px) 0 0;
+  /* A hard border and a flat offset shadow rather than a soft one: this is the
+     same paper-and-ink vocabulary as the clippings, and a blur would be the
+     only gaussian on the whole site. */
+  border: 1px solid var(--ink);
+  background: var(--paper-2);
+  padding: clamp(8px, 1vw, 14px);
+  box-shadow: 6px 6px 0 var(--rule);
+}
+.v2-story-fig.is-wide { max-width: 100%; }
+.v2-story-fig.is-inset { max-width: min(560px, 100%); }
+.v2-story-fig img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--rule);
+}
+.v2-story-fig figcaption {
+  font-family: var(--f-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  /* on --paper-2: --ink-3 is 4.50:1 */
+  color: var(--ink-3);
+  margin-top: 10px;
+  max-width: 72ch;
+}
+
+/* --- the shelf of facts --------------------------------------------------- */
+/* Deliberately NOT a stats bar. Every value here is written down somewhere in
+   the repository, which is why there are three or four of them and not six:
+   a project with nothing measured gets no shelf rather than a padded one. */
+.v2-story-shelf {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1px;
+  margin: clamp(34px, 5vw, 60px) 0 0;
+  padding: 0;
+  background: var(--rule);
+  border: 1px solid var(--rule-firm);
+}
+.v2-story-shelf > div {
+  background: var(--paper);
+  padding: clamp(13px, 1.6vw, 18px) clamp(14px, 1.8vw, 20px);
+}
+.v2-story-shelf dt {
+  font-family: var(--f-display);
+  font-variation-settings: 'wdth' 92, 'opsz' 28;
+  font-size: clamp(20px, 2.3vw, 28px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.v2-story-shelf dd {
+  font-family: var(--f-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 7px 0 0;
+  line-height: 1.35;
+}
+
+/* --- the body ------------------------------------------------------------- */
+.v2-story-article {
+  margin-top: clamp(46px, 7vw, 96px);
+  border-top: 1px solid var(--rule-firm);
+  padding-top: clamp(16px, 2vw, 26px);
+}
+.v2-story-sec + .v2-story-sec { margin-top: clamp(32px, 4.4vw, 58px); }
+.v2-story-sec p {
+  font-family: var(--f-read);
+  font-size: clamp(16px, 1.75vw, 19px);
+  font-weight: 300;
+  line-height: 1.68;
+  color: var(--ink-2);
+  /* The one number on this page that is about reading rather than about the
+     record. Anything wider and the eye loses the line return. */
+  max-width: 66ch;
+  margin: 0;
+}
+.v2-story-sec p + p { margin-top: clamp(14px, 1.6vw, 20px); }
+/* Tighter above its own heading than the gap between sections, so a heading
+   belongs to what follows it rather than floating between two things. */
+.v2-story-sec .v2-story-h2 { margin-bottom: clamp(12px, 1.6vw, 18px); }
+
+/* --- the pull ------------------------------------------------------------- */
+.v2-story-pull {
+  margin: clamp(26px, 3.4vw, 44px) 0 0;
+  padding: 0 0 0 clamp(16px, 2vw, 26px);
+  border-left: 3px solid var(--verm);
+  font-family: var(--f-display);
+  font-variation-settings: 'wdth' 94, 'opsz' 30;
+  font-size: clamp(20px, 2.5vw, 30px);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.22;
+  color: var(--ink);
+  max-width: 24ch;
+}
+
+@media (max-width: 620px) {
+  .v2-story-fig { box-shadow: 4px 4px 0 var(--rule); }
+  .v2-story-pull { max-width: none; }
+}
+
 /* --- the blocks ---------------------------------------------------------- */
 
 .v2-story-block {

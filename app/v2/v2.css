@@ -2062,7 +2062,8 @@ html[data-v2-theme='dark']  body { background: #15130E; }
 }
 
 /* the two ways out of the reel: this project, or all of them */
-.v2-reel-go {
+.v2-reel-go,
+.v2-case-go {
   display: flex;
   flex-wrap: wrap;
   gap: 8px 20px;
@@ -2075,15 +2076,18 @@ html[data-v2-theme='dark']  body { background: #15130E; }
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
-.v2-reel-go a {
+.v2-reel-go a,
+.v2-case-go a {
   color: var(--ink-2);
   text-decoration: none;
   border-bottom: 1px solid var(--rule-firm);
   padding-bottom: 2px;
   transition: color 0.18s var(--ease), border-color 0.18s var(--ease);
 }
-.v2-reel-go a.is-lead { color: var(--verm-text); border-bottom-color: var(--verm); }
-.v2-reel-go a:hover { color: var(--ink); border-bottom-color: currentColor; }
+.v2-reel-go a.is-lead,
+.v2-case-go a.is-lead { color: var(--verm-text); border-bottom-color: var(--verm); }
+.v2-reel-go a:hover,
+.v2-case-go a:hover { color: var(--ink); border-bottom-color: currentColor; }
 
 .v2-reel-controls {
   grid-area: controls;
@@ -3417,6 +3421,10 @@ html[data-v2-theme='dark']  body { background: #15130E; }
    -------------------------------------------------------------------------- */
 .v2-case-stage {
   position: relative;
+  /* A sideways drag belongs to the case, a vertical one still belongs to the
+     page. Without this a touch device claims the whole gesture before the
+     wheel handler ever sees it, and the ring cannot be turned by hand. */
+  touch-action: pan-y;
   /* Deliberately close to the aspect of the drawing itself. The case fits
      itself to the plate, so a plate far wider than the art just banks paper
      down both sides. */
@@ -3425,6 +3433,15 @@ html[data-v2-theme='dark']  body { background: #15130E; }
   border: 1px solid var(--rule-firm);
   overflow: hidden;
 }
+/* It carries a tab stop and its own arrow keys, so it has to say where the
+   keyboard is. */
+.v2-case-stage:focus-visible {
+  outline: 2px solid var(--verm-text);
+  outline-offset: 2px;
+}
+/* Only where a click actually takes the thing in front. */
+.v2-case-stage[data-takeable] { cursor: pointer; }
+
 .v2-case-stage canvas {
   position: absolute;
   inset: 0;
@@ -3620,6 +3637,200 @@ html[data-v2-theme='dark']  body { background: #15130E; }
    and the chrome simply stops transitioning. */
 @media (prefers-reduced-motion: reduce) {
   .v2-case-plaque { transition: none; }
+}
+
+/* ==========================================================================
+   THE CASE AS A CAROUSEL
+
+   > "The projects section carousel doesn't work, can you just lift the
+   >  carousel from the 'all projects' page but only keep the two either side
+   >  and be able to use the arrow buttons and the horizontal scroll if the
+   >  user has it."
+
+   > "There should be a way to see all the projects, maybe on a rotating basis,
+   >  or a clever layout, from the top of the screen with the carousel in view.
+   >  When a project is selected, it's article entry should come up."
+
+   Three layouts out of one tree, and the difference between them is where the
+   rail goes.
+
+     index   the rail is a list of plaques beside the citation. The awards.
+     reel    there is no rail. The spine: three objects and two arrows.
+     sheet   the rail is a grid of tiles BESIDE the stage, so all fifteen are
+             on screen at the same time as the carousel that turns them.
+
+   The sheet is the answer to the second quote. A tall list under the case
+   cannot be seen with the case; a grid at the case's own height can, and it
+   costs nothing but a different `grid-template-columns`.
+   ========================================================================== */
+.v2-case-plate { position: relative; }
+
+.v2-case.is-sheet .v2-case-plate {
+  display: grid;
+  /* The stage keeps the larger share: it is the drawing, and the tiles are
+     labels. Below 900 the tiles fall under it and become a wide, short grid,
+     which is still every project on one screen. */
+  grid-template-columns: minmax(0, 1.34fr) minmax(0, 1fr);
+  gap: clamp(14px, 2vw, 26px);
+}
+@media (max-width: 900px) {
+  .v2-case.is-sheet .v2-case-plate { grid-template-columns: 1fr; }
+}
+
+/*
+ * THE SHEET IS THE WHOLE PLATE.
+ *
+ * Fifteen tiles in two columns is eight rows of real type, about 200px taller
+ * than any stage worth looking at. Stretching the stage to meet it does not
+ * help: the drawing is width-bound in this column, so the extra height is
+ * banked as blank paper above and below the ring. So the second row of the
+ * left column is the citation, and the tiles run down beside both.
+ *
+ * The result is the ask, exactly: the carousel, the caption for whatever is
+ * turned toward you, and all fifteen names, without scrolling.
+ */
+.v2-case.is-sheet .v2-case-plate { grid-template-rows: auto auto; }
+.v2-case.is-sheet .v2-case-stage {
+  grid-area: 1 / 1;
+  height: clamp(300px, 32vw, 440px);
+}
+.v2-case.is-sheet .v2-case-sheet { grid-area: 1 / 2 / 3 / 3; }
+.v2-case.is-sheet .v2-case-citation {
+  grid-area: 2 / 1;
+  margin: 0;
+  align-self: start;
+}
+@media (max-width: 900px) {
+  /* One column, so the source order stands: stage, tiles, caption. */
+  .v2-case.is-sheet .v2-case-stage,
+  .v2-case.is-sheet .v2-case-sheet,
+  .v2-case.is-sheet .v2-case-citation { grid-area: auto; }
+}
+
+/* Fifteen is odd, so the last tile would sit beside an empty cell, and an
+   empty cell in this grid is a rule-coloured hole. It takes the width
+   instead. */
+.v2-case-sheet li:nth-child(odd):last-child .v2-case-tile { grid-column: 1 / -1; }
+
+/* No rail in the body for either new layout, so the citation takes the full
+   measure rather than half a grid with nothing in the other half. */
+.v2-case.is-reel .v2-case-body,
+.v2-case.is-sheet .v2-case-body { grid-template-columns: 1fr; }
+.v2-case.is-reel .v2-case-citation,
+.v2-case.is-sheet .v2-case-citation { max-width: 76ch; }
+
+/* Where you are in the ring, in the corner opposite the pipeline's signature.
+   The reel had this and it is the one thing a carousel owes the reader: how
+   much of it there is, and how far in they are. */
+.v2-case-tally {
+  position: absolute;
+  left: 10px;
+  top: 8px;
+  margin: 0;
+  font-family: var(--f-mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  /* on --paper-2: --ink-3 is 4.50:1 */
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.v2-case-tally i { font-style: normal; opacity: 0.5; }
+
+/* --------------------------------------------------------------------------
+   the sheet
+   Hairline gaps over a rule-coloured ground, so the grid draws its own lines
+   and no cell needs a border of its own to go wrong at the edges.
+   -------------------------------------------------------------------------- */
+.v2-case-sheet {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  /* TWO COLUMNS, EIGHT ROWS, and that is arithmetic rather than taste: at
+     three columns the tiles are narrow enough that half the titles take three
+     lines, the grid grows to about 640px, and it stands a third taller than
+     the stage it is supposed to sit beside. Two wide columns wrap almost
+     nothing and land within a few pixels of the stage's own height, so the
+     row stretches them to meet it exactly. Below 900 the sheet falls under
+     the stage and packs itself instead. */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(44px, 1fr);
+  gap: 1px;
+  background: var(--rule);
+  border: 1px solid var(--rule-firm);
+  align-content: stretch;
+}
+@media (max-width: 900px) {
+  .v2-case-sheet { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+}
+.v2-case-sheet li { display: contents; }
+
+.v2-case-tile {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  width: 100%;
+  height: 100%;
+  padding: 9px 12px;
+  border: 0;
+  background: var(--paper);
+  text-align: left;
+  cursor: pointer;
+  transition: background 160ms var(--ease), box-shadow 160ms var(--ease);
+}
+.v2-case-tile-num {
+  font-family: var(--f-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.v2-case-tile-title {
+  font-family: var(--f-display);
+  font-variation-settings: 'wdth' 94, 'opsz' 20;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.014em;
+  line-height: 1.14;
+  color: var(--ink);
+}
+.v2-case-tile-date {
+  font-family: var(--f-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  color: var(--ink-3);
+}
+.v2-case-tile:hover { background: var(--paper-2); }
+
+/* TWO STATES, AND THEY ARE NOT THE SAME STATE.
+   `is-on` is the cursor: the object currently turned to the front, which the
+   arrows and the wheel move without committing to anything. A bar, because a
+   cursor should be a mark in the margin rather than a filled cell. `is-chosen`
+   is the one whose entry is open below, and that is a filled cell, because it
+   is the only thing on this page that has actually been decided. */
+.v2-case-tile.is-on {
+  background: var(--paper-2);
+  box-shadow: inset 3px 0 0 var(--verm);
+}
+.v2-case-tile.is-chosen {
+  background: var(--ink);
+  box-shadow: none;
+}
+.v2-case-tile.is-chosen .v2-case-tile-title { color: var(--paper); }
+.v2-case-tile.is-chosen .v2-case-tile-num,
+.v2-case-tile.is-chosen .v2-case-tile-date { color: var(--paper-3); }
+.v2-case-tile.is-chosen.is-on { box-shadow: inset 3px 0 0 var(--verm); }
+.v2-case-tile:focus-visible {
+  outline: 2px solid var(--verm-text);
+  outline-offset: -3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .v2-case-tile { transition: none; }
 }
 
 /* ==========================================================================
@@ -4753,7 +4964,8 @@ html.v2-palette-driven.v2-mode-transition body {
    hard against its edges, on a translucent paper chip so they stay legible
    whatever the plate is drawing behind them.
    ========================================================================== */
-.v2-reel-arrow {
+.v2-reel-arrow,
+.v2-case-arrow {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
@@ -4771,26 +4983,34 @@ html.v2-palette-driven.v2-mode-transition body {
   transition: background 160ms var(--ease), color 160ms var(--ease),
     border-color 160ms var(--ease);
 }
-.v2-reel-arrow.is-prev { left: 10px; }
-.v2-reel-arrow.is-next { right: 10px; }
-.v2-reel-arrow:hover {
+.v2-reel-arrow.is-prev,
+.v2-case-arrow.is-prev { left: 10px; }
+.v2-reel-arrow.is-next,
+.v2-case-arrow.is-next { right: 10px; }
+.v2-reel-arrow:hover,
+.v2-case-arrow:hover {
   background: var(--ink);
   border-color: var(--ink);
   color: var(--paper);
 }
-.v2-reel-arrow:focus-visible {
+.v2-reel-arrow:focus-visible,
+.v2-case-arrow:focus-visible {
   outline: 2px solid var(--verm-text);
   outline-offset: 2px;
 }
 
 @media (max-width: 620px) {
-  .v2-reel-arrow { width: 30px; height: 44px; }
-  .v2-reel-arrow.is-prev { left: 6px; }
-  .v2-reel-arrow.is-next { right: 6px; }
+  .v2-reel-arrow,
+  .v2-case-arrow { width: 30px; height: 44px; }
+  .v2-reel-arrow.is-prev,
+  .v2-case-arrow.is-prev { left: 6px; }
+  .v2-reel-arrow.is-next,
+  .v2-case-arrow.is-next { right: 6px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .v2-reel-arrow { transition: none; }
+  .v2-reel-arrow,
+  .v2-case-arrow { transition: none; }
 }
 
 /* ==========================================================================

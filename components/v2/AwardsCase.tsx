@@ -648,6 +648,75 @@ export interface SpecimenCaseProps {
   /** Unique per instance, so two cases on one page do not share element ids. */
   idPrefix: string;
   className?: string;
+  /**
+   * How many slots either side of the front stay lit, before the fade.
+   *
+   * > "only keep the two either side"
+   *
+   * Two is a reel: one object chosen, one shoulder each side, nothing else
+   * competing. The default is the case's own 2.4, which at five entries lights
+   * all of them and at fifteen lights a shallow arc.
+   *
+   * It is not only a fade. RING_SPREAD divides by the sine of this angle, so a
+   * narrower window also pushes the two neighbours FURTHER APART on the plate:
+   * three objects across the same width the case would give five.
+   */
+  window?: number;
+  /** Arrow buttons flanking the stage. */
+  arrows?: boolean;
+  /**
+   * 'index'  the plaque rail beside the citation. The default, and the awards.
+   * 'reel'   no rail. The stage, then the citation under it, full measure.
+   * 'sheet'  the rail becomes a grid of tiles beside the stage, so every
+   *          entry is on screen at the same time as the carousel.
+   */
+  layout?: 'index' | 'reel' | 'sheet';
+  /** Rendered at the foot of the citation. The way out of the case. */
+  citationFoot?: (entry: CaseEntry, index: number) => React.ReactNode;
+  /**
+   * Called when an entry is CHOSEN rather than merely looked at.
+   *
+   * > "you should be able to select/cycle through the carousel itself without
+   * >  selecting the project down below ... When a project is selected, it's
+   * >  article entry should come up."
+   *
+   * So the case has two positions and not one. The cursor is where you are
+   * looking: arrows, the wheel, a drag, roving focus in the rail all move it,
+   * and the citation follows it, because the citation is the caption for the
+   * object that is turned toward you. A CHOICE is a click, or Enter on the
+   * stage, and it is the only thing that fires this. A caller with an article
+   * under the case wires it to that; a caller without one leaves it out and
+   * the case behaves exactly as it did.
+   */
+  onChoose?: (entry: CaseEntry, index: number) => void;
+  /** The key of the currently chosen entry, if the caller tracks one. */
+  chosenKey?: string;
+  /**
+   * The case's own eyebrow, heading and note. On by default.
+   *
+   * > "There should be a way to see all the projects ... from the top of the
+   * >  screen with the carousel in view."
+   *
+   * A page whose entire subject IS the case has a masthead of its own, and two
+   * mastheads stacked is most of a laptop screen spent before the carousel
+   * starts. Turned off, the case is labelled by the caller's heading instead
+   * and `note` is not rendered at all, so there is nothing to keep in sync.
+   */
+  head?: boolean;
+}
+
+/** Arrow glyph. Two of them, mirrored, so it is written once. */
+function Chevron({ back }: { back?: boolean }) {
+  return (
+    <svg width="13" height="22" viewBox="0 0 13 22" aria-hidden="true">
+      <path
+        d={back ? 'M10.5 1.5 L2.5 11 l8 9.5' : 'M2.5 1.5 L10.5 11 l-8 9.5'}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+      />
+    </svg>
+  );
 }
 
 export function SpecimenCase({
@@ -657,10 +726,18 @@ export function SpecimenCase({
   note,
   listLabel,
   idPrefix,
-  className
+  className,
+  window: windowSlots,
+  arrows = false,
+  layout = 'index',
+  citationFoot,
+  onChoose,
+  chosenKey,
+  head = true
 }: SpecimenCaseProps) {
   const [index, setIndex] = useState(0);
   const count = entries.length;
+  const dofSlots = windowSlots ?? DOF_SLOTS;
 
   /*
    * Was built once at module load, when the case knew its own contents. It is
@@ -697,8 +774,82 @@ export function SpecimenCase({
       indexRef.current = i;
       setIndex(i);
       if (focus) btnRefs.current[i]?.focus();
+      return i;
     },
     [count]
+  );
+
+  /** Look at it AND take it. See SpecimenCaseProps.onChoose. */
+  const choose = useCallback(
+    (next: number) => {
+      const i = select(next, false);
+      onChoose?.(entries[i], i);
+    },
+    [select, onChoose, entries]
+  );
+
+  /*
+   * THE WHEEL, HORIZONTALLY ONLY.
+   *
+   * > "be able to use the arrow buttons and the horizontal scroll if the user
+   * >  has it"
+   *
+   * Three rules, and every one of them is about not stealing the page.
+   *
+   * 1. `deltaX` only, and only when it beats `deltaY`. A trackpad emits both
+   *    on any diagonal flick, and a mouse wheel with no tilt emits deltaY
+   *    alone; reading the larger axis means a reader scrolling PAST the case
+   *    scrolls past it, and only a deliberate sideways gesture turns the ring.
+   * 2. The guard comes BEFORE preventDefault, so a vertical wheel is never
+   *    even nominally consumed.
+   * 3. It accumulates. One notch of a tilt wheel is ~40px and a trackpad
+   *    emits a stream of 2s, so stepping per event would make the mouse
+   *    useless and the trackpad ungovernable. STRIDE is one object.
+   */
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+    const STRIDE = 90;
+    let acc = 0;
+    let last = 0;
+    const onWheel = (e: WheelEvent) => {
+      const dx = e.deltaX;
+      if (Math.abs(dx) <= Math.abs(e.deltaY)) return;
+      e.preventDefault();
+      /* A new gesture starts from zero: leftover travel from a flick half a
+         second ago should not add itself to the next one. */
+      const now = performance.now();
+      if (now - last > 260) acc = 0;
+      last = now;
+      acc += dx;
+      while (acc >= STRIDE) {
+        acc -= STRIDE;
+        select(indexRef.current + 1, false);
+      }
+      while (acc <= -STRIDE) {
+        acc += STRIDE;
+        select(indexRef.current - 1, false);
+      }
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [select]);
+
+  /* The stage steers too, and it is the thing the reader is looking at. Left
+     and right move the cursor; Enter and Space take what is in front. */
+  const onStageKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      const at = indexRef.current;
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') select(at + 1, false);
+      else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') select(at - 1, false);
+      else if (e.key === 'Home') select(0, false);
+      else if (e.key === 'End') select(count - 1, false);
+      else if (e.key === 'Enter' || e.key === ' ') choose(at);
+      else return;
+      e.preventDefault();
+    },
+    [count, select, choose]
   );
 
   /* Reads from the ref, not the render closure: two key events can land inside
@@ -717,6 +868,16 @@ export function SpecimenCase({
     },
     [count, select]
   );
+
+  /* Keep the cursor on whatever the caller chose behind our back: a deep link
+     into the page, or a row in the index below setting the case from outside.
+     Roving focus is deliberately NOT moved with it, because nothing here asked
+     for the keyboard. */
+  useEffect(() => {
+    if (!chosenKey) return;
+    const at = entries.findIndex((e) => e.key === chosenKey);
+    if (at >= 0 && at !== indexRef.current) select(at, false);
+  }, [chosenKey, entries, select]);
 
   /* Under reduced motion nothing is scheduled, so a selection has to ask for
      its own frame. Harmless in the animated case: the loop redraws anyway. */
@@ -834,8 +995,39 @@ export function SpecimenCase({
      * by the sine of the window angle keeps the SPREAD ON THE PLATE the same
      * whatever the case is holding. Clamped at 1 so a short case is untouched.
      */
-    const RING_SPREAD = 1 / Math.max(0.5, Math.sin(Math.min(Math.PI / 2, DOF_SLOTS * (TAU / count))));
+    /*
+     * A WINDOW OF TWO MEANS TWO, not two and a ghost of a third.
+     *
+     * The case's own falloff is 2.4 slots lit and 1.3 more to fade across,
+     * which at five entries reaches past the whole ring and is therefore
+     * invisible. Asked for two, it drew a third neighbour at nearly full
+     * strength on each side and only finished fading at four -- five objects
+     * where Jack asked for three. So a caller-set window fades over ONE slot
+     * instead: lit at 2, gone at 3.
+     */
+    const dofSoft = windowSlots === undefined ? DOF_SOFT : 1;
+    /** The last slot that has anything drawn in it at all. */
+    const dofEdge = dofSlots + dofSoft;
+    const RING_SPREAD = 1 / Math.max(0.5, Math.sin(Math.min(Math.PI / 2, dofSlots * (TAU / count))));
     let ringX = RING_X * RING_SPREAD;
+
+    /**
+     * How wide the SHELF is drawn, as a multiple of its modelled width.
+     *
+     * The shelf is a full ellipse and the window is an arc of one, so a case
+     * showing three of fifteen was standing them on a rail that ran the whole
+     * plate and disappeared into blank paper at both ends. It also set the
+     * horizontal bounds single-handedly, which meant narrowing the window made
+     * the objects SMALLER rather than larger.
+     *
+     * Ends just past the outermost lit object. Clamped so it can never be
+     * wider than the ring it belongs to, which is what leaves the five-entry
+     * awards case exactly as it was.
+     */
+    function shelfKx(rx: number): number {
+      const reach = rx * Math.sin(Math.min(Math.PI / 2, dofSlots * STEP)) + 0.62;
+      return Math.min(rx / RING_X, reach / (RING_X + 0.52));
+    }
     let SPAN_X = 1;
     let SPAN_Y = 1;
     let MID_X = 0;
@@ -864,14 +1056,30 @@ export function SpecimenCase({
               oCos[o] = 1;
               oSin[o] = 0;
               oScale[o] = 1;
-              oKx[o] = ringX / RING_X;
+              oKx[o] = shelfKx(ringX);
               oTx[o] = 0;
               oTy[o] = 0;
               oTz[o] = 0;
+              oHidden[o] = 0;
               continue;
             }
             const isSel = o === sel;
             const th = shown + o * STEP;
+            /*
+             * THE PLATE FRAMES WHAT IT DRAWS, not what it holds.
+             *
+             * This measured every object on the ring, including the ones the
+             * fade hides completely, and the hidden ones are the ones furthest
+             * round the ellipse -- so the composition was scaled to fit a back
+             * half nobody ever sees. Harmless at five entries, where nothing is
+             * ever hidden; at fifteen with a window of two it was the whole
+             * reason three objects sat small in the middle of a wide plate.
+             *
+             * Marked rather than skipped, because the scratch arrays are
+             * indexed by object and the vertex pass below reads them.
+             */
+            const wrapped = ((th + Math.PI) % TAU + TAU) % TAU - Math.PI;
+            oHidden[o] = Math.abs(wrapped) / STEP >= dofEdge ? 1 : 0;
             oCos[o] = Math.cos(th);
             oSin[o] = Math.sin(th);
             oScale[o] = isSel ? SEL_SCALE : REST_SCALE;
@@ -881,6 +1089,7 @@ export function SpecimenCase({
           }
           for (let i = 0; i < g.nVerts; i++) {
             const o = g.vObj[i];
+            if (oHidden[o]) continue;
             const k0 = oScale[o];
             const ax0 = g.vx[i] * k0 * oKx[o];
             const ay0 = g.vy[i] * k0;
@@ -984,7 +1193,7 @@ export function SpecimenCase({
           oCos[o] = 1;
           oSin[o] = 0;
           oScale[o] = 1;
-          oKx[o] = ringX / RING_X;
+          oKx[o] = shelfKx(ringX);
           oTx[o] = 0;
           oTy[o] = 0;
           oTz[o] = 0;
@@ -1022,7 +1231,7 @@ export function SpecimenCase({
            `away` is the distance from the front, in slots, by the short way. */
         const wrapped = ((th + Math.PI) % TAU + TAU) % TAU - Math.PI;
         const away = Math.abs(wrapped) / STEP;
-        let dof = (away - DOF_SLOTS) / DOF_SOFT;
+        let dof = (away - dofSlots) / dofSoft;
         dof = dof < 0 ? 0 : dof > 1 ? 1 : dof;
         oFade[o] = pale + (1 - pale) * dof;
         /* Fully faded is not "drawn at one tenth" — the quantiser floors every
@@ -1449,83 +1658,203 @@ export function SpecimenCase({
       document.removeEventListener('visibilitychange', onVis);
       window.removeEventListener('resize', onResize);
     };
-  }, [GEOMETRY, count, SHELF_OBJ]);
+  /* `windowSlots` as well as `dofSlots`: they usually move together, but
+     undefined -> 2.4 is the same dofSlots and a different falloff. */
+  }, [GEOMETRY, count, SHELF_OBJ, dofSlots, windowSlots]);
 
   /* ------------------------------------------------------------------------ */
 
-  return (
-    <section
-      className={className ? `v2-case ${className}` : 'v2-case'}
-      aria-labelledby={`${idPrefix}-title`}
+  const sheet = layout === 'sheet';
+  const takeable = Boolean(onChoose);
+
+  /*
+   * ONE RAIL, THREE PLACES.
+   *
+   * 'index' hangs it beside the citation, as a list of plaques with their
+   * metadata, which is what a case of five wants. 'sheet' puts the same
+   * buttons in a grid next to the stage, so fifteen entries are all on screen
+   * WITH the carousel rather than a screen below it. 'reel' leaves it out
+   * entirely: the reel is one object at a time and its own arrows.
+   *
+   * Roving tabindex either way, so the rail is one tab stop and the arrow keys
+   * walk it. The stage is a second, independent one.
+   */
+  const rail = (
+    <ol
+      className={sheet ? 'v2-case-sheet' : 'v2-case-list'}
+      onKeyDown={onKeyDown}
+      aria-label={listLabel}
     >
-      <header className="v2-case-head">
-        <p className="v2-eyebrow" data-perch data-perch-text data-perch-inset="0.38em">
-          {eyebrow}
-        </p>
-        <h2
-          className="v2-h2"
-          id={`${idPrefix}-title`}
-          data-perch
-          data-perch-text
-          data-perch-inset="0.10em"
-        >
-          {heading}
-        </h2>
-        <p className="v2-case-note">{note}</p>
-      </header>
-
-      <div className="v2-case-stage" data-perch>
-        <canvas ref={canvasRef} aria-hidden="true" />
-        <p className="v2-case-mark">
-          {GEOMETRY.nVerts} vertices / {GEOMETRY.nFaces} faces / drawn here
-        </p>
-      </div>
-
-      <div className="v2-case-body">
-        <ol className="v2-case-list" onKeyDown={onKeyDown} aria-label={listLabel}>
-          {entries.map((a, i) => (
-            <li key={a.key}>
-              <button
-                type="button"
-                ref={(el) => {
-                  btnRefs.current[i] = el;
-                }}
-                className={`v2-case-plaque${i === index ? ' is-on' : ''}`}
-                tabIndex={i === index ? 0 : -1}
-                aria-pressed={i === index}
-                aria-controls={`${idPrefix}-citation`}
-                onClick={() => select(i, false)}
-                onFocus={() => select(i, false)}
-              >
+      {entries.map((a, i) => (
+        <li key={a.key}>
+          <button
+            type="button"
+            ref={(el) => {
+              btnRefs.current[i] = el;
+            }}
+            className={`${sheet ? 'v2-case-tile' : 'v2-case-plaque'}${
+              i === index ? ' is-on' : ''
+            }${chosenKey && a.key === chosenKey ? ' is-chosen' : ''}`}
+            tabIndex={i === index ? 0 : -1}
+            aria-pressed={chosenKey ? a.key === chosenKey : i === index}
+            aria-controls={`${idPrefix}-citation`}
+            onClick={() => choose(i)}
+            onFocus={() => select(i, false)}
+          >
+            {sheet ? (
+              <>
+                <span className="v2-case-tile-num">{String(i + 1).padStart(2, '0')}</span>
+                <span className="v2-case-tile-title">{a.title}</span>
+                <span className="v2-case-tile-date">{a.date}</span>
+              </>
+            ) : (
+              <>
                 <span className="v2-case-plaque-place">{a.meta}</span>
                 <span className="v2-case-plaque-title">{a.title}</span>
                 <span className="v2-case-plaque-date">{a.date}</span>
-              </button>
-            </li>
-          ))}
-        </ol>
+              </>
+            )}
+          </button>
+        </li>
+      ))}
+    </ol>
+  );
 
-        <div className="v2-case-citation" id={`${idPrefix}-citation`} aria-live="polite">
-          <p className="v2-case-cite-meta">
-            <b>{award.meta}</b>
-            <span aria-hidden="true"> / </span>
-            {award.date}
+  /*
+   * Hoisted, because the sheet puts it somewhere else.
+   *
+   * On a plate of five it belongs under the case beside the rail. On the
+   * index it belongs UNDER THE STAGE, in the column the stage is in, with the
+   * tiles running down the full height beside both: the carousel, the caption
+   * for what is turned toward you, and all fifteen names, in one screen. That
+   * is the whole of "from the top of the screen with the carousel in view",
+   * and it is a placement rather than a second component.
+   */
+  const citation = (
+    <div className="v2-case-citation" id={`${idPrefix}-citation`} aria-live="polite">
+      <p className="v2-case-cite-meta">
+        <b>{award.meta}</b>
+        <span aria-hidden="true"> / </span>
+        {award.date}
+      </p>
+      <h3 className="v2-case-cite-title">{award.title}</h3>
+      <p className="v2-case-cite-body">{award.body}</p>
+      {award.badges && award.badges.length ? (
+        <ul className="v2-case-badges">
+          {award.badges.map((b) => (
+            <li key={b}>{b}</li>
+          ))}
+        </ul>
+      ) : null}
+      <p className="v2-case-specimen">
+        <span className="v2-case-specimen-key">On the shelf</span>
+        {award.specimen} {stat.verts} vertices, {stat.faces} faces.
+      </p>
+      {citationFoot ? citationFoot(award, index) : null}
+    </div>
+  );
+
+  return (
+    <section
+      className={`v2-case${layout === 'index' ? '' : ` is-${layout}`}${
+        className ? ` ${className}` : ''
+      }`}
+      aria-labelledby={head ? `${idPrefix}-title` : undefined}
+      aria-label={head ? undefined : listLabel}
+    >
+      {head ? (
+        <header className="v2-case-head">
+          <p className="v2-eyebrow" data-perch data-perch-text data-perch-inset="0.38em">
+            {eyebrow}
           </p>
-          <h3 className="v2-case-cite-title">{award.title}</h3>
-          <p className="v2-case-cite-body">{award.body}</p>
-          {award.badges && award.badges.length ? (
-            <ul className="v2-case-badges">
-              {award.badges.map((b) => (
-                <li key={b}>{b}</li>
-              ))}
-            </ul>
+          <h2
+            className="v2-h2"
+            id={`${idPrefix}-title`}
+            data-perch
+            data-perch-text
+            data-perch-inset="0.10em"
+          >
+            {heading}
+          </h2>
+          <p className="v2-case-note">{note}</p>
+        </header>
+      ) : null}
+
+      <div className="v2-case-plate">
+        {/*
+          The stage is a control now, not a picture of one.
+
+          It carries its own tab stop and its own arrow keys, because it is the
+          thing the reader is actually looking at and reaching the case through
+          a list of names below it to turn the object above is a strange way
+          round. The canvas stays aria-hidden: this box holds the label.
+
+          `touch-action: pan-y` in the CSS, so a sideways drag is ours and a
+          vertical one is still the page's.
+        */}
+        <div
+          className="v2-case-stage"
+          ref={stageRef}
+          data-perch
+          role="group"
+          tabIndex={0}
+          aria-label={listLabel}
+          onKeyDown={onStageKeyDown}
+          onClick={takeable ? () => choose(indexRef.current) : undefined}
+          data-takeable={takeable ? '' : undefined}
+        >
+          <canvas ref={canvasRef} aria-hidden="true" />
+          <p className="v2-case-mark">
+            {GEOMETRY.nVerts} vertices / {GEOMETRY.nFaces} faces / drawn here
+          </p>
+          <p className="v2-case-tally" aria-hidden="true">
+            {String(index + 1).padStart(2, '0')}
+            <i> / </i>
+            {String(count).padStart(2, '0')}
+          </p>
+          {arrows ? (
+            <>
+              {/* Flanking the object rather than sitting under it, so the thing
+                  you are steering and the control that steers it are one
+                  gesture. `stopPropagation` because the stage itself may be a
+                  click target: an arrow turns the case, it does not take what
+                  it turned away from. */}
+              <button
+                type="button"
+                className="v2-case-arrow is-prev"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  select(indexRef.current - 1, false);
+                }}
+                aria-label={`Previous: ${entries[(index - 1 + count) % count]?.title ?? ''}`}
+              >
+                <Chevron back />
+              </button>
+              <button
+                type="button"
+                className="v2-case-arrow is-next"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  select(indexRef.current + 1, false);
+                }}
+                aria-label={`Next: ${entries[(index + 1) % count]?.title ?? ''}`}
+              >
+                <Chevron />
+              </button>
+            </>
           ) : null}
-          <p className="v2-case-specimen">
-            <span className="v2-case-specimen-key">On the shelf</span>
-            {award.specimen} {stat.verts} vertices, {stat.faces} faces.
-          </p>
         </div>
+
+        {sheet ? rail : null}
+        {sheet ? citation : null}
       </div>
+
+      {sheet ? null : (
+        <div className="v2-case-body">
+          {layout === 'index' ? rail : null}
+          {citation}
+        </div>
+      )}
     </section>
   );
 }

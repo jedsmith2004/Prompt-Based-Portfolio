@@ -21,7 +21,7 @@ import { useMode } from '@/components/v2/useMode';
 import ClimbingWall from '@/components/v2/ClimbingWall';
 import Polaroids from '@/components/v2/Polaroids';
 import NeuralPlayground from '@/components/v2/NeuralPlayground';
-import HighlightReel from '@/components/v2/HighlightReel';
+import ProjectCase from '@/components/v2/ProjectCase';
 import RouteMap from '@/components/v2/RouteMap';
 import SkillConstellation from '@/components/v2/SkillConstellation';
 import SectionBackdrops from '@/components/v2/SectionBackdrops';
@@ -30,6 +30,7 @@ import CareerLine from '@/components/v2/CareerLine';
 import AwardsClippings from '@/components/v2/AwardsClippings';
 import ContactPlate, { type ContactPlateHandle } from '@/components/v2/ContactPlate';
 import CurriculumVitae from '@/components/v2/CurriculumVitae';
+import { askJack } from '@/lib/v2/ask';
 import { HERO, SECTIONS, SECTION_WORLDS, WHISPERS, type SectionShape } from '@/lib/v2/content';
 import {
   ridgeline,
@@ -114,9 +115,21 @@ function sectionExtra(id: string, contactExtra?: React.ReactNode) {
        */
       return <SkillConstellation />;
     case 'recensorium':
-      /* The reel leads with Recensorium, so it belongs on the plate that is
-         about Recensorium rather than two sections further down. */
-      return <HighlightReel height={400} />;
+      /*
+       * THE CASE, NOT THE REEL.
+       *
+       * > "The projects section carousel doesn't work, can you just lift the
+       * >  carousel from the 'all projects' page but only keep the two either
+       * >  side and be able to use the arrow buttons and the horizontal scroll
+       * >  if the user has it."
+       *
+       * Lifted rather than reimplemented: this is the same component the index
+       * uses, in its reel dress. Two either side, arrows, a sideways wheel, and
+       * the two links out that the reel carried. It holds all fifteen rather
+       * than five, which is also why it is still on the plate that is about
+       * Recensorium: Recensorium is the one it opens on.
+       */
+      return <ProjectCase variant="reel" />;
     case 'delivery':
       /* CareerLine's argument is that the roles did not queue up behind the
          degree, they ran inside it. This is the plate about the roles. */
@@ -294,25 +307,7 @@ export default function V2Page() {
     }
   }, [shapeName, route]);
 
-  /* The bird answers as Jack. Streams from the existing /api/ask route, and
-     says so plainly rather than inventing an answer when the route is down. */
-  const ask = useCallback(async (q: string): Promise<string> => {
-    const res = await fetch('/api/ask', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: q, history: [] })
-    });
-    if (!res.ok || !res.body) throw new Error(String(res.status));
-    const reader = res.body.getReader();
-    const dec = new TextDecoder();
-    let acc = '';
-    for (;;) {
-      const r = await reader.read();
-      if (r.done) break;
-      acc += dec.decode(r.value, { stream: true });
-    }
-    return acc.trim() || 'I did not catch that. Ask me another way.';
-  }, []);
+  const ask = useCallback((q: string) => askJack(q), []);
 
   const jump = useCallback((id: string) => {
     scrollToSection(id);

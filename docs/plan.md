@@ -926,9 +926,16 @@ wearing five hats. `lib/v2/paletteWatch.ts` and four subscribers.
 
 **Plate 7 — cv / the press wall**
 
-`[x]` *"There are massive gaps in the newspaper cutouts."* The appointments card
-sat alone in an outer-grid row, leaving five columns and ~700px of nothing. It
-is a multicolumn flow now.
+`[x]` *"There are massive gaps in the newspaper cutouts."* WRONGLY DIAGNOSED
+the first time, and the fix made it worse: I read "gaps" as gaps in the WALL,
+found the appointments card sitting alone in an outer-grid row with ~700px of
+nothing beside it, and rebuilt the layout as a multicolumn flow. Jack, on
+seeing it: *"I like how the newspaper clippings were before, now they're
+stacked up. It's only the public speaking competition and engineering you're
+hired ones that had the gaps in their text!"* The gaps were INSIDE two
+clippings, where a narrow cut left a short measure. The wall is back to the
+twelve-track grid it was, and those two entries carry `cut: null` so they take
+the full 136px band.
 `[x]` *"The black background is also too black, make it slightly grey."* Every
 dark form lifted +12 per channel, re-audited: 18 forms, worst small text 4.50:1,
 zero failures.
@@ -964,6 +971,93 @@ bottom of the screen."*
 easter eggs, and ones for halloween, christmas, easter, etc. — put those ones in
 now so I can see them."* Five bits and the timeline machinery to hang more on.
 `SEASON_PREVIEW` is on, so the seasonal three are in the hat all year.
+
+---
+
+## P1 — the second tweak list (new, 2026-08-27)
+
+### P1-CAROUSELS — DONE (2026-08-27)
+
+**The spine's project carousel.**
+
+`[x]` *"The projects section carousel doesn't work, can you just lift the
+carousel from the 'all projects' page but only keep the two either side and be
+able to use the arrow buttons and the horizontal scroll if the user has it."*
+Lifted rather than reimplemented: `SpecimenCase` in `AwardsCase.tsx` grew three
+dresses (`index`, `reel`, `sheet`), and the spine now mounts the same
+`ProjectCase` the index does, in its reel dress. It carries all fifteen rather
+than the reel's five, and it carries over the reel's two links out, which were
+a direct Jack request from the previous list. `HighlightReel.tsx` has no
+importers now; retiring it is its own job because its `.v2-reel-arrow` and
+`.v2-reel-go` CSS is shared with the case.
+
+Three things had to change under the hood before "two either side" meant it:
+
+- **The window is a count of lit slots now.** The case's own falloff is 2.4
+  slots lit over 1.3 more, which at five entries reaches past the whole ring
+  and is therefore invisible. Asked for two, it drew a third neighbour at
+  nearly full strength on each side. A caller-set window fades over one slot:
+  lit at 2, gone at 3.
+- **The fit measured objects that are never drawn.** `measureBounds` walked the
+  whole ring including the hidden back half, so the composition was scaled to
+  frame something nobody sees. Harmless at five, where nothing is ever hidden;
+  at fifteen with a window of two it was the reason three objects sat small in
+  the middle of a wide plate.
+- **The shelf is an ellipse and the window is an arc of one.** It ran the full
+  width under three objects and set the horizontal bounds single-handedly,
+  which meant narrowing the window made the objects SMALLER. It now ends just
+  past the outermost lit object, clamped so the awards case is untouched.
+
+**The all-projects page.**
+
+`[x]` *"firstly, there is no pip"* — the Companion is mounted per page and this
+page never imported it. Every prop is optional, so the fix is the mount plus
+lines for the two sections.
+`[x]` *"you should be able to select/cycle through the carousel itself without
+selecting the project down below"* — the case has a CURSOR and a CHOICE now,
+and they are different things. Arrows, the sideways wheel and roving focus move
+the cursor; the citation follows it, because the citation is the caption for
+whatever is turned toward you. Only a click or Enter chooses.
+`[x]` *"There should be a way to see all the projects, maybe on a rotating
+basis, or a clever layout, from the top of the screen with the carousel in
+view."* The sheet dress: stage top left, its citation directly under it, and
+all fifteen as tiles running down the full height beside both. The page's own
+masthead was cut to one row and the case raises no second one. Everything is in
+the first screen on a laptop.
+`[x]` *"When a project is selected, it's article entry should come up."* A
+raised entry between the case and the catalogue, on ink-bordered stock: the full
+description, every technology rather than the first eight, the features without
+asking, and the way to the full page. The catalogue below is unchanged, and its
+row numbers are buttons that send a project back up to the case.
+
+### P1-PROJECT-PAGES — DONE (2026-08-27)
+
+`[x]` *"Every project page needs a massive revamp, with it's own background,
+screenshots, stories, articles within them."*
+
+**The content was the work.** The page rendered one `description` per project:
+372 words across all fifteen, nine of them under 110. A revamp of the renderer
+alone would have produced fifteen better-arranged versions of the same
+paragraph. `lib/v2/projectStories.ts` is about 4,200 words, written against
+`lib/projects-data.ts`, `public/context.json`, this repository's own source and
+the screenshots in `public/`, then fact-checked against the same sources. Where
+a project is thin its entry is short. Three have no figure because they have no
+screenshot, and one of those says so in its copy.
+
+One invented number survived the check and was caught by grepping every numeral
+in the corpus against the sources: a 95% grade on the AlexNet study that is
+written down nowhere. Cut. The rasterizer's "FPS near 75" looked like the same
+kind of invention and is not: it is legible in `public/3d-rasterizer-engine.png`.
+
+**A regression, found on the way.** `.v2-world` was changed to `opacity: 0`
+until `SectionBackdrops` adds `is-ready` — that was the fix for the backdrop
+swap stutter. `ProjectStory` mounts its world by hand rather than through that
+component, so every project page had been rendering an invisible backdrop since
+that commit. It runs the same two-rAF gate now.
+
+**Also.** `askJack` in `lib/v2/ask.ts`: the same stream-reading helper was
+written out byte-identically on the spine and on a project page, and was about
+to be written a third time.
 
 ---
 

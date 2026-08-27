@@ -45,7 +45,7 @@ network, the route is the real coordinates. Nothing is a picture of the thing.
 | — | `top` | Hero | InkField (gritstone ridgeline) | **none** | light | — |
 | 01 | `from-scratch` | Write the pipeline, then import one | NeuralPlayground (real 784-64-10 MLP) | Geometry | **dark** | switch |
 | 02 | `models` | Nothing leaves the machine | SkillConstellation (3D) | Techno | dark | — |
-| 03 | `recensorium` | An agent never picks what it reviews | HighlightReel (halftone) | Watercolour | **light** | switch |
+| 03 | `recensorium` | An agent never picks what it reviews | ProjectCase, reel dress | Watercolour | **light** | switch |
 | 04 | `delivery` | Shipped, handed over, still running | CareerLine | **Braid** | light | — |
 | 05 | `road` | Croatia to the Sahara, thumb out | RouteMap + Polaroids | Scrapbook | light | — |
 | 06 | `practice` | Falling is part of the method | ClimbingWall | Topography | **dark** | dial |
