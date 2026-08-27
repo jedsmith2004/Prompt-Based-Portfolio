@@ -41,6 +41,7 @@
    ========================================================================== */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { paletteTokens, type PaletteTokens } from '@/lib/v2/paletteWatch';
 import {
   PARTS,
   PALETTE,
@@ -1634,13 +1635,13 @@ export default function Companion({
     /* The sprite palette is fixed, but the bubble and chat chrome are ours,
        so they follow the page's own tokens and flip with the theme. */
     const theme = { paper: '#F0ECE3', ink: '#17140F', ink3: '#655C4F', verm: '#9E3524' };
-    function readTheme() {
-      const cs = getComputedStyle(document.documentElement);
-      const get = (n: string, f: string) => (cs.getPropertyValue(n) || '').trim() || f;
-      theme.paper = get('--paper-hi', '#F0ECE3');
-      theme.ink = get('--ink', '#17140F');
-      theme.ink3 = get('--ink-3', '#655C4F');
-      theme.verm = get('--verm-text', get('--verm', '#9E3524'));
+    /* The snapshot paletteWatch carries where there is one, the document
+       where there is not. Four reads rather than four forced recalcs. */
+    function readTheme(t: PaletteTokens = paletteTokens()) {
+      theme.paper = t.get('--paper-hi', '#F0ECE3');
+      theme.ink = t.get('--ink', '#17140F');
+      theme.ink3 = t.get('--ink-3', '#655C4F');
+      theme.verm = t.get('--verm-text', t.get('--verm', '#9E3524'));
       bubble.dirty = true;
       chatUi.dirty = true;
     }
@@ -7090,7 +7091,18 @@ export default function Companion({
     const themeObserver = new MutationObserver(onThemeChange);
     themeObserver.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ['data-v2-theme', 'class', 'style']
+      /*
+       * NARROWED from ['data-v2-theme', 'class', 'style'].
+       *
+       * `style` on <html> is where usePalette writes all sixteen tokens and
+       * `class` is where it puts its transition markers, so ONE change of
+       * light delivered three separate batches here and readTheme ran on all
+       * three. Worse, the bird's own draw toggles a cursor class on <html>,
+       * so he was waking himself. `data-v2-theme` is written in the same
+       * batch as the tokens, which is the whole reason `style` was added in
+       * the first place, so it is now sufficient on its own.
+       */
+      attributeFilter: ['data-v2-theme']
     });
 
     const onKey = (e: KeyboardEvent) => {

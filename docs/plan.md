@@ -1061,6 +1061,227 @@ to be written a third time.
 
 ---
 
+### P1-LIGHT-COST - DONE (2026-08-27)
+
+`[x]` *"there are lag spikes when switching backgrounds and massive lag spikes
+when turning off or on the lights."*
+
+One change of light performed **19 `getComputedStyle` acquisitions and 82
+`getPropertyValue` calls**, every one of them re-deriving from the DOM a value
+`usePalette` had held as a plain hex string a microtask earlier. Because all
+sixteen palette tokens are registered `@property` with `inherits: true`, the
+first of those reads forces a full-document style recalculation - the 110ms
+already written into `v2.css` - and it was being paid inside a mutation
+callback, where it blocks.
+
+The notification carries the palette now. `usePalette` publishes what it is
+about to write; six subscribers ask the snapshot rather than the document.
+
+Measured by **counting the calls**, because long-task blocking on a dev build
+could not resolve it: run-to-run drift and a within-run degradation were both
+larger than the effect. Per event, 12 samples per cell:
+
+| | before | payload | + residue |
+|---|---|---|---|
+| arrival, palette reads | 86.7 | 8.6 | **0** |
+| arrival, ms inside them | 99.8 | 1.0 | 1.3 |
+| toggle, palette reads | 102.6 | 13 | **0** |
+| toggle, ms inside them | 70.7 | 6.9 | 2.2 |
+| toggle, worst single call | 133.4ms | 35.9ms | **1.2ms** |
+
+Zero palette reads remain on either path. The third column is after converting
+`RouteMap`, which kept its own observer and so was missed, and caching
+`--clip-bleed` in `AwardsClippings`, which was not a colour at all - but any
+computed read after the tokens are written pays for the whole document.
+
+Full method, including two invalid A/B designs and why they were invalid, in
+[ab-log.md](ab-log.md) under AB-LIGHT.
+
+**Not claimed:** that the page is 100ms faster per plate. The browser still
+resolves that style; it does it in its own rendering step now instead of on
+demand from inside a callback.
+
+**Left open:** a *separate* degradation, unrelated to this change and present on
+both sides of it. Four of five measurement runs got three to ten times more
+expensive by the third pass over the plates. That is the better lead of the two
+and nothing about it is settled - see the devlog.
+
+### P1-CLOSING-NOISE - DONE (2026-08-27)
+
+`[x]` *"the last page still has a screen full of noise when you go onto it, the
+particles spawning in."*
+
+Still, because the earlier wake-onto-targets fix was keyed on `dormant`
+changing and did not cover it. `retarget()` re-aims a quarter of a million
+particles at the portrait and lets them fly across the viewport, in front of the
+one plate on the site that asks the reader for something.
+
+The deferred retarget settles now instead of flying. Verified by capturing
+frames 400ms after arrival and scoring ink coverage against each route's own
+settled state:
+
+| route | before | after |
+|---|---|---|
+| plate by plate (scrolling) | 2.63x | 0.88x |
+| smooth jump (the nav rail) | 2.43x | 0.52x |
+| instant jump (a `#hash` link) | 2.07x | 0.65x |
+
+And by looking at the frames: a full-viewport field of speckle with the copy
+unreadable underneath it becomes the settled portrait.
+
+Three more defects on the same path went with it: `resize()` re-flighting every
+particle on any window resize; `resize()` not recording what it built, so the
+shapeKey effect rebuilt a quarter of a million destinations a second time on
+every mount; and a GL teardown that nulled `retargetRef` but not `runRef`,
+leaving a start/stop pair closed over deleted programs and textures.
+
+**Two explanations of this were wrong before the right one.** Both were reading
+rather than looking, and both are kept in the devlog.
+
+---
+
+### P1-SHOWCASE - DONE (2026-08-27)
+
+`[x]` *"For the projects showcase, remove the background, the stats '12/15',
+'1936 verticles', the prose 'The same case that stands at the head of the
+index...', and make the turnstile and the project it's selected side by side.
+Also, only 5 projects should be here, not all of them."*
+
+All of it applies to the REEL only. The index at `/v2/projects` is a catalogue
+and keeps its tally, its vertex mark and its standfirst; the awards plate is
+untouched.
+
+- **The background.** Read as the case's own panel, not the plate's world. The
+  stage carried an opaque `--paper-2` fill and a firm border, which on this
+  plate punched a grey rectangle through the watercolour. Jack, 2026-08-26:
+  *"the backdrops should be prominent and the centrepiece, with everything
+  working around them"* - the panel was the one thing on the plate refusing to.
+  Removing it puts the ring straight onto the world, which serves that
+  instruction rather than fighting it. If he meant the world, that is one line
+  in `SECTION_WORLDS`.
+- **`01 / 15`.** Gone from the reel. It now renders on the sheet alone, where
+  fifteen tiles make a count mean something. It has been wrong in both
+  directions: first rendered unconditionally, which put `01 / 05` on the awards
+  plate, then guarded as "not the awards", which left it here.
+- **`1936 vertices / 1197 faces / drawn here`.** Gone. The pipeline signing its
+  own work is right on a page about the pipeline; on a showcase it is a vertex
+  count sitting on top of somebody's project.
+- **The standfirst.** Gone. Four lines about the rendering pipeline between the
+  heading and the thing the reader came to look at. How to work the case is
+  still in `listLabel`, where a screen reader gets it.
+- **Also removed, not asked for by name:** the `On the shelf` line, which ended
+  *"69 vertices, 39 faces"*. It is the same stat in a third place, and it
+  describes the OBJECT while the column it sat in is now about the PROJECT.
+  Reinstating it is one guard in `AwardsCase.tsx`.
+- **Side by side.** The citation moves inside `.v2-case-plate` and the plate
+  becomes two columns, `1.35fr` for the stage and `1fr` for the entry, centred
+  on each other. The stage also gets a shorter, wider box: the ring is a wide
+  object, and in a tall narrow column it went width-bound and banked the rest
+  as blank paper - which, with no panel behind it, read as a small object
+  adrift.
+- **Five projects.** Newest first, take five. Rule-based rather than a
+  hand-picked list: it is the order the eyebrow already claims, it cannot fall
+  out of step with `lib/projects-data.ts`, and a new project arrives at the
+  front on its own. Today that is Recensorium, MotionGen, AlexNet, HabitFlow
+  and Natural Systems & RL. `REEL_COUNT` in `ProjectCase.tsx` is the one line
+  to change, and swapping it for an explicit array of ids is the way to curate
+  instead.
+
+- **A knock-on I nearly shipped.** The stage carries `data-perch`, and the
+  perch contract deliberately took no inset there *because the plate's 1px
+  border was the visible line Pip stood on*. Removing the border left him
+  standing on an invisible rectangle a clear gap above the object, which is the
+  one thing `measureEdge` exists to prevent. The perch is dropped for this
+  layout; he keeps the eyebrow, the heading and the two links. Caught by
+  reading the CSS comment I had just written, which described the problem
+  without fixing it.
+
+Five is also the number this ring was built for: the awards case has run five
+objects on the same geometry since it was written.
+
+Verified by rendering, light and dark.
+
+---
+
+### P1-ONE-ENTRY - DONE (2026-08-27)
+
+`[x]` *"On /projects, the project entry appears twice, I want the higher one
+(under the turnstile) to be the main one, compress the information from the big
+entry underneath into that smaller one with links."*
+
+There were two, and the higher one was a CAPTION while the lower one was the
+article: meta line, title, one sentence, five chips. The lower one carried the
+description, the features, the whole stack and the links, on ink-bordered stock
+between the case and the catalogue.
+
+The caption grew into the article and the panel went.
+
+- **What moved up.** The whole description rather than its first sentence; the
+  whole stack rather than five of it; the project's own page and every outbound
+  link it has, with the catalogue's own words for them, so one project reads the
+  same in both places.
+- **What did not, and why.** The feature list. It is four to twelve bullets and
+  the catalogue row one screen below already discloses every one of them behind
+  *"What it does (n)"*, as does the project's own page. Reinstating it means
+  rendering `p.features` in the same side column - it is the one editorial call
+  in here, so it is the one to argue with.
+- **The stack is capped at ten** with a `+n` tail. Recensorium lists fifteen
+  technologies, which in this column is six rows of chips standing over the
+  description. Ten and a tail is the catalogue's own idiom, not a new one.
+  `TECH_SHOWN` in `ProjectCase.tsx`.
+- **Two columns, not one.** In one column the reading measure runs out long
+  before the chips and the links do and everything after them is pushed a screen
+  down. The left column reads, the right one lists, and the object's caption runs
+  under both because it is about the drawing rather than either column. Below
+  901px it is one column again: a 280px reading measure is not a saving.
+- **The stack and the links are ONE element, not two cells.** Grid rows are
+  shared across columns, so a four-row block of chips placed beside the title
+  decides how tall the title's row is, and the description underneath starts
+  wherever the chips happen to stop. First attempt did exactly that and left the
+  title hanging over a hole the depth of itself.
+
+**The choice went with the panel.** The case had two positions, a cursor and a
+choice, for one reason: something below had to know when the reader meant it.
+With the entry attached to the cursor there is nothing left for a choice to open,
+and a second mark that can drift out of step with the first is a mark that lies -
+click tile 07, arrow to 08, and a filled black cell claims a choice about a
+project you are no longer looking at. So:
+
+- `SpecimenCase` gained `onCursor`, which reports the cursor out on mount and on
+  every turn. `/v2/projects` mirrors it and the catalogue marks the row the case
+  is showing, which is now true by construction rather than only after a click.
+- `is-chosen` is gated on `takeable`, so the class agrees with `aria-pressed`,
+  which was already gated. A caller that uses `chosenKey` only to POINT the case
+  no longer gets a filled cell announcing a choice nobody made.
+- `chosenKey` accepts `{ key }` as well as a string, and that fixes a control
+  that was dead: two presses of the same row number are the same string, React
+  bails out, and the second press did nothing in exactly the case a reader would
+  make it, once the case had been turned somewhere else in between. It must be a
+  new object per request and a stable one between renders, or it fights the
+  reader for the cursor one frame per keypress.
+
+**Announcements.** The citation is a polite live region, which is right for a
+caption and hostile for an entry: a screenful read out on every notch of the
+wheel. On the sheet the identity alone is announced now and the rest is read on
+request, which is how a listbox behaves. The other two dresses are unchanged.
+
+**Also.** `ProjectRow` is memoised and takes the id back rather than a fresh
+closure, because the bar in its margin now follows a cursor that moves on every
+arrow key. The raised entry's stylesheet is deleted with the entry.
+
+**Half of that bug was already known.** There is a comment in `page.tsx` saying
+the row number was dead on a repeat press and that carrying an object fixed it.
+It fixed the page's half. The case's own effect keys on the same string and was
+never touched, so the ring still would not turn back; a fix at one level had been
+covering for the absence of a fix at the other.
+
+Verified by rendering at 1440, 1024 and 430, and by turning the case with its own
+arrow and its own keyboard: the entry, its stack, its links, the specimen caption
+and the catalogue's mark all follow. `/v2/awards` and the spine's reel are
+unchanged - checked by DOM count, not by eye.
+
+---
+
 ## Immediate next three (2026-08-26, after the tweak list)
 
 Everything above that was mine to do is done. What is left needs Jack, or needs

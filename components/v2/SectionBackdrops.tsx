@@ -382,7 +382,22 @@ export default function SectionBackdrops({
           <div
             key={s.key}
             ref={(el) => {
-              wrapRefs.current.set(s.key, el);
+              /*
+               * DELETE ON DETACH, or this Map only ever grows.
+               *
+               * `drop()` deletes the key and THEN calls setSlots, so React
+               * unmounts the node afterwards -- and in React 18 a callback ref
+               * has no cleanup return, so detaching invokes it again with
+               * null, which put the key straight back. The other removal path
+               * (a world overtaken mid-fade) never deleted from here at all.
+               * Keys come from a module counter that is never reset, so
+               * nothing could ever reclaim an entry.
+               *
+               * Small -- a number against null, no node retained -- but
+               * unbounded, and on the one path the reader takes most.
+               */
+              if (el) wrapRefs.current.set(s.key, el);
+              else wrapRefs.current.delete(s.key);
             }}
             className={`v2-world${s.leaving ? ' is-leaving' : ''}${
               !s.leaving && s.key === readyKey ? ' is-ready' : ''

@@ -1961,6 +1961,10 @@ html[data-v2-theme='dark']  body { background: #15130E; }
 .v2-bird-input::selection { background: rgba(181, 64, 47, 0.28); }
 .v2-bird-input::placeholder { color: transparent; }
 
+/* Visually hidden, still read. `.v2-bird-sr` was the only one of these on the
+   site and it is named for the bird; the case needs the same thing for a
+   heading it does not draw and an instruction it does not print. */
+.v2-sr,
 .v2-bird-sr {
   position: absolute;
   width: 1px;
@@ -3716,8 +3720,124 @@ html[data-v2-theme='dark']  body { background: #15130E; }
    measure rather than half a grid with nothing in the other half. */
 .v2-case.is-reel .v2-case-body,
 .v2-case.is-sheet .v2-case-body { grid-template-columns: 1fr; }
-.v2-case.is-reel .v2-case-citation,
 .v2-case.is-sheet .v2-case-citation { max-width: 76ch; }
+
+/* ==========================================================================
+   THE ENTRY UNDER THE TURNSTILE
+
+   > "the project entry appears twice, I want the higher one (under the
+   >  turnstile) to be the main one, compress the information from the big
+   >  entry underneath into that smaller one with links"
+
+   So this is no longer a caption. It carries the whole description, the stack
+   and every way out, in the width of the stage's column, and in one column
+   that is a very tall stack of paper: the reading measure runs out long before
+   the chips and the links do, and everything after them is pushed a screen
+   down.
+
+   Two columns instead. The left is the reading one and keeps a proper measure;
+   the right takes the two things that are lists rather than prose, where a
+   short line is the point. The object's own caption runs under both, because
+   it is about the drawing above rather than about either column.
+
+   Below 900 the plate is already one column and so is this: a 280px-wide
+   reading measure is not a saving.
+   ========================================================================== */
+@media (min-width: 901px) {
+  .v2-case.is-sheet .v2-case-citation {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr);
+    column-gap: clamp(18px, 2.2vw, 34px);
+    row-gap: 16px;
+    align-items: start;
+  }
+  .v2-case.is-sheet .v2-case-cite-id { grid-area: 1 / 1; }
+  .v2-case.is-sheet .v2-case-cite-body {
+    grid-area: 2 / 1;
+    margin-bottom: 0;
+    /* The measure is the column now. 46ch in a 360px box is a max-width that
+       never binds, and pretending otherwise hides where the line breaks are
+       actually decided. */
+    max-width: none;
+    /* A whole description rather than one sentence, so it sets a step down
+       from the lede above it: the entry is the small print of the plate, not
+       a second headline. */
+    font-size: clamp(14.5px, 1.2vw, 16px);
+    line-height: 1.58;
+  }
+  /* One column, not two cells: rows are shared across a grid, so a stack of
+     chips placed beside the title decides how tall the title's row is, and the
+     description underneath starts wherever the chips happen to stop. */
+  .v2-case.is-sheet .v2-case-side {
+    grid-area: 1 / 2 / 3 / 3;
+  }
+  .v2-case.is-sheet .v2-case-specimen {
+    grid-area: 3 / 1 / 4 / 3;
+  }
+}
+
+/* The stack, and then the ways out of it. Below 901 this is simply the last
+   two blocks of the entry, in the order they are written. */
+.v2-case-side .v2-case-badges { margin-bottom: 0; }
+.v2-case-side .v2-case-badges .is-more { color: var(--ink-3); opacity: 0.75; }
+
+/* ==========================================================================
+   THE REEL: the object and the project it belongs to, side by side.
+
+   > "make the turnstile and the project it's selected side by side"
+
+   The stage keeps the larger share because it is the drawing; the column
+   beside it is one project's entry, so it wants a reading measure and not a
+   third of the screen. `align-items: center` rather than `start`: the entry is
+   shorter than the stage on every project, and hung from the top it reads as
+   having fallen off the object rather than standing next to it.
+   ========================================================================== */
+.v2-case.is-reel .v2-case-plate {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: clamp(20px, 3.4vw, 52px);
+  align-items: center;
+}
+@media (max-width: 900px) {
+  /* Source order stands: the object, then its entry. */
+  .v2-case.is-reel .v2-case-plate { grid-template-columns: 1fr; }
+}
+
+/*
+ * NO BOX BEHIND THE OBJECT.
+ *
+ * > "remove the background"
+ *
+ * The stage carried an opaque `--paper-2` panel and a firm border, which on
+ * this plate meant a grey rectangle punched through the watercolour. Jack,
+ * 2026-08-26: "the backdrops should be prominent and the centrepiece, with
+ * everything working around them" -- the panel was the one thing on the plate
+ * refusing to do that. Dropped, so the ring is drawn straight onto the world.
+ *
+ * The canvas paints its glyphs in --ink and --verm-text and composites over
+ * whatever is behind, so this is a change of ground, not of ink.
+ */
+.v2-case.is-reel .v2-case-stage {
+  background: none;
+  border: 0;
+  /*
+   * SHORTER THAN THE OTHER TWO, because the box is narrower.
+   *
+   * The ring is a wide object: five solids on a turning shelf, much wider than
+   * it is tall. The drawing fits itself to its box, so in a tall box it goes
+   * width-bound and banks the leftover as blank paper above and below -- which
+   * on a plate with no panel behind it is just a small object adrift in a lot
+   * of nothing. Roughly 8:5 puts the ring at the size of its own column.
+   */
+  height: clamp(240px, 25vw, 360px);
+}
+/* The perch is dropped in the markup for this layout rather than adjusted
+   here: with no border there is no visible line to stand on. See the note on
+   data-perch in AwardsCase.tsx. */
+.v2-case.is-reel .v2-case-citation {
+  margin: 0;
+  max-width: 46ch;
+}
 
 /* Where you are in the ring, in the corner opposite the pipeline's signature.
    The reel had this and it is the one thing a carousel owes the reader: how

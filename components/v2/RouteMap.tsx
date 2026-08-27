@@ -47,6 +47,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import context from '@/public/context.json';
 import { withAlpha } from '@/lib/v2/colour';
+import { paletteTokens } from '@/lib/v2/paletteWatch';
 import COUNTRIES from '@/lib/v2/route-countries.json';
 
 /**
@@ -161,6 +162,27 @@ function rgba(css: string, alpha: number): string {
 function token(style: CSSStyleDeclaration, name: string, fallback: string) {
   const v = style.getPropertyValue(name);
   return v && v.trim() ? v.trim() : fallback;
+}
+
+/**
+ * `--f-mono`, read from the document once for the life of the page.
+ *
+ * It is not a palette token and it never changes, but it was being read inside
+ * the draw alongside six that do -- and after a palette write, the first
+ * computed read of ANY property has to resolve a sixteen-thousand-pixel
+ * document before it can answer. Lazy rather than module-level so it is never
+ * evaluated during SSR. See lib/v2/paletteWatch.ts.
+ */
+let monoCache = '';
+function monoStack(): string {
+  if (!monoCache) {
+    monoCache = token(
+      getComputedStyle(document.documentElement),
+      '--f-mono',
+      '"JetBrains Mono", ui-monospace, Menlo, monospace'
+    );
+  }
+  return monoCache;
 }
 
 /* ------------------------------------------------------------- projection */
@@ -681,16 +703,22 @@ export default function RouteMap({
     canvas.style.width = `${box.w}px`;
     canvas.style.height = `${box.h}px`;
 
-    /* ---- palette, read live so the plate follows the sheet --------------- */
-    const cs = getComputedStyle(document.documentElement);
-    const inkHex = token(cs, '--ink', '#17140F');
-    const ink3Hex = token(cs, '--ink-3', '#655C4F');
-    const vermHex = token(cs, '--verm', '#B5402F');
-    const vermTextHex = token(cs, '--verm-text', '#9E3524');
-    const paperHex = token(cs, '--paper', '#E4DFD3');
-    const ruleCol = token(cs, '--rule', 'rgba(23,20,15,0.16)');
-    const mono =
-      token(cs, '--f-mono', '"JetBrains Mono", ui-monospace, Menlo, monospace');
+    /* ---- palette, from the snapshot so the plate follows the sheet ------
+       This effect re-runs on `theme`, which is to say on every change of
+       light, and it used to answer that by going back to the document for six
+       values usePalette had just written. Because the tokens are registered
+       `@property` with `inherits: true`, the first of those reads forced a
+       full-document style recalculation: the counter caught it at 34-36ms, the
+       largest single blocking call left on the page after the other six
+       figures had been converted. See lib/v2/paletteWatch.ts. */
+    const pal = paletteTokens();
+    const inkHex = pal.get('--ink', '#17140F');
+    const ink3Hex = pal.get('--ink-3', '#655C4F');
+    const vermHex = pal.get('--verm', '#B5402F');
+    const vermTextHex = pal.get('--verm-text', '#9E3524');
+    const paperHex = pal.get('--paper', '#E4DFD3');
+    const ruleCol = pal.get('--rule', 'rgba(23,20,15,0.16)');
+    const mono = monoStack();
 
     const C_WASH = rgba(inkHex, 0.30);
     const C_CORE = rgba(inkHex, 0.62);

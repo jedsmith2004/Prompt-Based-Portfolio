@@ -45,7 +45,7 @@
 
 import { useEffect, useId, useRef } from 'react';
 import { mulberry32, rgba, toRgb } from './backdrops/types';
-import { onPaletteChange } from '@/lib/v2/paletteWatch';
+import { onPaletteChange, paletteTokens, type PaletteTokens } from '@/lib/v2/paletteWatch';
 
 /* ------------------------------------------------------------------- types */
 
@@ -263,12 +263,11 @@ interface Stock {
  * than carrying its own copy of the colours. Called only on a repaint, which
  * is a resize or a plate change, so a getComputedStyle here costs nothing.
  */
-function readStock(): Stock {
-  const cs = getComputedStyle(document.documentElement);
-  const pick = (name: string, fallback: string): Rgb => {
-    const v = cs.getPropertyValue(name);
-    return toRgb(v && v.trim() ? v.trim() : fallback);
-  };
+/* Seven reads, once per cutting, six cuttings: forty-two forced style
+   recalculations on one change of light. The stock comes from the snapshot
+   paletteWatch carries. See lib/v2/paletteWatch.ts. */
+function readStock(t: PaletteTokens = paletteTokens()): Stock {
+  const pick = (name: string, fallback: string): Rgb => toRgb(t.get(name, fallback));
   return {
     hi: pick('--paper-hi', '#F0ECE3'),
     mid: pick('--paper', '#E4DFD3'),
@@ -562,7 +561,12 @@ interface PaperSpec {
  * for the photograph; the halftone is drawn into wherever the text engine
  * actually put it, so the picture and the words can never disagree.
  */
-function paintCutting(canvas: HTMLCanvasElement, spec: PaperSpec, cut: HTMLElement | null): void {
+function paintCutting(
+  canvas: HTMLCanvasElement,
+  spec: PaperSpec,
+  cut: HTMLElement | null,
+  bleed: number
+): void {
   /* clientWidth, not getBoundingClientRect: the cutting is rotated, and a
      bounding rect would report the axis-aligned box of the tilted sheet. */
   const cw = canvas.clientWidth;
@@ -570,8 +574,8 @@ function paintCutting(canvas: HTMLCanvasElement, spec: PaperSpec, cut: HTMLEleme
   if (cw < 8 || ch < 8) return;
 
   /* One source of truth for the bleed: the stylesheet sets --clip-bleed, the
-     canvas is stretched by it, and the paint reads the same number back. */
-  const bleed = parseFloat(getComputedStyle(canvas).getPropertyValue('--clip-bleed')) || 18;
+     canvas is stretched by it, and the paint is handed the same number back.
+     Passed in rather than read here; see the cache in usePaper. */
 
   const w = cw - bleed * 2;
   const h = ch - bleed * 2;
@@ -687,18 +691,41 @@ function usePaper<T extends HTMLElement>(spec: PaperSpec) {
     if (!host || !canvas) return;
 
     let raf = 0;
+
+    /*
+     * --clip-bleed, CACHED. -1 means "ask the document next paint".
+     *
+     * A layout constant, not a colour, and only a breakpoint can move it. It
+     * was read back out of the document on every repaint, and a palette change
+     * repaints all six cuttings, so one change of light performed six computed
+     * reads for a number that had not changed. The tokens are registered
+     * `@property` with `inherits: true`, so ANY computed read after they are
+     * written pays for the whole document -- it does not have to be one of
+     * them. See lib/v2/paletteWatch.ts.
+     *
+     * Only the two size paths dirty it. The palette path never reads it.
+     */
+    let bleed = -1;
     const paint = () => {
       raf = 0;
-      paintCutting(canvas, specRef.current, cutRef.current);
+      if (bleed < 0) {
+        bleed = parseFloat(getComputedStyle(canvas).getPropertyValue('--clip-bleed')) || 18;
+      }
+      paintCutting(canvas, specRef.current, cutRef.current, bleed);
     };
     const schedule = () => {
       if (!raf) raf = requestAnimationFrame(paint);
     };
+    /** A resize can change the breakpoint, and the breakpoint sets the bleed. */
+    const scheduleResized = () => {
+      bleed = -1;
+      schedule();
+    };
 
     schedule();
-    const ro = new ResizeObserver(schedule);
+    const ro = new ResizeObserver(scheduleResized);
     ro.observe(host);
-    window.addEventListener('resize', schedule);
+    window.addEventListener('resize', scheduleResized);
 
     /*
      * THE SHEET IS STOCK, AND THE STOCK CHANGES COLOUR.
@@ -712,7 +739,7 @@ function usePaper<T extends HTMLElement>(spec: PaperSpec) {
      * what that looks like.
      *
      * A palette change is a repaint reason like any other. */
-    const stopPalette = onPaletteChange(schedule);
+    const stopPalette = onPaletteChange(() => schedule());
 
     /* Dev-only handle: headless panes report a zero box and never fire a
        resize, so there is otherwise no way to drive a paint and inspect it. */
@@ -724,7 +751,7 @@ function usePaper<T extends HTMLElement>(spec: PaperSpec) {
       cancelAnimationFrame(raf);
       ro.disconnect();
       stopPalette();
-      window.removeEventListener('resize', schedule);
+      window.removeEventListener('resize', scheduleResized);
     };
   }, []);
 

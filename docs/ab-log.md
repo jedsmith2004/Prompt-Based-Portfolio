@@ -299,6 +299,146 @@ this moves by editing one field.
 
 ---
 
+## AB-LIGHT - 2026-08-27 - **MEASURED, not an option** — what one change of light costs, and three instruments that could not tell me
+
+**Question.** Jack, twice: *"there are lag spikes when switching backgrounds and
+massive lag spikes when turning off or on the lights."* Does carrying the palette
+with the notification, instead of every figure reading it back off the document,
+make the page measurably faster?
+
+**Answer: not by long-task blocking on a dev build, and I could not make that
+instrument say anything trustworthy.** What follows is the record, because the
+failure is the useful part.
+
+### Instrument 1 — long-task blocking, alternating within one page load
+
+Invalid. The configuration had memory: the ungated pass cleared dirty flags for
+the gated pass and vice versa, so each side was measured on a page the other
+side had already prepared.
+
+### Instrument 2 — long-task blocking, one configuration per page load, stash as the switch
+
+Invalid at first, for a reason that had nothing to do with the change. `git
+stash` makes the Next dev server rebuild; the "before" page loaded during the
+rebuild, had no dev handles, and reported a beautiful zero. Fixed by **polling
+for readiness** instead of sleeping, and then by checking the served chunk for a
+symbol only the new code contains — on disk *and* over HTTP — so that "which
+build did I actually measure" stopped being an assumption.
+
+With that fixed, three interleaved rounds, `A B A B A B`, 18 samples per cell:
+
+| arrival blocking, median | BEFORE | AFTER |
+|---|---|---|
+| round 1 | 159ms | 87ms |
+| round 2 | 167ms | 102ms |
+| round 3 | 324ms | 435ms |
+
+Two rounds favour the change, one contradicts it, and **both sides roughly
+double between round 1 and round 3**. The machine drifted under the measurement.
+
+Then the per-pass breakdown showed the real problem:
+
+```
+AFTER1   p1= 66ms  p2= 66ms  p3=346ms
+AFTER2   p1=112ms  p2= 88ms  p3=293ms
+BEFORE1  p1=119ms  p2=  0ms  p3=406ms
+BEFORE2  p1= 58ms  p2=176ms  p3=622ms
+```
+
+Four of five runs get three to ten times more expensive by the third pass over
+the plates, **on both configurations**. That is a confound larger than the
+effect. Long-task blocking was measuring page-driving-history, not the change.
+
+It is also, on its own terms, a better lead than the thing it was confounding —
+see AB-DRIFT.
+
+### Instrument 3 — count the thing the change removes
+
+The change does not make work cheaper, it deletes calls. All sixteen palette
+tokens are registered `@property` with `inherits: true`, so the first computed
+read after `usePalette` writes them must resolve the whole document before it
+can answer: that read **is** the forced recalculation. So wrap
+`getComputedStyle` and `CSSStyleDeclaration.prototype.getPropertyValue` at
+runtime, count the calls and time them from inside the wrapper.
+
+No source edit, therefore the same instrument on both builds. A counter has no
+variance.
+
+Two builds, one instrument, three passes over six plates each, 12 samples per
+cell. "Palette reads" is `getPropertyValue` calls: a registered custom property
+can only be read that way, so for the palette this count is exact.
+
+| per event                    | before | payload | + residue |
+|------------------------------|--------|---------|-----------|
+| arrival, palette reads       | 86.7   | 8.6     | **0**     |
+| arrival, ms inside them      | 99.8   | 1.0     | 1.3       |
+| arrival, worst single call   | 229.5  | 0.1     | 0.5       |
+| toggle, palette reads        | 102.6  | 13      | **0**     |
+| toggle, ms inside them       | 70.7   | 6.9     | 2.2       |
+| toggle, worst single call    | 133.4  | 35.9    | **1.2**   |
+
+The third column is after chasing the two callers the payload change left
+behind. The harness names them rather than leaving it to a guess - it records
+which call was worst, and both remaining cases were `read --ink` with
+**RouteMap** in the caller set, the one figure not converted. The other residue
+was `AwardsClippings` reading `--clip-bleed`: a layout constant, not a colour,
+but any computed read after the tokens are written pays for the whole document.
+
+Zero palette reads now remain on either path.
+
+Ninety per cent of the reads are gone, and with them the block. The 99.8ms
+figure is independent corroboration of the 110ms Jack had already measured and
+written into v2.css: it is the same recalculation, seen from the other side.
+
+The caller attribution is better evidence than the totals, because it shows the
+mechanism rather than a number. BEFORE:
+
+```
+  14839  /components/v2/Companion.tsx
+   1458  /components/v2/AwardsClippings.tsx
+    378  /components/v2/ClimbingWall.tsx
+    243  /components/v2/NeuralPlayground.tsx
+    212  /components/v2/AwardsCase.tsx
+    162  /components/v2/SkillConstellation.tsx
+    104  /components/v2/RouteMap.tsx
+```
+
+AFTER, four of those are gone from the list entirely:
+
+```
+  14850  /components/v2/Companion.tsx
+    336  /components/v2/AwardsClippings.tsx
+    104  /components/v2/RouteMap.tsx
+```
+
+TWO THINGS THIS DOES NOT SAY.
+
+It does not say the page is 100ms faster per plate. It says 100ms of forced,
+synchronous, main-thread style resolution per plate change has stopped being
+demanded from inside a mutation callback. The browser still resolves that style,
+in its own rendering step, where it is not blocking script.
+
+And it does not cost Companion. That instrument times getComputedStyle() and
+getPropertyValue(), but the perch survey reads cs.visibility, cs.display and
+cs.opacity as DIRECT getters, which force the same recalculation without passing
+through either wrapper. Companion's 14,839 calls are essentially unchanged
+between the two builds, they are not palette reads, and what they actually cost
+is not measured here. That is a separate lead, not a result.
+
+### The rule this leaves behind
+
+Timings on a dev build could not resolve a change of this size, and two of my
+three attempts to make them were invalid for reasons unrelated to the change.
+Where a change deletes a specific, countable operation, **count the operation**.
+Reserve wall-clock for changes whose whole claim is wall-clock, and even then
+report the run-to-run spread of one configuration next to the difference between
+two, so the reader can see whether the difference is bigger than the noise.
+
+All numbers here are **dev build**. The production server was down and
+rebuilding would have clobbered the running dev server's `.next`.
+
+---
+
 ## Open questions for Jack
 
 1. **Career line, "slightly off"** — *answered*, 2026-08-26: UCD was drawn as

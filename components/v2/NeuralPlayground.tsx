@@ -31,7 +31,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { withAlpha } from '@/lib/v2/colour';
-import { onPaletteChange } from '@/lib/v2/paletteWatch';
+import { onPaletteChange, paletteTokens, type PaletteTokens } from '@/lib/v2/paletteWatch';
 
 /* -------------------------------------------------------------------------- */
 /* model                                                                       */
@@ -569,7 +569,7 @@ export default function NeuralPlayground({ height = 340, className }: NeuralPlay
     const size = c.width / dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, size, size);
-    const ink = token(getComputedStyle(document.documentElement), '--ink', '#17140F');
+    const ink = paletteTokens().get('--ink', '#17140F');
     ctx.fillStyle = ink;
     ctx.strokeStyle = ink;
     ctx.lineCap = 'round';
@@ -695,16 +695,23 @@ export default function NeuralPlayground({ height = 340, className }: NeuralPlay
       blue: '#2A4C7D',
       mono: '"JetBrains Mono", ui-monospace, Menlo, monospace'
     };
-    const readInks = () => {
-      const style = getComputedStyle(document.documentElement);
-      C.ink = token(style, '--ink', '#17140F');
-      C.ink3 = token(style, '--ink-3', '#7C7364');
-      C.ink4 = token(style, '--ink-4', '#A79D8B');
-      C.verm = token(style, '--verm', '#B5402F');
-      C.blue = token(style, '--blue', '#2A4C7D');
-      C.mono = token(style, '--f-mono', '"JetBrains Mono", ui-monospace, Menlo, monospace');
+    /* From the snapshot paletteWatch carries, not from the document: these
+       six reads used to be six forced style recalculations of a sixteen
+       thousand pixel page. `--f-mono` is not a palette token and never
+       changes, so it is read once at mount and left alone. */
+    const readInks = (t: PaletteTokens) => {
+      C.ink = t.get('--ink', '#17140F');
+      C.ink3 = t.get('--ink-3', '#7C7364');
+      C.ink4 = t.get('--ink-4', '#A79D8B');
+      C.verm = t.get('--verm', '#B5402F');
+      C.blue = t.get('--blue', '#2A4C7D');
     };
-    readInks();
+    C.mono = token(
+      getComputedStyle(document.documentElement),
+      '--f-mono',
+      '"JetBrains Mono", ui-monospace, Menlo, monospace'
+    );
+    readInks(paletteTokens());
 
     /* eased mirrors of the true activations, so the plate settles rather than
        snapping; the numbers under the pad are never eased */
@@ -1031,8 +1038,8 @@ export default function NeuralPlayground({ height = 340, className }: NeuralPlay
     );
     io.observe(host);
 
-    const stopPalette = onPaletteChange(() => {
-      readInks();
+    const stopPalette = onPaletteChange((t) => {
+      readInks(t);
       kick(false);
     });
 

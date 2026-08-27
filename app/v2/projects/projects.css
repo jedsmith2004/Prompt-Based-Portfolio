@@ -251,127 +251,14 @@
    drew them. See the note in page.tsx: Recensorium launched, and the row it
    was hiding is now the first thing on the page. */
 
-/* --------------------------------------------------------------------------
-   THE RAISED ENTRY
-
-   > "When a project is selected, it's article entry should come up."
-
-   Between the case and the catalogue, on ink-bordered stock so it reads as a
-   thing that has been pulled OUT of the list rather than another row of it.
-   Nothing here is a duplicate treatment of the row below: the row is for
-   scanning, three lines and a fold; this is for reading, so it takes the full
-   description, every technology rather than the first eight, and the features
-   without asking.
-   -------------------------------------------------------------------------- */
-.v2-proj-entry {
-  margin: clamp(4px, 1vw, 10px) 0 clamp(30px, 5vw, 58px);
-}
-.v2-proj-entry-card {
-  border: 1px solid var(--ink);
-  border-left-width: 4px;
-  background: var(--paper-2);
-  padding: clamp(18px, 2.6vw, 32px) clamp(18px, 3vw, 38px) clamp(20px, 3vw, 34px);
-}
-.v2-proj-entry-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 20px;
-  margin-bottom: 10px;
-}
-.v2-proj-entry-head .v2-eyebrow { margin: 0; }
-.v2-proj-entry-close {
-  font-family: var(--f-mono);
-  font-size: 11px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--ink-3);
-  background: none;
-  border: 0;
-  border-bottom: 1px solid var(--rule);
-  padding: 0 0 2px;
-  cursor: pointer;
-  transition: color 160ms var(--ease), border-color 160ms var(--ease);
-}
-.v2-proj-entry-close:hover { color: var(--verm-text); border-bottom-color: currentColor; }
-.v2-proj-entry-close:focus-visible { outline: 2px solid var(--verm-text); outline-offset: 3px; }
-
-.v2-proj-entry-title {
-  font-family: var(--f-display);
-  font-variation-settings: 'wdth' 92, 'opsz' 40;
-  font-size: clamp(27px, 4vw, 44px);
-  font-weight: 700;
-  letter-spacing: -0.028em;
-  line-height: 1.06;
-  color: var(--ink);
-  margin: 0 0 clamp(12px, 1.6vw, 18px);
-}
-.v2-proj-entry-body {
-  font-family: var(--f-read);
-  font-size: clamp(16px, 1.7vw, 19px);
-  font-weight: 300;
-  line-height: 1.66;
-  color: var(--ink-2);
-  margin: 0;
-  max-width: 68ch;
-}
-.v2-proj-entry-features {
-  margin: clamp(14px, 2vw, 22px) 0 0;
-  padding-left: 1.1em;
-  max-width: 66ch;
-  font-family: var(--f-read);
-  font-size: 15.5px;
-  font-weight: 300;
-  line-height: 1.58;
-  color: var(--ink-2);
-}
-.v2-proj-entry-features li { margin-bottom: 5px; }
-.v2-proj-entry-features li::marker { color: var(--verm-text); }
-
-.v2-proj-entry-tech {
-  list-style: none;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: clamp(14px, 2vw, 22px) 0 0;
-  padding: 0;
-}
-.v2-proj-entry-tech li {
-  font-family: var(--f-mono);
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  color: var(--ink-2);
-  border: 1px solid var(--rule);
-  padding: 2px 7px;
-}
-
-.v2-proj-entry-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 20px;
-  align-items: baseline;
-  margin: clamp(16px, 2.4vw, 26px) 0 0;
-  padding-top: 14px;
-  border-top: 1px solid var(--rule-firm);
-  font-family: var(--f-mono);
-  font-size: 12px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-.v2-proj-entry-links a {
-  color: var(--ink-2);
-  text-decoration: none;
-  border-bottom: 1px solid var(--rule-firm);
-  padding-bottom: 2px;
-  transition: color 0.18s var(--ease), border-color 0.18s var(--ease);
-}
-.v2-proj-entry-links a.is-lead { color: var(--verm-text); border-bottom-color: var(--verm); }
-.v2-proj-entry-links a:hover { color: var(--ink); border-bottom-color: currentColor; }
+/* The raised entry that used to sit here is gone, and so is its stylesheet.
+   Jack: "the project entry appears twice, I want the higher one (under the
+   turnstile) to be the main one". It is the case's own citation now, which is
+   styled in v2.css with the rest of the case; see `.v2-case.is-sheet
+   .v2-case-citation` there. Nothing on this page draws an entry any more. */
 
 @media (prefers-reduced-motion: reduce) {
-  .v2-proj-num,
-  .v2-proj-entry-close,
-  .v2-proj-entry-links a { transition: none; }
+  .v2-proj-num { transition: none; }
 }
 
 /* --- the case, at the head of the index ---------------------------------- */

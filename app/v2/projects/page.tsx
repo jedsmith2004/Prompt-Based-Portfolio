@@ -3,26 +3,35 @@
 /* ============================================================================
    /v2/projects — the full index.
 
-   Three things, in the order they answer questions.
+   Two things, in the order they answer questions.
 
    THE CASE, at the top, holding all fifteen. Jack: "There should be a way to
    see all the projects, maybe on a rotating basis, or a clever layout, from
    the top of the screen with the carousel in view." So the case wears its
    'sheet' dress here: the stage on the left, every project as a tile on the
-   right, both above the fold. The carousel turns without committing to
-   anything, because the tiles are already telling you what is in it.
+   right, and the entry for whatever is turned to the front directly under the
+   object it belongs to.
 
-   THE ENTRY, raised under the case when you choose one. "When a project is
-   selected, it's article entry should come up." Choosing is a click or Enter,
-   not merely arriving, which is the whole reason the case has a cursor and a
-   choice rather than one index for both.
+   THAT ENTRY USED TO BE TWO. There was a caption under the stage and a raised
+   panel below the case, and Jack: "the project entry appears twice, I want the
+   higher one (under the turnstile) to be the main one, compress the
+   information from the big entry underneath into that smaller one with links."
+   So the panel is gone and the caption grew into it: the whole description,
+   the stack, the project's own page and everywhere else it lives.
+
+   Losing the panel takes the CHOICE with it. The case had two positions, a
+   cursor and a choice, for one reason: something below had to know when a
+   reader meant it. With the entry attached to the cursor there is nothing left
+   for a choice to open, and a second mark that can drift out of step with the
+   first is a mark that lies. The case reports its cursor instead, and the
+   catalogue marks the row it is showing.
 
    THE CATALOGUE, below, unchanged: everything, plainly, filterable. It is the
    scanning view and the entry above is the reading view, which is why the two
    look nothing alike despite coming from the same record.
    ========================================================================== */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { projects, type Project } from '@/lib/projects-data';
 import ProjectCase from '@/components/v2/ProjectCase';
@@ -55,7 +64,7 @@ const WHISPERS: Record<string, string[]> = {
   'proj-index': [
     'Turn the case. He modelled every one of those objects by hand.',
     'Fifteen. He will tell you which three he would keep.',
-    'Pick one and the entry comes up underneath.'
+    'Whatever is facing you, its entry is right underneath.'
   ],
   'proj-catalogue': [
     'The whole list. Filter it if you know what you are after.',
@@ -66,12 +75,22 @@ const WHISPERS: Record<string, string[]> = {
 export default function V2Projects() {
   const [tag, setTag] = useState<string | null>(null);
   /**
-   * The project whose entry is open. Null until something is chosen: an empty
-   * panel sitting between the case and the catalogue would be a hole, and the
-   * layout shift when it fills is one the reader just asked for.
+   * WHAT THE CASE IS SHOWING, and WHAT WE LAST ASKED IT TO SHOW.
+   *
+   * Two different facts, and it matters that they are two. `cursorId` comes
+   * back OUT of the case every time the ring turns, by any means, and is what
+   * the catalogue marks. `turnTo` goes IN, and only ever from a row number
+   * down there.
+   *
+   * `turnTo` is an object rather than a bare id because a bare id cannot be
+   * asked for twice: `setTurnTo(p.id)` with the id it already held is a React
+   * bail-out, so the row number would do nothing at all in exactly the case a
+   * reader would press it, when they had since turned the case somewhere else.
+   * A fresh object each press, and the case keys on its identity.
    */
-  const [chosenId, setChosenId] = useState<string | null>(null);
-  const entryRef = useRef<HTMLDivElement | null>(null);
+  const [cursorId, setCursorId] = useState<string | null>(null);
+  const [turnTo, setTurnTo] = useState<{ key: string } | null>(null);
+  const caseRef = useRef<HTMLDivElement | null>(null);
 
   const { velocityRef } = useSpine(['proj-index', 'proj-catalogue']);
 
@@ -95,32 +114,56 @@ export default function V2Projects() {
     [sorted, tag]
   );
 
-  const chosen = useMemo(
-    () => (chosenId ? projects.find((p) => p.id === chosenId) ?? null : null),
-    [chosenId]
-  );
+  const onCursor = useCallback((id: string) => setCursorId(id), []);
 
-  /* Choosing the open one closes it, so the tile is a switch rather than a
-     one-way door with no handle on the inside. */
-  const onChoose = useCallback((id: string) => {
-    setChosenId((prev) => (prev === id ? null : id));
+  /* From the catalogue. Never a toggle: pressing a row number is a request to
+     go and look at that one, and turning the case away from it down here would
+     be a strange answer to it. */
+  const onShowInCase = useCallback((id: string) => {
+    setTurnTo({ key: id });
   }, []);
 
   const ask = useCallback((q: string) => askJack(q), []);
 
   /*
-   * `block: 'nearest'` and nothing else.
+   * The case is held still while the cursor moves.
    *
-   * The entry is directly under the plate, so on a laptop it usually arrives
-   * already on screen and this does nothing at all, which is correct: the
-   * reader asked to see a project, not to be moved. It only scrolls when the
-   * panel genuinely fell below the fold, and then only far enough, so the
-   * carousel stays where Jack asked for it to be.
+   * `onCursor` fires on every notch of the wheel and every arrow key, and the
+   * only thing on this page that cares is the bar in the catalogue's margin.
+   * Without this the case would re-render from above on each one, on top of
+   * the re-render it is already doing for itself, for a mark five hundred
+   * pixels away. Memoising the element rather than the component keeps the
+   * reason next to the state that caused it.
+   */
+  const theCase = useMemo(
+    () => (
+      <div ref={caseRef}>
+        <ProjectCase
+          className="v2-proj-case"
+          variant="index"
+          onCursor={onCursor}
+          chosenKey={turnTo ?? undefined}
+        />
+      </div>
+    ),
+    [onCursor, turnTo]
+  );
+
+  /*
+   * WHERE A ROW NUMBER PUTS YOU.
+   *
+   * At the top of the case, because the whole point of pressing one is to go
+   * and look at the object. The entry travels with it, being part of the same
+   * plate now, which is the other half of why the raised panel is not missed:
+   * there is nothing left that can be on screen without the thing it describes.
+   *
+   * Nothing here scrolls when the case is turned by its own controls. A reader
+   * working the arrows is already looking at it.
    */
   useEffect(() => {
-    if (!chosenId) return;
-    entryRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-  }, [chosenId]);
+    if (!turnTo) return;
+    caseRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }, [turnTo]);
 
   return (
     <>
@@ -141,30 +184,12 @@ export default function V2Projects() {
             <p className="v2-lede v2-proj-lede">
               {projects.length} projects, newest first, each one modelled as an
               object and drawn by the same pipeline as the rest of the site.
-              Turn the case, then choose one.
+              Turn the case; the entry under it follows.
             </p>
           </div>
         </div>
 
-        <ProjectCase
-          className="v2-proj-case"
-          variant="index"
-          onChoose={onChoose}
-          chosenId={chosenId ?? undefined}
-        />
-
-        {chosen ? (
-          <div className="v2-wrap">
-            <div className="v2-proj-entry" ref={entryRef} aria-live="polite">
-              <ProjectEntry
-                project={chosen}
-                index={sorted.findIndex((p) => p.id === chosen.id) + 1}
-                total={sorted.length}
-                onClose={() => setChosenId(null)}
-              />
-            </div>
-          </div>
-        ) : null}
+        {theCase}
 
         <div className="v2-wrap" id="proj-catalogue">
           <div className="v2-proj-filters" role="group" aria-label="Filter by technology">
@@ -199,8 +224,8 @@ export default function V2Projects() {
                 key={p.id}
                 project={p}
                 index={i + 1}
-                chosen={p.id === chosenId}
-                onShowInCase={() => setChosenId(p.id)}
+                chosen={p.id === cursorId}
+                onShowInCase={onShowInCase}
               />
             ))}
           </ol>
@@ -223,85 +248,20 @@ export default function V2Projects() {
 }
 
 /* -------------------------------------------------------------------------- */
-/* the raised entry                                                            */
-/* -------------------------------------------------------------------------- */
-
-function ProjectEntry({
-  project: p,
-  index,
-  total,
-  onClose
-}: {
-  project: Project;
-  index: number;
-  total: number;
-  onClose: () => void;
-}) {
-  const links: Array<{ href: string; label: string }> = [];
-  if (p.demo) links.push({ href: p.demo, label: 'Open it' });
-  if (p.github) links.push({ href: p.github, label: 'Read the source' });
-  if (p.paper) links.push({ href: p.paper, label: 'The paper' });
-  if (p.linkedin) links.push({ href: p.linkedin, label: 'Write-up' });
-
-  return (
-    <article className="v2-proj-entry-card">
-      <header className="v2-proj-entry-head">
-        <p className="v2-eyebrow">
-          {String(index).padStart(2, '0')} <b>/</b> {String(total).padStart(2, '0')}
-          <span aria-hidden="true"> / </span>
-          {p.date}
-          {p.status === 'in-progress' ? <span> / in progress</span> : null}
-        </p>
-        <button type="button" className="v2-proj-entry-close" onClick={onClose}>
-          Close
-        </button>
-      </header>
-
-      {/* h2 rather than h1: the page already has one, and this is a part of it
-          rather than a page of its own. The page of its own is the link. */}
-      <h2 className="v2-proj-entry-title" data-perch data-perch-text data-perch-inset="0.12em">
-        {p.title}
-      </h2>
-      <p className="v2-proj-entry-body">{p.description}</p>
-
-      {p.features?.length ? (
-        <ul className="v2-proj-entry-features">
-          {p.features.map((f) => (
-            <li key={f}>{f}</li>
-          ))}
-        </ul>
-      ) : null}
-
-      <ul className="v2-proj-entry-tech">
-        {p.tech.map((t) => (
-          <li key={t}>{t}</li>
-        ))}
-      </ul>
-
-      <p className="v2-proj-entry-links" data-perch>
-        <Link href={`/v2/projects/${p.id}`} className="is-lead">
-          The full page
-        </Link>
-        {links.map((l) => (
-          <a
-            key={l.label}
-            href={l.href}
-            target={l.href.startsWith('/') ? undefined : '_blank'}
-            rel={l.href.startsWith('/') ? undefined : 'noreferrer noopener'}
-          >
-            {l.label}
-          </a>
-        ))}
-      </p>
-    </article>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
 /* the catalogue                                                               */
 /* -------------------------------------------------------------------------- */
 
-function ProjectRow({
+/*
+ * MEMOISED, because `chosen` now changes under it constantly.
+ *
+ * The bar in the margin follows the case's cursor, which moves on every arrow
+ * key and every notch of a sideways wheel. Fifteen rows of real markup
+ * re-rendering for a three-pixel rule on one of them is a poor trade, and the
+ * only thing standing between here and that trade is the callback: an inline
+ * `() => onShowInCase(p.id)` is a new function on every render and would defeat
+ * this outright. So the row is handed the id back instead.
+ */
+const ProjectRow = memo(function ProjectRow({
   project: p,
   index,
   chosen,
@@ -310,7 +270,7 @@ function ProjectRow({
   project: Project;
   index: number;
   chosen: boolean;
-  onShowInCase: () => void;
+  onShowInCase: (id: string) => void;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -339,7 +299,7 @@ function ProjectRow({
       <button
         type="button"
         className="v2-proj-num"
-        onClick={onShowInCase}
+        onClick={() => onShowInCase(p.id)}
         aria-label={`Show ${p.title} in the case`}
       >
         {String(index).padStart(2, '0')}
@@ -400,4 +360,4 @@ function ProjectRow({
       <span className="v2-proj-meta">{p.date}</span>
     </li>
   );
-}
+});

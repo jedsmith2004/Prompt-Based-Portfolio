@@ -63,6 +63,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { projects as ALL_PROJECTS } from '@/lib/projects-data';
 import { buildTechLedger, type TechRow } from './SkillsFromWork';
+import { onPaletteChange, paletteTokens, type PaletteTokens } from '@/lib/v2/paletteWatch';
 
 /* -------------------------------------------------------------------------- */
 /* layout                                                                      */
@@ -359,14 +360,24 @@ export default function SkillConstellation({
 
     /* Palette, resolved once per repaint rather than per star. */
     let C = { ink: '#17140F', ink3: '#635B4E', verm: '#B5402F', blue: '#2A4C7D', mono: 'monospace' };
-    function readTokens() {
-      const st = getComputedStyle(canvas!);
+    /* `--f-mono` is not a palette token and never moves, so it is read from
+       the document once and carried; the four colours come from the snapshot
+       paletteWatch hands over. Reading them off the canvas after a palette
+       write forced a full-document style recalc, which a profile of one light
+       toggle taken on the CONTACT plate charged 134ms to -- six plates from
+       this component. See lib/v2/paletteWatch.ts. */
+    const MONO = token(
+      getComputedStyle(document.documentElement),
+      '--f-mono',
+      'ui-monospace, monospace'
+    );
+    function readTokens(t: PaletteTokens = paletteTokens()) {
       C = {
-        ink: token(st, '--ink', '#17140F'),
-        ink3: token(st, '--ink-3', '#635B4E'),
-        verm: token(st, '--verm', '#B5402F'),
-        blue: token(st, '--blue', '#2A4C7D'),
-        mono: token(st, '--f-mono', 'ui-monospace, monospace')
+        ink: t.get('--ink', '#17140F'),
+        ink3: t.get('--ink-3', '#635B4E'),
+        verm: t.get('--verm', '#B5402F'),
+        blue: t.get('--blue', '#2A4C7D'),
+        mono: MONO
       };
     }
 
@@ -713,14 +724,15 @@ export default function SkillConstellation({
     document.addEventListener('visibilitychange', onVis);
 
     /* The palette moves under us as the reader crosses plates. One repaint on
-       the transition's far side is enough; nothing here reads tokens per frame. */
-    const mo = new MutationObserver(() => {
-      readTokens();
+       the transition's far side is enough; nothing here reads tokens per frame.
+
+       Through paletteWatch rather than a private observer, so it is skipped
+       while the plate is off screen: a profile of the light toggle taken on
+       the CONTACT plate, six plates down, charged 138ms to this component's
+       token reads. */
+    const stopPalette = onPaletteChange((t) => {
+      readTokens(t);
       if (!running) draw();
-    });
-    mo.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['data-v2-palette', 'data-v2-mode']
     });
 
     if (reduced) draw();
@@ -750,7 +762,7 @@ export default function SkillConstellation({
       stop();
       ro.disconnect();
       io.disconnect();
-      mo.disconnect();
+      stopPalette();
       document.removeEventListener('visibilitychange', onVis);
       canvas.removeEventListener('pointerdown', onDown);
       canvas.removeEventListener('pointermove', onMove);

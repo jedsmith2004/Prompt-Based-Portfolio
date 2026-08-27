@@ -222,8 +222,12 @@ export default function ProjectStory({
                 and one of those says so in its own copy. */}
             {story.figures.map((f) => (
               <figure key={f.src} className={`v2-story-fig is-${f.size}`}>
+                {/* alt="" ON PURPOSE. The figcaption directly below carries
+                    the same sentence, and it is written as a description
+                    rather than a label, so an alt would have every screenshot
+                    read out twice in a row. */}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={f.src} alt={f.caption} loading="lazy" decoding="async" />
+                <img src={f.src} alt="" loading="lazy" decoding="async" />
                 <figcaption data-perch data-perch-inset="0.2em">{f.caption}</figcaption>
               </figure>
             ))}

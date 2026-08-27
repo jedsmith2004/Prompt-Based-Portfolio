@@ -529,6 +529,35 @@ const HOOKS: Record<string, string> = Object.fromEntries(
   FEATURED_PROJECTS.map((f) => [f.id, f.hook])
 );
 
+/** How many objects the spine's showcase carries. The index carries them all. */
+const REEL_COUNT = 5;
+
+/**
+ * How much of a stack the entry prints before it stops counting.
+ *
+ * Recensorium alone lists fifteen technologies, which at the citation's column
+ * width is six rows of chips standing over the description. Ten and a tail is
+ * the catalogue's own idiom one screen below, so the entry does not invent a
+ * second way of saying the same thing.
+ */
+const TECH_SHOWN = 10;
+
+/** The record behind an entry, for the parts of it the case does not carry. */
+const BY_ID: Record<string, Project> = Object.fromEntries(
+  PROJECTS.map((p) => [p.id, p])
+);
+
+/** Everywhere this project lives that is not this site. Same order and the
+    same words as the catalogue below, so one project reads the same twice. */
+function outboundLinks(p: Project): Array<{ href: string; label: string }> {
+  const out: Array<{ href: string; label: string }> = [];
+  if (p.demo) out.push({ href: p.demo, label: 'Open it' });
+  if (p.github) out.push({ href: p.github, label: 'Read the source' });
+  if (p.paper) out.push({ href: p.paper, label: 'The paper' });
+  if (p.linkedin) out.push({ href: p.linkedin, label: 'Write-up' });
+  return out;
+}
+
 export interface ProjectCaseProps {
   className?: string;
   /**
@@ -547,38 +576,77 @@ export interface ProjectCaseProps {
   variant?: 'index' | 'reel';
   /** Fires when a project is CHOSEN. See SpecimenCase.onChoose. */
   onChoose?: (id: string, index: number) => void;
-  /** The chosen project's id, if the caller tracks one. */
-  chosenId?: string;
+  /** Fires with the project the case is turned to. See SpecimenCase.onCursor. */
+  onCursor?: (id: string, index: number) => void;
+  /**
+   * Turn the case to this project. Passed straight through, by reference:
+   * see SpecimenCase.chosenKey for why the object form exists and why it must
+   * not be rebuilt on every render.
+   */
+  chosenKey?: string | { key: string };
 }
 
 export default function ProjectCase({
   className,
   variant = 'index',
   onChoose,
-  chosenId
+  onCursor,
+  chosenKey
 }: ProjectCaseProps) {
+  const reel = variant === 'reel';
+
   const entries = useMemo<readonly CaseEntry[]>(() => {
     const sorted = PROJECTS.slice().sort((a, b) => monthKey(b.date) - monthKey(a.date));
-    return sorted.map((p) => {
+    /*
+     * FIVE ON THE SPINE, all fifteen on the index.
+     *
+     * > "only 5 projects should be here, not all of them"
+     *
+     * Newest first and take five, rather than a hand-picked list: it is the
+     * order the plate already claims in its own eyebrow, it cannot fall out of
+     * step with lib/projects-data.ts, and a new project arrives at the front
+     * without anyone remembering to add it. To curate instead, replace this
+     * with an explicit array of ids.
+     *
+     * Five is also the number the ring was built for: the awards case has run
+     * five objects on this exact geometry since it was written.
+     */
+    const shown = variant === 'reel' ? sorted.slice(0, REEL_COUNT) : sorted;
+    return shown.map((p) => {
       const spec = specFor(p);
-      /* The index below already carries the full description; the citation
-         gets the hook if the project has one and the first sentence if not,
-         which is the one that says what it is. */
+      /*
+       * TWO DRESSES, TWO LENGTHS.
+       *
+       * > "the project entry appears twice, I want the higher one (under the
+       * >  turnstile) to be the main one"
+       *
+       * On the index the citation IS the entry now -- there is nothing raised
+       * under it any more -- so it gets the whole description and the whole
+       * stack, and the links come in through `citationFoot` below.
+       *
+       * The reel is still a showcase and still a caption: the hook where a
+       * project has one, the opening sentence where it does not, and five
+       * badges. Its own page is one link away.
+       */
       const dot = p.description.indexOf('. ');
       return {
         key: p.id,
         meta: p.status === 'in-progress' ? 'In progress' : 'Shipped',
         title: p.title,
         date: p.date,
-        body: HOOKS[p.id] ?? (dot > 40 ? p.description.slice(0, dot + 1) : p.description),
-        badges: p.tech.slice(0, 5),
+        body: reel
+          ? HOOKS[p.id] ?? (dot > 40 ? p.description.slice(0, dot + 1) : p.description)
+          : p.description,
+        /* The sheet draws its own, inside the side column below: as a direct
+           child of the citation the stack sets the height of the row the title
+           is in, and a four-row block of chips leaves the title hanging over a
+           hole the depth of itself. */
+        badges: reel ? p.tech.slice(0, 5) : undefined,
         specimen: spec.label,
         build: spec.build
       };
     });
-  }, []);
-
-  const reel = variant === 'reel';
+  }, [variant, reel]);
 
   return (
     <SpecimenCase
@@ -593,16 +661,22 @@ export default function ProjectCase({
       /* Two either side, and no more. See SpecimenCaseProps.window. */
       window={reel ? 2 : undefined}
       onChoose={onChoose ? (e, i) => onChoose(e.key, i) : undefined}
-      chosenKey={chosenId}
+      onCursor={onCursor ? (e, i) => onCursor(e.key, i) : undefined}
+      chosenKey={chosenKey}
+      /* A description of how to work it, not a name. The drag it promises
+          is implemented now: see the pointer handlers in AwardsCase. */
       listLabel={
         reel
-          ? 'Projects. Drag sideways or use the arrow keys to turn the case.'
-          : 'Projects. Use the arrow keys to turn the case, and enter to open one.'
+          ? 'Drag sideways, scroll sideways, or use the left and right arrow keys to turn the case.'
+          : 'Drag sideways or use the left and right arrow keys to turn the case. The entry beneath it is whichever project is in front.'
       }
+      regionLabel="Projects"
+      stageLabel="Project carousel"
+      railLabel="All projects"
       eyebrow={
         reel ? (
           <>
-            Projects / <b>{entries.length}, newest first</b>
+            Projects / <b>five, newest first</b>
           </>
         ) : (
           <>
@@ -611,41 +685,82 @@ export default function ProjectCase({
         )
       }
       heading={reel ? 'Turn the case.' : 'Fifteen projects, fifteen objects.'}
+      /*
+       * NO STANDFIRST ON THE REEL.
+       *
+       * It was four lines about the rendering pipeline standing between the
+       * heading and the thing the reader came to look at, and the index below
+       * already says all of it on a page where it belongs. How to work the
+       * case is in `listLabel`, where a screen reader gets it and the sighted
+       * reader gets the arrows instead.
+       */
       note={
         reel
-          ? 'The same case that stands at the head of the index, holding three at a time. Each ' +
-            'object is modelled from vertices and drawn by the same hand-rolled pipeline that ' +
-            'draws the rest of this site, then quantised to a grid of characters. Use the ' +
-            'arrows, the arrow keys, or a sideways scroll.'
+          ? undefined
           : 'Not fifteen screenshots. Each object is modelled from vertices and drawn by the same ' +
             'hand-rolled pipeline that draws the rest of this site, then quantised to a grid of ' +
             'characters. Where a project has a physical fact in it, that is the object: a pipe, a ' +
-            'wall calendar, a fan of cards. Choose one and its entry opens below.'
+            'wall calendar, a fan of cards. Turn the case and the entry under it follows.'
       }
-      citationFoot={
-        reel
-          ? (entry) => (
-              /*
-               * THE WAY IN, carried over from the reel this replaced.
-               *
-               * Jack, 2026-08-26: "there is no link to each project (each
-               * should have its own custom page) ... there is also no link to
-               * an 'all projects' page."
-               *
-               * Both of them, in the part of the case that is about ONE
-               * project, because the first is where you go if the object in
-               * front of you interested you and the second is where you go if
-               * it did not.
-               */
-              <p className="v2-case-go" data-perch>
-                <Link href={`/v2/projects/${entry.key}`} className="is-lead">
-                  Open {entry.title}
-                </Link>
-                <Link href="/v2/projects">Every project</Link>
-              </p>
-            )
-          : undefined
-      }
+      /*
+       * THE WAY OUT OF THE CASE, and it is a different way on each dress.
+       *
+       * On the reel, both of Jack's asks from 2026-08-26 -- "there is no link
+       * to each project (each should have its own custom page) ... there is
+       * also no link to an 'all projects' page" -- sit in the part of the case
+       * that is about ONE project, because the first is where you go if the
+       * object in front of you interested you and the second is where you go
+       * if it did not.
+       *
+       * On the sheet there is no 'all projects' to link to, since you are
+       * standing in it. What the citation needs instead is everything the
+       * raised entry used to carry down the page: the project's own page, and
+       * every place it lives that is not this site. Same labels as the
+       * catalogue rows below, so one project reads the same in both.
+       */
+      citationFoot={(entry) => {
+        if (reel) {
+          return (
+            <p className="v2-case-go" data-perch>
+              <Link href={`/v2/projects/${entry.key}`} className="is-lead">
+                Open {entry.title}
+              </Link>
+              <Link href="/v2/projects">Every project</Link>
+            </p>
+          );
+        }
+        const p = BY_ID[entry.key];
+        const tech = p ? p.tech : [];
+        return (
+          <div className="v2-case-side">
+            {tech.length ? (
+              <ul className="v2-case-badges">
+                {tech.slice(0, TECH_SHOWN).map((t) => (
+                  <li key={t}>{t}</li>
+                ))}
+                {tech.length > TECH_SHOWN ? (
+                  <li className="is-more">+{tech.length - TECH_SHOWN}</li>
+                ) : null}
+              </ul>
+            ) : null}
+            <p className="v2-case-go" data-perch>
+              <Link href={`/v2/projects/${entry.key}`} className="is-lead">
+                The full page
+              </Link>
+              {(p ? outboundLinks(p) : []).map((l) => (
+                <a
+                  key={l.label}
+                  href={l.href}
+                  target={l.href.startsWith('/') ? undefined : '_blank'}
+                  rel={l.href.startsWith('/') ? undefined : 'noreferrer noopener'}
+                >
+                  {l.label}
+                </a>
+              ))}
+            </p>
+          </div>
+        );
+      }}
     />
   );
 }

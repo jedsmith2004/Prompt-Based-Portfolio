@@ -31,7 +31,7 @@
 
 import { useEffect, useRef } from 'react';
 import { withAlpha } from '@/lib/v2/colour';
-import { onPaletteChange } from '@/lib/v2/paletteWatch';
+import { onPaletteChange, paletteTokens, type PaletteTokens } from '@/lib/v2/paletteWatch';
 
 export interface ClimbingWallProps {
   /** Plate height. A number is taken as px. */
@@ -218,15 +218,15 @@ export default function ClimbingWall({
      * of this effect. */
     let toneColors: string[] = [];
     let monoStack = '"JetBrains Mono", ui-monospace, Menlo, monospace';
-    function readTones(): void {
-      const rootStyle = getComputedStyle(document.documentElement);
-      toneColors = TONES.map((t) => {
-        const v = rootStyle.getPropertyValue(t.token);
-        return rgba(v && v.trim() ? v : t.fallback, t.alpha);
-      });
-      monoStack =
-        rootStyle.getPropertyValue('--f-mono').trim() ||
-        '"JetBrains Mono", ui-monospace, Menlo, monospace';
+    /* Thirteen reads, and every one of them used to force a full-document
+       style recalculation of a sixteen thousand pixel page. They come from the
+       snapshot paletteWatch carries now; `--f-mono` is not a palette token and
+       is read from the document once. See lib/v2/paletteWatch.ts. */
+    monoStack =
+      getComputedStyle(document.documentElement).getPropertyValue('--f-mono').trim() ||
+      '"JetBrains Mono", ui-monospace, Menlo, monospace';
+    function readTones(t: PaletteTokens = paletteTokens()): void {
+      toneColors = TONES.map((tone) => rgba(t.get(tone.token, tone.fallback), tone.alpha));
     }
     readTones();
 
@@ -1047,9 +1047,9 @@ export default function ClimbingWall({
     /* The sheet changed colour under us. Re-read, re-rasterise, repaint. See
        readTones above, and lib/v2/paletteWatch.ts for why this is an observer
        rather than a prop. */
-    const stopPalette = onPaletteChange(() => {
+    const stopPalette = onPaletteChange((t) => {
       if (disposed) return;
-      readTones();
+      readTones(t);
       buildAtlas();
       repaintAll();
       compose();

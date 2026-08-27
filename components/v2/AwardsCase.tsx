@@ -48,6 +48,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import context from '@/public/context.json';
+import { onPaletteChange, paletteTokens, type PaletteTokens } from '@/lib/v2/paletteWatch';
 
 /* -------------------------------------------------------------------------- */
 /* 1. geometry primitives                                                      */
@@ -642,9 +643,25 @@ export interface SpecimenCaseProps {
   entries: readonly CaseEntry[];
   eyebrow: React.ReactNode;
   heading: React.ReactNode;
-  note: React.ReactNode;
-  /** Screen-reader label for the list of plaques. */
+  /** Optional: the reel is a showcase and carries no standfirst. */
+  note?: React.ReactNode;
+  /**
+   * How to work the case, as one sentence.
+   *
+   * It is a DESCRIPTION, not a name. It used to be handed to the section, the
+   * stage and the rail all three, so a screen-reader user entering the region
+   * heard the same sentence three times before reaching a control and had no
+   * way to tell the picture from the list of names. It now describes the stage
+   * and names nothing.
+   */
   listLabel: string;
+  /** Short name for the whole region, when `head` is off and there is no
+      heading to be labelled by. */
+  regionLabel?: string;
+  /** Short name for the plate itself. Distinct from the rail's. */
+  stageLabel?: string;
+  /** Short name for the list of entries. Distinct from the stage's. */
+  railLabel?: string;
   /** Unique per instance, so two cases on one page do not share element ids. */
   idPrefix: string;
   className?: string;
@@ -689,8 +706,32 @@ export interface SpecimenCaseProps {
    * the case behaves exactly as it did.
    */
   onChoose?: (entry: CaseEntry, index: number) => void;
-  /** The key of the currently chosen entry, if the caller tracks one. */
-  chosenKey?: string;
+  /**
+   * Where the cursor IS, reported back out.
+   *
+   * The case owns its cursor, which is right: it is the thing being turned.
+   * But a page carrying the same entries somewhere else -- a catalogue below,
+   * say -- has to know which one is in front if it wants to mark it, and the
+   * only way it could learn that before was to make the reader choose. Fires
+   * on mount as well, because the case is showing something from the first
+   * frame and a mark that appears only after the first turn is a worse lie
+   * than no mark at all.
+   */
+  onCursor?: (entry: CaseEntry, index: number) => void;
+  /**
+   * Turn the case to this entry, without choosing it.
+   *
+   * A bare string points at an entry but cannot point at it TWICE. Two presses
+   * of the same row number are the same string, React bails out of the render,
+   * and the effect that reads this never runs again -- so the second press
+   * does nothing in exactly the case a reader would make it, once the case has
+   * been turned somewhere else in between. Callers that can ask more than once
+   * pass a fresh `{ key }` object each time and the effect keys on its
+   * identity instead. It must be a NEW object per request and a STABLE one
+   * between renders: rebuilt on every render it would fight the reader for the
+   * cursor, one frame per keypress.
+   */
+  chosenKey?: string | { key: string };
   /**
    * The case's own eyebrow, heading and note. On by default.
    *
@@ -732,8 +773,12 @@ export function SpecimenCase({
   layout = 'index',
   citationFoot,
   onChoose,
+  onCursor,
   chosenKey,
-  head = true
+  head = true,
+  regionLabel,
+  stageLabel,
+  railLabel
 }: SpecimenCaseProps) {
   const [index, setIndex] = useState(0);
   const count = entries.length;
@@ -779,6 +824,11 @@ export function SpecimenCase({
     [count]
   );
 
+  /** Whether a choice is possible at all. A ref so the stage's key handler
+      does not have to be rebuilt when the caller's identity changes. */
+  const takeableRef = useRef(false);
+  takeableRef.current = Boolean(onChoose);
+
   /** Look at it AND take it. See SpecimenCaseProps.onChoose. */
   const choose = useCallback(
     (next: number) => {
@@ -807,6 +857,9 @@ export function SpecimenCase({
    *    useless and the trackpad ungovernable. STRIDE is one object.
    */
   const stageRef = useRef<HTMLDivElement | null>(null);
+  /** True once a drag has actually turned the ring, so the click that ends
+      that drag is not also a choice. A gesture is one thing or the other. */
+  const draggedRef = useRef(false);
   useEffect(() => {
     const el = stageRef.current;
     if (!el) return;
@@ -814,8 +867,19 @@ export function SpecimenCase({
     let acc = 0;
     let last = 0;
     const onWheel = (e: WheelEvent) => {
-      const dx = e.deltaX;
-      if (Math.abs(dx) <= Math.abs(e.deltaY)) return;
+      /*
+       * deltaMode, or the horizontal wheel is dead in Firefox.
+       *
+       * Firefox on Windows and Linux reports DOM_DELTA_LINE for a mouse wheel,
+       * with deltaX around 1 to 3 per tilt notch rather than the ~40px Chrome
+       * sends. Against a 90px stride that is thirty to ninety notches to move
+       * the ring by one object, which is not a feature. Both axes always carry
+       * the same mode, so the guard below is safe unnormalised; only the
+       * comparison against STRIDE has units in it.
+       */
+      const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? STRIDE : 1;
+      const dx = e.deltaX * unit;
+      if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
       e.preventDefault();
       /* A new gesture starts from zero: leftover travel from a flick half a
          second ago should not add itself to the next one. */
@@ -832,24 +896,102 @@ export function SpecimenCase({
         select(indexRef.current - 1, false);
       }
     };
+    /*
+     * AND THE DRAG, because a phone emits no wheel event at all.
+     *
+     * The reel's own label said "drag sideways" and nothing implemented it, so
+     * on a touch device the fifteen projects were reachable only through two
+     * 34px arrows -- and `touch-action: pan-y` on the stage was giving up
+     * horizontal panning in exchange for nothing. Same accumulator as the
+     * wheel, so one stride means one object however you push it.
+     *
+     * Pointer events rather than touch: it covers pen and a mouse drag for
+     * free, and `setPointerCapture` means a gesture that leaves the plate
+     * still finishes. The vertical axis is never captured, so a thumb going
+     * down the page still scrolls it.
+     */
+    let dragId = -1;
+    let dragX = 0;
+    let dragOwned = false;
+    const onDown = (e: PointerEvent) => {
+      if (e.button !== 0 && e.pointerType === 'mouse') return;
+      dragId = e.pointerId;
+      dragX = e.clientX;
+      dragOwned = false;
+      acc = 0;
+    };
+    const onMove = (e: PointerEvent) => {
+      if (e.pointerId !== dragId) return;
+      const d = e.clientX - dragX;
+      dragX = e.clientX;
+      /* Claim the pointer only once the gesture has committed to sideways.
+         Before that it might still be the page being scrolled. */
+      if (!dragOwned && Math.abs(d) > 2) {
+        dragOwned = true;
+        draggedRef.current = true;
+        try {
+          el.setPointerCapture(e.pointerId);
+        } catch {
+          /* the pointer is already gone; the move below is still harmless */
+        }
+      }
+      if (!dragOwned) return;
+      acc -= d;
+      while (acc >= STRIDE) {
+        acc -= STRIDE;
+        select(indexRef.current + 1, false);
+      }
+      while (acc <= -STRIDE) {
+        acc += STRIDE;
+        select(indexRef.current - 1, false);
+      }
+    };
+    const onUp = (e: PointerEvent) => {
+      if (e.pointerId !== dragId) return;
+      dragId = -1;
+      dragOwned = false;
+      acc = 0;
+    };
+
     el.addEventListener('wheel', onWheel, { passive: false });
-    return () => el.removeEventListener('wheel', onWheel);
+    el.addEventListener('pointerdown', onDown);
+    el.addEventListener('pointermove', onMove);
+    el.addEventListener('pointerup', onUp);
+    el.addEventListener('pointercancel', onUp);
+    return () => {
+      el.removeEventListener('wheel', onWheel);
+      el.removeEventListener('pointerdown', onDown);
+      el.removeEventListener('pointermove', onMove);
+      el.removeEventListener('pointerup', onUp);
+      el.removeEventListener('pointercancel', onUp);
+    };
   }, [select]);
 
-  /* The stage steers too, and it is the thing the reader is looking at. Left
-     and right move the cursor; Enter and Space take what is in front. */
+
+
+  /*
+   * The stage steers too, and it is the thing the reader is looking at.
+   *
+   * LEFT AND RIGHT ONLY, and Enter or Space only where there is something to
+   * choose. It began by taking ArrowUp, ArrowDown, Home, End and Space as
+   * well, which are the keys the PAGE scrolls with: tab onto the case and the
+   * document stopped answering them, on every plate the case appears on. On
+   * the awards case it was worse than a trade, because `onChoose` is undefined
+   * there, so Space did nothing except fail to page down.
+   *
+   * The rail below keeps the full set. It is a list of options, so Home, End
+   * and both axes belong to it; the stage is a picture you can turn.
+   */
   const onStageKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLDivElement>) => {
       const at = indexRef.current;
-      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') select(at + 1, false);
-      else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') select(at - 1, false);
-      else if (e.key === 'Home') select(0, false);
-      else if (e.key === 'End') select(count - 1, false);
-      else if (e.key === 'Enter' || e.key === ' ') choose(at);
+      if (e.key === 'ArrowRight') select(at + 1, false);
+      else if (e.key === 'ArrowLeft') select(at - 1, false);
+      else if (takeableRef.current && (e.key === 'Enter' || e.key === ' ')) choose(at);
       else return;
       e.preventDefault();
     },
-    [count, select, choose]
+    [select, choose]
   );
 
   /* Reads from the ref, not the render closure: two key events can land inside
@@ -874,10 +1016,18 @@ export function SpecimenCase({
      Roving focus is deliberately NOT moved with it, because nothing here asked
      for the keyboard. */
   useEffect(() => {
-    if (!chosenKey) return;
-    const at = entries.findIndex((e) => e.key === chosenKey);
+    const key = typeof chosenKey === 'string' ? chosenKey : chosenKey?.key;
+    if (!key) return;
+    const at = entries.findIndex((e) => e.key === key);
     if (at >= 0 && at !== indexRef.current) select(at, false);
   }, [chosenKey, entries, select]);
+
+  /* And the cursor going the other way. See SpecimenCaseProps.onCursor. The
+     caller's setState is expected to bail out on an unchanged value, which is
+     what keeps an unmemoised callback from turning this into a render loop. */
+  useEffect(() => {
+    if (entries[index]) onCursor?.(entries[index], index);
+  }, [onCursor, entries, index]);
 
   /* Under reduced motion nothing is scheduled, so a selection has to ask for
      its own frame. Harmless in the animated case: the loop redraws anyway. */
@@ -1589,18 +1739,28 @@ export function SpecimenCase({
        all tone values, and tone is theme-independent by construction. Only the
        two colours the ramp is finally printed in were stale.
        ---------------------------------------------------------------------- */
-    function repaintAtlases() {
+    function repaintAtlases(t: PaletteTokens = paletteTokens()) {
       if (atlasCell < 0) return; // never laid out; the first layout will do it
-      paintAtlas(inkAtlas, token(canvas!, '--ink', '#17140F'));
-      paintAtlas(vermAtlas, token(canvas!, '--verm-text', '#9E3524'));
+      /* From the snapshot the notification carries: reading these two off the
+         canvas after sixteen inherited custom properties changed forces a
+         full-document style recalc. See lib/v2/paletteWatch.ts. */
+      paintAtlas(inkAtlas, t.get('--ink', '#17140F'));
+      paintAtlas(vermAtlas, t.get('--verm-text', '#9E3524'));
       if (reduce) render();
       else kick();
     }
-    const themeObserver = new MutationObserver(repaintAtlases);
-    themeObserver.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['data-v2-theme', 'class', 'style']
-    });
+    /*
+     * Was a private MutationObserver on ['data-v2-theme', 'class', 'style'].
+     *
+     * `style` on <html> is where usePalette writes all sixteen tokens, and
+     * `class` is where it puts the transition and view-transition markers, so
+     * ONE change of light re-rasterised both glyph atlases three or four
+     * times. Through paletteWatch it is the three palette attributes, one
+     * observer shared with every other figure, and the two colours arrive WITH
+     * the notification rather than being read back off a document that sixteen
+     * inherited custom properties have just dirtied.
+     */
+    const stopPalette = onPaletteChange(repaintAtlases);
 
     /* The atlas is measured in JetBrains Mono. If the face lands late, the
        glyphs were drawn in the fallback and every cell is subtly wrong. */
@@ -1654,7 +1814,7 @@ export function SpecimenCase({
       raf = 0;
       io.disconnect();
       if (ro) ro.disconnect();
-      themeObserver.disconnect();
+      stopPalette();
       document.removeEventListener('visibilitychange', onVis);
       window.removeEventListener('resize', onResize);
     };
@@ -1665,7 +1825,26 @@ export function SpecimenCase({
   /* ------------------------------------------------------------------------ */
 
   const sheet = layout === 'sheet';
+  const reel = layout === 'reel';
+  /* The reel is the one dress that is a SHOWCASE rather than a catalogue: the
+     object and the project it belongs to, side by side, and nothing else. The
+     index still explains the pipeline, because that is a page about how the
+     objects were made. */
   const takeable = Boolean(onChoose);
+  /*
+   * ONE FACT, ONE MARK.
+   *
+   * `is-chosen` was drawn from `chosenKey` alone while `aria-pressed` was
+   * already gated on there being anything to choose, so a caller that uses
+   * `chosenKey` only to POINT the case got a filled black cell announcing a
+   * choice that was never made -- and, worse, one that went stale the moment
+   * the ring turned. The class agrees with the ARIA now.
+   */
+  const chosen = takeable
+    ? typeof chosenKey === 'string'
+      ? chosenKey
+      : chosenKey?.key
+    : undefined;
 
   /*
    * ONE RAIL, THREE PLACES.
@@ -1683,7 +1862,7 @@ export function SpecimenCase({
     <ol
       className={sheet ? 'v2-case-sheet' : 'v2-case-list'}
       onKeyDown={onKeyDown}
-      aria-label={listLabel}
+      aria-label={railLabel ?? listLabel}
     >
       {entries.map((a, i) => (
         <li key={a.key}>
@@ -1694,9 +1873,24 @@ export function SpecimenCase({
             }}
             className={`${sheet ? 'v2-case-tile' : 'v2-case-plaque'}${
               i === index ? ' is-on' : ''
-            }${chosenKey && a.key === chosenKey ? ' is-chosen' : ''}`}
+            }${chosen && a.key === chosen ? ' is-chosen' : ''}`}
             tabIndex={i === index ? 0 : -1}
-            aria-pressed={chosenKey ? a.key === chosenKey : i === index}
+            /*
+             * TWO FACTS, TWO ATTRIBUTES.
+             *
+             * `aria-pressed` was reporting the CHOICE when the caller tracked
+             * one and the CURSOR when it did not, which meant the same
+             * attribute on the same page changed meaning depending on whether
+             * anything had been opened yet: before the first choice tile 01
+             * announced itself pressed with nothing open, and closing an entry
+             * silently left its tile still announcing pressed. The visual
+             * classes had this right all along, `is-on` against `is-chosen`.
+             *
+             * So pressed means chosen, and only where choosing is possible.
+             * The cursor is `aria-current`, which is what it is.
+             */
+            aria-pressed={takeable ? a.key === chosen : undefined}
+            aria-current={i === index ? 'true' : undefined}
             aria-controls={`${idPrefix}-citation`}
             onClick={() => choose(i)}
             onFocus={() => select(i, false)}
@@ -1731,13 +1925,33 @@ export function SpecimenCase({
    * and it is a placement rather than a second component.
    */
   const citation = (
-    <div className="v2-case-citation" id={`${idPrefix}-citation`} aria-live="polite">
-      <p className="v2-case-cite-meta">
-        <b>{award.meta}</b>
-        <span aria-hidden="true"> / </span>
-        {award.date}
-      </p>
-      <h3 className="v2-case-cite-title">{award.title}</h3>
+    <div
+      className="v2-case-citation"
+      id={`${idPrefix}-citation`}
+      /*
+       * HOW MUCH OF THIS GETS READ OUT WHEN THE RING TURNS.
+       *
+       * On the index and the reel the citation is a CAPTION, a few lines long,
+       * and announcing the whole of it is the right answer: the reader turned
+       * the case with the arrows, focus stayed on the stage, and this is the
+       * only feedback there is.
+       *
+       * On the sheet it is the project's entry -- a full description, its
+       * stack and its links -- and a polite region that reads a screenful on
+       * every notch of the wheel is not feedback, it is a filibuster. There
+       * the identity alone is announced and the rest is read on request, which
+       * is how a listbox is supposed to behave.
+       */
+      aria-live={sheet ? undefined : 'polite'}
+    >
+      <div className="v2-case-cite-id" aria-live={sheet ? 'polite' : undefined}>
+        <p className="v2-case-cite-meta">
+          <b>{award.meta}</b>
+          <span aria-hidden="true"> / </span>
+          {award.date}
+        </p>
+        <h3 className="v2-case-cite-title">{award.title}</h3>
+      </div>
       <p className="v2-case-cite-body">{award.body}</p>
       {award.badges && award.badges.length ? (
         <ul className="v2-case-badges">
@@ -1746,10 +1960,16 @@ export function SpecimenCase({
           ))}
         </ul>
       ) : null}
-      <p className="v2-case-specimen">
-        <span className="v2-case-specimen-key">On the shelf</span>
-        {award.specimen} {stat.verts} vertices, {stat.faces} faces.
-      </p>
+      {/* Not on the reel. It describes the OBJECT -- what was modelled and out
+          of how many vertices -- and the reel's right-hand column is the
+          PROJECT. Alongside the vertex count over the glass, it was the case
+          talking about itself in a place meant to talk about the work. */}
+      {reel ? null : (
+        <p className="v2-case-specimen">
+          <span className="v2-case-specimen-key">On the shelf</span>
+          {award.specimen} {stat.verts} vertices, {stat.faces} faces.
+        </p>
+      )}
       {citationFoot ? citationFoot(award, index) : null}
     </div>
   );
@@ -1759,9 +1979,27 @@ export function SpecimenCase({
       className={`v2-case${layout === 'index' ? '' : ` is-${layout}`}${
         className ? ` ${className}` : ''
       }`}
-      aria-labelledby={head ? `${idPrefix}-title` : undefined}
-      aria-label={head ? undefined : listLabel}
+      aria-labelledby={`${idPrefix}-title`}
     >
+      {/*
+        THE HEADING EXISTS EVEN WHEN IT IS NOT DRAWN.
+
+        With `head` off the case rendered no h2 at all, so on /v2/projects the
+        next heading after the page's h1 was the citation's h3: a skipped
+        level, and a citation that reads as a subsection of nothing. The
+        heading is still the region's accessible name either way, which is
+        also how the two labels that used to fight over that job went away.
+      */}
+      {head ? null : (
+        <h2 className="v2-sr" id={`${idPrefix}-title`}>
+          {regionLabel ?? heading}
+        </h2>
+      )}
+      {/* The instruction sentence, once, as a description rather than as
+          three identical names. */}
+      <p className="v2-sr" id={`${idPrefix}-howto`}>
+        {listLabel}
+      </p>
       {head ? (
         <header className="v2-case-head">
           <p className="v2-eyebrow" data-perch data-perch-text data-perch-inset="0.38em">
@@ -1776,7 +2014,7 @@ export function SpecimenCase({
           >
             {heading}
           </h2>
-          <p className="v2-case-note">{note}</p>
+          {note ? <p className="v2-case-note">{note}</p> : null}
         </header>
       ) : null}
 
@@ -1795,23 +2033,70 @@ export function SpecimenCase({
         <div
           className="v2-case-stage"
           ref={stageRef}
-          data-perch
+          /*
+           * NOT A PERCH ON THE REEL.
+           *
+           * The perch contract deliberately took no inset here, because the
+           * plate's 1px border WAS the visible line and the bird stood on it.
+           * The reel has no border and no panel now, so that edge is nothing
+           * at all: Pip would stand on an invisible rectangle a clear gap
+           * above the object, which is the one thing measureEdge exists to
+           * stop. He has the eyebrow, the heading, the entry's own type, the
+           * badges and the two links, all still declared.
+           */
+          data-perch={reel ? undefined : true}
           role="group"
           tabIndex={0}
-          aria-label={listLabel}
+          aria-label={stageLabel ?? 'The case'}
+          aria-describedby={`${idPrefix}-howto`}
           onKeyDown={onStageKeyDown}
-          onClick={takeable ? () => choose(indexRef.current) : undefined}
+          onClick={
+            takeable
+              ? () => {
+                  /* The click that ends a drag is not a choice. */
+                  if (draggedRef.current) {
+                    draggedRef.current = false;
+                    return;
+                  }
+                  choose(indexRef.current);
+                }
+              : undefined
+          }
           data-takeable={takeable ? '' : undefined}
         >
           <canvas ref={canvasRef} aria-hidden="true" />
-          <p className="v2-case-mark">
-            {GEOMETRY.nVerts} vertices / {GEOMETRY.nFaces} faces / drawn here
-          </p>
-          <p className="v2-case-tally" aria-hidden="true">
-            {String(index + 1).padStart(2, '0')}
-            <i> / </i>
-            {String(count).padStart(2, '0')}
-          </p>
+          {/* The pipeline signing its own work. Right for a page ABOUT the
+              pipeline; on the showcase it is a vertex count sitting on top of
+              somebody's project. */}
+          {reel ? null : (
+            <p className="v2-case-mark">
+              {GEOMETRY.nVerts} vertices / {GEOMETRY.nFaces} faces / drawn here
+            </p>
+          )}
+          {/*
+            THE SHEET ONLY, and it has now been wrong in both directions.
+
+            It is a carousel's debt to the reader -- how much of it there is
+            and how far in they are -- so it went on unconditionally, which put
+            a mono "01 / 05" in the top left of the AWARDS plate, five objects
+            Jack had already approved without one. Guarding it to "not the
+            awards" then left it on the reel, where "01 / 15" was one of the
+            two stats he asked to have taken off the showcase.
+
+            It earns its place on the sheet, where fifteen tiles beside the
+            stage make the count real. The reel carries five and shows all of
+            them at once, so there is nothing to keep count of.
+
+            Neither error was catchable by looking at canvas pixels: this is
+            DOM text OVER the canvas.
+          */}
+          {sheet ? (
+            <p className="v2-case-tally" aria-hidden="true">
+              {String(index + 1).padStart(2, '0')}
+              <i> / </i>
+              {String(count).padStart(2, '0')}
+            </p>
+          ) : null}
           {arrows ? (
             <>
               {/* Flanking the object rather than sitting under it, so the thing
@@ -1846,15 +2131,23 @@ export function SpecimenCase({
         </div>
 
         {sheet ? rail : null}
-        {sheet ? citation : null}
+        {/*
+          SIDE BY SIDE, on both of the layouts that pair the object with words.
+
+          The sheet puts the caption under the stage with the tiles beside
+          both; the reel puts it in the second column, level with the object it
+          describes. Only the index still hangs it underneath, because there
+          the rail is the thing that sits beside the stage.
+        */}
+        {layout === 'index' ? null : citation}
       </div>
 
-      {sheet ? null : (
+      {layout === 'index' ? (
         <div className="v2-case-body">
-          {layout === 'index' ? rail : null}
+          {rail}
           {citation}
         </div>
-      )}
+      ) : null}
     </section>
   );
 }
@@ -1869,7 +2162,9 @@ export default function AwardsCase({ className }: AwardsCaseProps) {
       className={className}
       idPrefix="v2-case-awards"
       entries={AWARD_ENTRIES}
-      listLabel="Awards. Use the arrow keys to turn the case."
+      listLabel="Use the left and right arrow keys to turn the case."
+      stageLabel="The award case"
+      railLabel="Awards"
       eyebrow={
         <>
           Awards / <b>2022 to 2025</b>

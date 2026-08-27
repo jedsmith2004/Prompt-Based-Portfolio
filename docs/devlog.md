@@ -8,7 +8,270 @@ See also: [spec.md](spec.md) · [plan.md](plan.md) · [ab-log.md](ab-log.md) · 
 
 ---
 
-## 2026-08-27 (latest) — one case, three dresses, and 4,200 words that did not exist
+## 2026-08-27 (latest) - two entries for one project, and the harness that could not see it
+
+Jack: *"On /projects, the project entry appears twice, I want the higher one
+(under the turnstile) to be the main one, compress the information from the big
+entry underneath into that smaller one with links."*
+
+He is right, and it was deliberate: the case's citation was a caption and the
+raised panel below it was the article, on the theory that a carousel you are
+merely turning should not commit you to anything. The theory costs a whole
+mechanism - a cursor AND a choice - and pays for it with the same project written
+out twice on one screen.
+
+So the caption grew into the article: the whole description, the whole stack, the
+project's page and everywhere else it lives. The panel is gone, and so is its
+stylesheet.
+
+### What the merge took with it
+
+The CHOICE. With the entry attached to the cursor there is nothing for a choice
+to open, and the second mark starts lying the moment the ring turns past it. The
+case reports its cursor out instead (`onCursor`), the catalogue marks the row it
+is showing, and `is-chosen` is gated on there actually being something to choose,
+which is what `aria-pressed` had been doing all along. The class and the ARIA had
+disagreed since the day the choice was added.
+
+While there, a control that was dead: pressing the same row number twice. The id
+is a string, React bails out on an unchanged one, the effect never re-runs, and
+the case does not turn back - in exactly the case a reader would press it, having
+turned the case away in between. `chosenKey` takes `{ key }` now. The same bug was
+found and fixed at the PAGE level when the choice was first added, and there is a
+comment there saying so; the half nobody looked for was one level lower, in the
+case's own effect, where the page's fix could not reach it.
+
+### The instrument was measuring nothing
+
+Three probes said the page was inert: `element.click()` on a tile did nothing,
+`Input.dispatchKeyEvent` on the stage did nothing, and `onCursor` never fired. A
+fourth, using real mouse events, worked. That combination has no honest
+explanation, which is the tell.
+
+The readiness poll was:
+
+```js
+const c = document.querySelector('.v2-case-stage canvas');
+return c && c.width > 0 ? 'y' : 'n';
+```
+
+**`canvas.width` is 300 on an element no script has ever touched.** It is an IDL
+attribute with a default, not a measurement. So the poll passed against inert
+server HTML, every probe ran before hydration, and every click was swallowed. The
+one that worked did five taps with waits between them and had simply been alive
+long enough by the fourth.
+
+The fix is a signal only the client can produce:
+
+```js
+Object.keys(el).some((k) => k.indexOf('__reactFiber') === 0)
+```
+
+This is the same shape of error as the noise metric that sampled the nav rail and
+called it paper, in the entry below: a proxy chosen because it was easy to read,
+rather than one that could only be true when the thing itself was true. Both cost
+a full measurement round.
+
+### Things that turned out not to be true
+
+- *"The click handler is broken."* It was not. The page had not hydrated.
+- *"`grid-area` on each of the four citation children will lay this out."* Grid
+  rows are shared between columns, so the stack of chips beside the title set the
+  height of the title's row, and the description below it started wherever the
+  chips stopped - a hole the depth of the title. The two right-hand blocks had to
+  become one element that spans.
+- *"46ch on the body is the measure."* In a 356px column that max-width never
+  binds. It was pretending to control something the column had already decided.
+
+---
+
+## 2026-08-27 - the light stopped asking the document what colour it was
+
+Jack, twice: *"there are lag spikes when switching backgrounds and massive lag
+spikes when turning off or on the lights"* and *"the last page still has a screen
+full of noise when you go onto it, the particles spawning in."* Two complaints,
+two causes, and three measuring instruments that had to be thrown away before
+either could be shown.
+
+### The light
+
+One change of light performed **19 `getComputedStyle` acquisitions and 82
+`getPropertyValue` calls**. Every one was a figure answering a palette mutation
+by going back to the DOM for a value `usePalette` had been holding as a plain hex
+string a microtask earlier.
+
+Not merely wasteful. All sixteen palette tokens are registered `@property` with
+`inherits: true` on `:root`, so the instant `usePalette` writes them every
+element in a sixteen-thousand-pixel document is dirty, and the first computed
+read after that must resolve the whole thing before it can answer. Jack had
+already measured that recalculation and written the number into `v2.css`: an
+untransitioned light change costs 110ms of style. It was being dragged forward
+into a mutation callback, where it blocks.
+
+**The fix is one sentence.** The notification carries the palette. `usePalette`
+publishes the sixteen values it is about to write; a subscriber asks the snapshot
+instead of the document. The recalculation still happens - it must - but in the
+browser's own rendering step, where it is not blocking anything.
+
+Six subscribers converted. `Companion` was doing something worse than the others:
+it was the last observer watching `class` and `style` on `<html>`, which is where
+`usePalette` writes all sixteen tokens and its transition markers, so one toggle
+delivered three separate batches and `readTheme` ran on all three - and the
+bird's own draw toggles a cursor class on `<html>`, so he was waking himself.
+Narrowed to `data-v2-theme`.
+
+Also fixed while in there: `published` is module state and nothing cleared it, so
+navigating from the spine to `/v2/awards` - which sets `data-v2-theme` by hand
+and never mounts `usePalette` - would leave the closing plate's colours answering
+for a page asking the document for its own. A quieter version of the exact bug
+`paletteWatch` exists to kill. Found by re-reading my own diff, not by running
+it.
+
+### What it bought, and how it had to be measured
+
+Long-task blocking could not answer this, and it took three tries to find that
+out. The full account is in [ab-log.md](ab-log.md) under AB-LIGHT. The short
+version: one stash-based A/B was invalid because `git stash` makes the dev server
+rebuild and the "before" page loaded mid-recompile and reported a beautiful zero;
+one alternating design was invalid because the configuration had memory; and the
+third, which was methodologically sound, produced this:
+
+| arrival blocking, median | BEFORE | AFTER |
+|---|---|---|
+| round 1 | 159ms | 87ms |
+| round 2 | 167ms | 102ms |
+| round 3 | 324ms | 435ms |
+
+Two rounds for, one against, both sides doubling across the session. Then the
+per-pass breakdown showed why: **four of five runs got three to ten times more
+expensive by the third pass over the plates, on both configurations.** The
+confound was bigger than the effect.
+
+So count the thing the change removes instead. Wrapping `getComputedStyle` and
+`getPropertyValue` at runtime needs no source edit, so it is the same instrument
+on both builds, and a counter has no variance. A registered custom property can
+only be read through `getPropertyValue`, so for the palette this count is exact.
+
+| per event | before | the payload | and the residue |
+|---|---|---|---|
+| arrival, palette reads | 86.7 | 8.6 | **0** |
+| arrival, ms inside them | 99.8 | 1.0 | 1.3 |
+| arrival, worst single call | 229.5ms | 0.1ms | 0.5ms |
+| toggle, palette reads | 102.6 | 13 | **0** |
+| toggle, ms inside them | 70.7 | 6.9 | 2.2 |
+| toggle, worst single call | 133.4ms | 35.9ms | **1.2ms** |
+
+The middle column is the payload change alone. The third is after chasing the
+two callers it left behind, which the harness named rather than my guessing at
+them: it records WHICH call was the worst, and in both remaining cases it was
+`read --ink` with **RouteMap** in the caller set - the one figure I had not
+converted, because it keeps its own narrowly-filtered observer and I took that
+to mean it was dealt with. It was not. The other was `AwardsClippings` reading
+`--clip-bleed`, a layout constant, once per cutting per repaint: not a colour at
+all, but the tokens are registered `@property` with `inherits: true`, so ANY
+computed read after they are written pays for the whole document. Cached, and
+invalidated only by the two paths that can move it.
+
+**Zero palette reads now remain on either path**, and the worst single blocking
+call on a change of light is 1.2ms.
+
+Ninety per cent of the reads gone, and with them the block. The 99.8ms is
+independent corroboration of Jack's own 110ms, seen from the other side.
+
+The caller attribution is better evidence than the totals, because it shows the
+mechanism. `ClimbingWall`, `NeuralPlayground`, `AwardsCase` and
+`SkillConstellation` disappear from the list entirely.
+
+**What this does not say.** It does not say the page is 100ms faster per plate.
+It says 100ms of forced, synchronous, main-thread style resolution per plate
+change has stopped being demanded from inside a callback. The browser still
+resolves that style, in its own rendering step.
+
+### The closing plate
+
+`retarget()` re-aims every particle at the portrait and lets them fly. A quarter
+of a million points crossing the viewport at once IS the noise, in front of the
+one plate on the site that asks the reader for something.
+
+Frames captured 400ms after arriving, ink coverage scored against that route's
+own settled state:
+
+| route | before | after |
+|---|---|---|
+| plate by plate (scrolling) | 2.63x | 0.88x |
+| smooth jump (the nav rail) | 2.43x | 0.52x |
+| instant jump (a `#hash` link) | 2.07x | 0.65x |
+
+Confirmed by looking: the 400ms frame goes from a full-viewport field of speckle
+with the copy unreadable underneath it, to the settled portrait. Three other
+defects on the same path went with it - `resize()` re-flighting every particle on
+any window resize, `resize()` not recording what it built so the shapeKey effect
+rebuilt a quarter of a million destinations a second time on every mount, and a
+GL teardown that nulled `retargetRef` but not `runRef`, leaving a start/stop pair
+closed over deleted programs.
+
+### Things that turned out not to be true
+
+- **I named the wrong route, twice.** The fix's first comment blamed a nav rail
+  jump under `prefers-reduced-motion`. That is the one route that was already
+  safe: `retarget` settles unconditionally when `reduced` is true. Then rendering
+  showed the flight on **all three** routes, including ordinary scrolling, which
+  does move `dormant` and so should have been covered by the wake. Both
+  explanations were reading, not looking. The comment now states what was
+  measured.
+- **My first noise metric measured the palette transition, not the particles.**
+  It sampled "paper" from the frame's four corners, and the top-left corner is
+  inside the dark nav rail, so on a light-mode frame almost every pixel differed
+  from it: 95% "noise" for a frame that was simply mid-transition. Caught by
+  opening the image. Replaced with the frame's modal colour, furniture cropped.
+- **I nearly reported a 275ms to 181ms improvement** from two uncontrolled runs,
+  and had to withdraw it to Jack. The controlled version of that same comparison
+  was 208ms against 200ms - no win at all - which is why the gate was deleted.
+- **A visibility gate was built, measured, and thrown away.** Skipping off-screen
+  figures bought nothing and introduced a stale-paint regression, because
+  `IntersectionObserver` records are delivered *after* the frame that crossed the
+  threshold has painted. Deferring the work was the wrong shape of answer; the
+  work should not exist.
+- **A harness was silently corrupted at write time.** The heredoc writing it
+  collapsed `\\` to `\`, turning a newline escape into a real newline inside a
+  string literal. It failed at runtime in a browser, pointing at the symptom.
+  Fifth time in this project. Harnesses that inject code are now written with no
+  backslashes at all and the injected fragment is parsed before a run is spent on
+  it.
+
+### The open lead
+
+The pass-three degradation is **still unexplained** and is the better lead of
+the two. It would be felt as exactly Jack's complaint, arriving after a minute
+of moving around rather than immediately.
+
+A read-only retention sweep - four lenses over the spine, every finding handed
+to a separate reader told to refute it - returned **eight candidates of which
+one survived**, and its own finder says that one is far too small to account for
+66ms becoming 346ms. It is real and it is fixed: `SectionBackdrops`' `wrapRefs`
+Map gains a permanent entry on every world mount, because `drop()` deletes the
+key *before* the `setSlots` that unmounts the node, and a React 18 callback ref
+has no cleanup return, so detaching invokes it again with `null` and puts the
+key straight back. The other removal path never deleted from that Map at all,
+and the keys come from a module counter that is never reset. It now deletes on
+detach. Verified against the source myself rather than taken on the sweep's
+word.
+
+The other seven were killed, most of them by one fact that the refuters found
+and the finders had not: **only one of the eight worlds owns a WebGL context.**
+Four separate findings were built on `drop()` failing to release GL contexts for
+worlds that are all `getContext('2d')`, where that code is a no-op. Several of
+those worlds still carry a vestigial "deliberately no `loseContext()`" comment
+on a 2D canvas, and `SectionBackdrops`' own file header still says "three of
+them own a WebGL context". Those stale comments are what the finders read.
+
+So the cause is not found. What has been ruled out, with reasons, is worth
+almost as much as a hit would have been - and the next instrument should be
+retained-object counts across passes, not another read of the source.
+
+---
+
+## 2026-08-27 — one case, three dresses, and 4,200 words that did not exist
 
 Three of Jack's asks turned out to be one component and one missing file.
 

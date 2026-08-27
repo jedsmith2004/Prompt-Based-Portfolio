@@ -1030,6 +1030,9 @@ export default function InkField({
     }
     retargetRef.current = retarget;
 
+    /** False until the first `resize`, which is the mount. See below. */
+    let sized = false;
+
     function resize() {
       const r = canvas!.getBoundingClientRect();
       if (!r.width || !r.height) return;
@@ -1038,7 +1041,19 @@ export default function InkField({
       canvas!.height = Math.max(1, Math.round(r.height * dpr));
       aspect = r.width / r.height;
       allocPigment(canvas!.width * PIGMENT_SCALE, canvas!.height * PIGMENT_SCALE);
-      retarget();
+      /*
+       * THE FIRST CALL IS THE MOUNT and must not settle: the particles are
+       * seeded on a random disc and the draw-in from it is the opening of the
+       * site. Every LATER call is a window resize, where the reader is already
+       * looking at a settled field and re-aiming all quarter of a million
+       * points sends the whole gather across the viewport again, unasked.
+       */
+      retarget(sized);
+      sized = true;
+      /* Recorded, or the shapeKey effect below builds these same targets a
+         second time on every mount -- a quarter of a million destinations,
+         about 50ms, for a texture that is already correct. */
+      targetKeyRef.current = shapeKeyRef.current;
       if (reduced) requestFrame();
     }
 
@@ -1385,6 +1400,10 @@ export default function InkField({
       gl.deleteVertexArray(quadVao);
       gl.deleteVertexArray(pointVao);
       retargetRef.current = null;
+      /* And this one. Left set, it is a start/stop pair closed over a context
+         whose programs and textures have just been deleted, and the wake path
+         above will happily call start() on it. */
+      runRef.current = null;
       repaintRef.current = null;
       liveRef.current = false;
     };
@@ -1415,7 +1434,44 @@ export default function InkField({
        ink. See targetKeyRef. */
     if (targetKeyRef.current === shapeKey) return;
     targetKeyRef.current = shapeKey;
-    retargetRef.current?.();
+    /*
+     * SETTLED, NOT FLOWN.
+     *
+     * > "the last page still has a screen full of noise when you go onto it,
+     * >  the particles spawning in"
+     *
+     * Still, and the earlier wake-onto-targets fix did not cover it. A plain
+     * retarget re-aims every particle at a portrait blob in the middle of the
+     * screen and lets them fly; a quarter of a million points crossing the
+     * viewport at once IS the noise, in front of the one plate on the site
+     * that asks the reader for something.
+     *
+     * MEASURED, because the last two explanations of this were wrong. Frames
+     * captured 400ms after arriving at the closing plate, ink coverage scored
+     * against that same route's own settled state:
+     *
+     *     route                       before   after
+     *     plate by plate (scrolling)   2.63x    0.88x
+     *     smooth jump (the nav rail)   2.43x    0.52x
+     *     instant jump (a #hash link)  2.07x    0.65x
+     *
+     * All three, not one. Note in particular that ordinary scrolling DOES move
+     * `dormant`, so the wake did run on that route and the field still arrived
+     * flying -- whatever the precise path is, keying the repair to `dormant`
+     * was not enough. Settling here covers all three, and that is what was
+     * verified: the 400ms frame goes from a full-viewport field of speckle with
+     * the copy unreadable underneath it, to the settled portrait.
+     *
+     * Note this is NOT the reduced-motion route, which was my first guess and
+     * is the one route that was already safe: `retarget` settles unconditionally
+     * when `reduced` is true.
+     *
+     * Nothing that reaches this line wants a flight. While the field is awake
+     * the reader can only be on the opening plate or the closing one, so every
+     * shapeKey change that gets past the guards above is a jump across the
+     * whole page. Put them where they are going.
+     */
+    retargetRef.current?.(true);
   }, [shapeKey]);
 
   return (

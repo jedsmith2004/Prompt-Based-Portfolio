@@ -40,6 +40,7 @@ import {
   type PaletteMode,
   type SectionPalette
 } from '@/lib/v2/palettes';
+import { publishPalette } from '@/lib/v2/paletteWatch';
 
 const DRIVEN_CLASS = 'v2-palette-driven';
 const MODE_TRANSITION_CLASS = 'v2-mode-transition';
@@ -91,6 +92,22 @@ export function usePalette(activeId: string, mode: PaletteMode): SectionPalette 
     previousModeRef.current = mode;
 
     const applyTokens = () => {
+      /*
+       * PUBLISHED BEFORE IT IS WRITTEN.
+       *
+       * Every canvas figure on the page used to answer the resulting mutation
+       * by going back to `getComputedStyle(root)` for these same sixteen
+       * strings -- 82 property reads across 19 acquisitions, per toggle -- and
+       * because the tokens are registered `@property` with `inherits: true`,
+       * the first of those reads forces a full-document style recalculation.
+       * That recalc is the 110ms written down further up v2.css, and it was
+       * being dragged into a mutation callback where it blocks. See
+       * lib/v2/paletteWatch.ts.
+       */
+      const snapshot: Record<string, string> = {};
+      for (const [key, prop] of PALETTE_VARS) snapshot[prop] = String(palette[key]);
+      publishPalette(snapshot);
+
       for (const [key, prop] of PALETTE_VARS) {
         root.style.setProperty(prop, String(palette[key]));
       }
@@ -196,6 +213,9 @@ export function usePalette(activeId: string, mode: PaletteMode): SectionPalette 
       root.classList.remove(MODE_TRANSITION_CLASS);
       root.classList.remove(MODE_VIEW_TRANSITION_CLASS);
       document.body.style.removeProperty('--ground');
+      /* Before the tokens go, and for the same reason they go: whatever reads
+         the palette after this must read the document, not this page. */
+      publishPalette(null);
       for (const [, prop] of PALETTE_VARS) root.style.removeProperty(prop);
       delete root.dataset.v2Palette;
       delete root.dataset.v2Mode;
@@ -219,6 +239,12 @@ export function usePalette(activeId: string, mode: PaletteMode): SectionPalette 
         const pal = paletteForSection(id, m);
         const root = document.documentElement;
         document.body.style.setProperty('--ground', String(pal.paper));
+        /* By the same path the hook uses, publication included -- otherwise a
+           figure reading the snapshot after this gets the last plate the hook
+           published and the handle silently measures the wrong plate. */
+        const snapshot: Record<string, string> = {};
+        for (const [key, prop] of PALETTE_VARS) snapshot[prop] = String(pal[key]);
+        publishPalette(snapshot);
         for (const [key, prop] of PALETTE_VARS) {
           root.style.setProperty(prop, String(pal[key]));
         }
