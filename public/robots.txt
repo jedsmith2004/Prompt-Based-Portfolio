@@ -1,6 +1,6 @@
-# robots.txt for jacksmith.me
+# robots.txt for v2.jacksmith.me
+#
+# This is the archived second version of the site. The live one is at
+# jacksmith.me and should be the only one in the index.
 User-agent: *
-Allow: /
-
-# Sitemap location
-Sitemap: https://jacksmith.me/sitemap.xml
+Disallow: /

@@ -4,7 +4,8 @@
 
 ### Personal Portfolio
 
-[![Live Site](https://img.shields.io/badge/🌐_Live_Site-www.jacksmith.me-blue?style=for-the-badge)](https://www.jacksmith.me)
+[![Archived](https://img.shields.io/badge/🗄_Archived-v2.jacksmith.me-lightgrey?style=for-the-badge)](https://v2.jacksmith.me)
+[![Live Site](https://img.shields.io/badge/🌐_Live_Site-jacksmith.me-blue?style=for-the-badge)](https://jacksmith.me)
 
 ![Next.js](https://img.shields.io/badge/Next.js-000000?style=flat-square&logo=next.js&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)
@@ -17,9 +18,14 @@
 
 ## About
 
+> **This branch is frozen.** It is the second version of my portfolio, kept online at
+> **[v2.jacksmith.me](https://v2.jacksmith.me)**. The live site is at
+> **[jacksmith.me](https://jacksmith.me)**, built from `master`, and the first version is at
+> **[v1.jacksmith.me](https://v1.jacksmith.me)**.
+
 My personal portfolio website showcasing my work, skills, and experience. Features an interactive AI-powered chat widget that can answer questions about my background and projects.
 
-**[www.jacksmith.me](https://www.jacksmith.me)**
+**[v2.jacksmith.me](https://v2.jacksmith.me)**
 
 ---
 
@@ -54,6 +60,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 <div align="center">
 
-**[www.jacksmith.me](https://www.jacksmith.me)**
+**[v2.jacksmith.me](https://v2.jacksmith.me)**
 
 </div>
