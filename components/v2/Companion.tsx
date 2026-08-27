@@ -57,6 +57,7 @@ import {
   IDLE_LOOP_MS,
   SPRITE_WIDTH,
   SPRITE_HEIGHT,
+  SPRITE_BOUNDS,
   BASELINE_Y,
   PIXEL_SCALE,
   FRAME_MS_MAX,
@@ -1014,6 +1015,9 @@ type Mode =
   | 'fly'
   | 'transit'
   | 'sleep'
+  /* Folded up in the corner of the viewport with the engine parked. Not a
+     perch and not a nap: see THE DOCK. */
+  | 'dock'
   | 'chat'
   | 'pvz'
   /* a set piece is happening to him; see the bit machinery */
@@ -1474,6 +1478,92 @@ const CURSOR_MATRIX_OVER: readonly string[] = [
  * 51px.
  */
 const CHAT_PIN_TOP = 96;
+
+/* ==========================================================================
+   THE DOCK, IN NUMBERS
+
+   Where he sleeps before anybody has asked him for anything. Every figure
+   here is about his FEET, because that is what bird.y is — never his box,
+   which has three empty rows above his head and would leave him floating a
+   fingernail off the corner if it were inset by instead.
+
+   The vertical one comes out of the sprite data: SPRITE_BOUNDS.y is 7 and
+   BASELINE_Y is 25, so the ink of a resting pose starts (25 - 7) *
+   PIXEL_SCALE = 72px above his feet, and DOCK_RISE therefore puts the top of
+   the BIRD at DOCK_TOP. The horizontal one could not be, and DOCK_HALF says
+   why underneath.
+   ========================================================================== */
+/** Feet to the top of the ink, in px. */
+const DOCK_RISE = (BASELINE_Y - SPRITE_BOUNDS.y) * PIXEL_SCALE;
+/**
+ * Centre line to the right edge of the ink, in px, IN THE SLEEPING POSE.
+ *
+ * Not derived from SPRITE_BOUNDS, because SPRITE_BOUNDS is the REST pose and
+ * `sleep` is not it: the body and head go to their `fluffed` variants and
+ * the tail to `down`, and the result reaches a sprite pixel further right
+ * than the resting bird does. Taken off the drawn canvas at the dock — the
+ * alpha bounding box of the fixed surface with nothing else on it — which is
+ * the only way to be right about a pose the bounds do not describe.
+ *
+ * DOCK_RISE above is safe to derive because the two agree there: the fluffed
+ * head sits lower than the resting one, so the bounds are the ceiling and the
+ * breath moves him between 20 and 24px off the top rather than through it.
+ */
+const DOCK_HALF = 31;
+/** Ink to the right edge of the screen. */
+const DOCK_INSET_X = 20;
+/** Ink to the top of the screen. The same, so the corner is a corner. */
+const DOCK_TOP = 20;
+/**
+ * And the same on a phone, where the top of the screen is not free.
+ *
+ * The plate bar is 42px of fixed chrome with the index button at its right
+ * hand end — exactly where he would otherwise be sitting — and a press on him
+ * calls preventDefault, which takes the click with it, so a bird parked over
+ * that button would silently eat every tap that opens the plate list.
+ *
+ * 62 puts his ink 20px under the bar and his HIT BOX 14px under it, which is
+ * the number that actually has to clear: see hitTest, which shrinks to the
+ * sleeping pose while he is docked for this same reason.
+ */
+const DOCK_TOP_BAR = 62;
+/** The width the plate bar exists at. Matches the @media in v2.css. */
+const DOCK_BAR_MAX_W = 760;
+
+/* ---- the sleep button ---------------------------------------------------- */
+/**
+ * The zzz, and the box it is pressed by. Three Zs on a diagonal: biggest
+ * nearest him, smallest floating away, which is how the drawing has been done
+ * since long before any of us got here.
+ *
+ * [font px, x offset, y offset], laid out so the three of them fill ZZZ_W by
+ * ZZZ_H exactly. Set in the same 5x7 font as the chat window, so the control
+ * is made of the same material as the thing it sits beside.
+ */
+const ZZZ_STEPS: readonly (readonly [number, number, number])[] = [
+  [4, 0, 14],
+  [3, 18, 4],
+  [2, 32, 0]
+];
+const ZZZ_W = 42;
+const ZZZ_H = 42;
+/**
+ * How much of the panel's top edge his seat gives up to the button.
+ *
+ * A chat perch is not just a bird: each one brings its own furniture, and the
+ * widest of the five reaches 75px to the right of his centre line —
+ * perchIncantation, whose book floats out beside him. Measured off the band,
+ * per perch:
+ *
+ *     perchNest         31    perchBranch        39
+ *     perchTyping       39    perchMeditate      47
+ *     perchIncantation  75
+ *
+ * So 75 of furniture, 11 of air, and the button's own 42. Anything less and
+ * the reader is asked to press a zzz that is sitting on top of his book.
+ */
+const ZZZ_SEAT_CLEAR = 128;
+
 const CURSOR_SCALE = 2;
 /** Class the swap puts on <html>. The rule is injected and removed with it. */
 const CURSOR_SWAP_CLASS = 'v2-bird-cursor-swap';
@@ -1554,6 +1644,10 @@ export default function Companion({
      a callback that changes with the route. Same arrangement as every other
      prop the loop needs; assigned below, where takeChip exists. */
   const takeChipRef = useRef<(key: string) => void>(() => {});
+  /* And the same bridge the other way for the sleep button, which is painted
+     on the canvas and therefore invisible to a keyboard. Assigned inside the
+     engine, next to the thing it calls. */
+  const dockRef = useRef<() => void>(() => {});
 
   const chat = useRef({
     open: false,
@@ -1871,7 +1965,33 @@ export default function Companion({
     let dpr = 1;
     function resize() {
       dpr = Math.min(window.devicePixelRatio || 1, 2);
-      W = window.innerWidth;
+      /*
+       * clientWidth, NOT innerWidth, and the difference is a classic
+       * scrollbar.
+       *
+       * innerWidth includes it; the fixed layer this canvas fills is inset:0
+       * against the initial containing block, which does not. On Windows and
+       * Linux that is 15px, so the canvas was given a 1280px backing store and
+       * laid out 1265px wide — everything on the FIXED surface was drawn 1.2%
+       * too far apart, growing to a full 15px of error at the right-hand edge.
+       * Nobody noticed while the only things up there were a chat window near
+       * the middle and a bird who lives on the band, but it also means the
+       * painted cursor sat up to 15px right of the real pointer, and it ate
+       * three quarters of the dock's margin: a bird asked to sit 20px in from
+       * the corner arrived 5px in from it.
+       *
+       * Every other coordinate in this engine is already a client coordinate
+       * — perches come from getBoundingClientRect and the pointer from
+       * clientX — so this is the one that was out of step, not the rest.
+       *
+       * The HEIGHT is left as innerHeight on purpose. clientHeight only
+       * differs from it when there is a HORIZONTAL scrollbar, and globals.css
+       * sets overflow-x: hidden on both html and body so there never is one;
+       * on a phone the two disagree for an entirely different reason (the
+       * retracting URL bar) and innerHeight is the one the pinned-chat
+       * measurements in CHAT_PIN_TOP were taken against.
+       */
+      W = document.documentElement.clientWidth || window.innerWidth;
       H = window.innerHeight;
       canvas!.width = Math.round(W * dpr);
       canvas!.height = Math.round(H * dpr);
@@ -2831,9 +2951,12 @@ export default function Companion({
          the window centred rather than dropped under him, clamping his own x
          into it would seat him wherever he happened to be standing, which on
          a phone is usually hard against one end of the rail. */
+      /* The right-hand clamp is four times deeper than the left, which is not
+         a typo: the far end of this edge belongs to the sleep button, and a
+         perch brings furniture with it. See ZZZ_SEAT_CLEAR. */
       chatUi.seatX = coarsePointer
         ? chatUi.x + w * 0.5
-        : Math.max(chatUi.x + 30, Math.min(chatUi.x + w - 30, sx));
+        : Math.max(chatUi.x + 30, Math.min(chatUi.x + w - ZZZ_SEAT_CLEAR, sx));
       chatUi.seatY = chatUi.y;
       chatUi.dirty = true;
       positionInput();
@@ -3860,6 +3983,14 @@ export default function Companion({
           onErrandFailRef.current?.();
           return;
         }
+        /* And not while he is asleep in the corner. The reader has not asked
+           for him yet, and an errand is not their asking: the switch pulls
+           its own cord on the failure path and the page carries on without
+           him, which is exactly what that path is for. */
+        if (docked() || dockHoming) {
+          onErrandFailRef.current?.();
+          return;
+        }
         /* The target was almost certainly added to the DOM on the frame
            before this one, so it is not in `byEl` yet. */
         measure();
@@ -4093,7 +4224,12 @@ export default function Companion({
 
     function beginDrag() {
       if (reduced) return;
-      /* Being picked up outranks any set piece running around him. */
+      /* Being picked up outranks any set piece running around him — and it
+         outranks the dock, in both directions: hauling a sleeping bird out of
+         the corner is a perfectly clear way of asking for him, and grabbing
+         one on his way home is a perfectly clear way of saying not yet. */
+      dockLeaving = false;
+      dockHoming = false;
       cutBit();
       drag.active = true;
       drag.hauled = 0;
@@ -4557,12 +4693,254 @@ export default function Companion({
       say(pickLine(LINE_SHAKEN), 2400);
     }
 
+    /* ======================================================================
+       THE DOCK
+
+       > "we need pip to be docked in the top right of the splash page
+       > sleeping, and only come out and do everything he does if someone
+       > clicks on him."
+
+       Everything above this line describes a bird who owns the page from the
+       first frame. That is the right animal to have BUILT and the wrong one
+       to open with: a reader who has never met him arrives to a sparrow
+       already hopping across their headings, and had no say in it. So he
+       starts folded up in the corner asleep, and the whole engine — the
+       comfort band, the transits, the set pieces, the cursor theft, the
+       whispers — is held behind one click on him.
+
+       THE DOCK IS A SCREEN POSITION, NOT A PERCH. There is no furniture in
+       the corner of a viewport, so bird.perch is null the whole time he is
+       there and his document coordinates are re-derived from the scroll every
+       frame. That is a third screen-space move to add to the two sanctioned
+       at the top of the file, and it is the transit's trick exactly: on screen
+       he does not move at all, so there is nothing to be continuous with.
+
+       Three states, and bird.mode only carries one of them:
+
+         mode 'dock'   asleep in the corner, engine parked
+         dockLeaving   woken, playing wakeUp, one frame from flying out
+         dockHoming    flying home, drawn on the fixed canvas so he cannot lag
+                       behind a screen-space target the way he would on the band
+
+       Neither flag outlives the thing it describes. dockLeaving is spent by
+       leaveDock on the frame the act queue lands in idle; dockHoming is
+       dropped by the post-switch block in update() the moment anything else
+       takes him, which is what makes a drag mid-flight cancel the trip rather
+       than strand it. Both are cleared by hand in beginDrag, which is the one
+       interruption that can arrive before either has had a frame.
+       ====================================================================== */
+
+    /** Feet, in viewport px. */
+    function dockX(): number {
+      return W - DOCK_INSET_X - DOCK_HALF;
+    }
+    function dockY(): number {
+      return (W <= DOCK_BAR_MAX_W ? DOCK_TOP_BAR : DOCK_TOP) + DOCK_RISE;
+    }
+    function docked(): boolean {
+      return bird.mode === 'dock';
+    }
+
+    let dockLeaving = false;
+    let dockHoming = false;
+
+    /** Park him. Called at boot, and at the end of the flight home. */
+    function settleOnDock() {
+      dockHoming = false;
+      dockLeaving = false;
+      beginPlan();
+      bird.perch = null;
+      bird.flyPerch = null;
+      bird.vx = 0;
+      bird.vy = 0;
+      bird.jumpAnim = null;
+      /* Facing back into the page. A bird in the top-right corner looking off
+         the edge of the screen reads as one who is leaving; looking inward he
+         reads as one who is waiting. */
+      bird.facing = -1;
+      bird.x = scrollXNow + dockX();
+      bird.y = scrollYNow + dockY();
+      bird.dreamIdx = (Math.random() * DREAM_ITEMS.length) | 0;
+      bird.dreamUntil = bird.clock + 3000 + Math.random() * 1000;
+      bubble.text = '';
+      bubble.until = 0;
+      setMode('dock');
+      startAnim('sleep', 0);
+    }
+
+    /**
+     * Wake him, which is the one thing a click on a docked bird does.
+     *
+     * He does not leave from here. wakeUp is the only legal exit from a
+     * sleeping pose and it is most of a second of him deciding to be awake;
+     * flying on the same frame would throw that away. leaveDock() picks it up
+     * on the frame the act queue drops him into idle.
+     */
+    function wakeFromDock() {
+      if (!docked()) return;
+      if (reduced) {
+        /* No startle and no flight: arriving rather than travelling is the
+           whole of what reduced motion asks for. updateReduced reseats him on
+           the next frame. */
+        dockLeaving = false;
+        bird.perch = null;
+        enterIdle();
+        return;
+      }
+      dockHoming = false;
+      dockLeaving = true;
+      setMode('act');
+      actLen = 1;
+      actIdx = 0;
+      ACTS[0] = 'wakeUp';
+      startAnim('wakeUp');
+      say(pickLine(LINE_WAKE), 2800);
+    }
+
+    /** The frame the wake act finished on. Off the corner and into the page. */
+    function leaveDock() {
+      dockLeaving = false;
+      const p = pickBandPerch(1);
+      /* pickBandPerch falls back to the nearest perch and can still come back
+         empty on a page with no furniture at all. Dropping is the honest
+         answer there, and the fall machinery finds him something. */
+      if (p) enterFly(targetXOn(p), p.y, p, 760);
+      else enterFall();
+    }
+
+    /**
+     * Send him home. The zzz, and nothing else, calls this.
+     *
+     * The chat goes first, and for the same reason a chip closes it first:
+     * the window is anchored to the screen and seats him on its top edge, so
+     * flying out from under an open one would leave the panel hanging there
+     * with nobody in it.
+     */
+    function sendToDock() {
+      if (docked() || dockHoming) return;
+      closeChat();
+      cutBit();
+      if (reduced) {
+        settleOnDock();
+        return;
+      }
+      dockLeaving = false;
+      dockHoming = true;
+      onCursor = false;
+      if (swap.hold !== 0) dropCursor(false);
+      enterFly(scrollXNow + dockX(), scrollYNow + dockY(), null, 820);
+    }
+
+    /**
+     * The whole of his behaviour while docked, and it is deliberately almost
+     * nothing: hold the corner, breathe, dream, and let the hover check turn
+     * the pointer into a finger so the one thing he can do is discoverable.
+     */
+    function updateDock(dt: number) {
+      /* Nothing but the dev handle can open a chat on a docked bird, but if
+         it does, the conversation outranks the nap. */
+      if (chat.current.open) {
+        setMode('chat');
+        return;
+      }
+      bird.perch = null;
+      bird.x = scrollXNow + dockX();
+      bird.y = scrollYNow + dockY();
+      bird.facing = -1;
+      if (bird.anim !== 'sleep') startAnim('sleep', 0);
+      if (bird.clock > bird.dreamUntil) {
+        bird.dreamUntil = bird.clock + 3000 + Math.random() * 1000;
+        bird.dreamIdx = (bird.dreamIdx + 1) % DREAM_ITEMS.length;
+      }
+      updateRig(dt);
+      if (swap.hold !== 0) dropCursor(false);
+      checkOverUi();
+      onHoverCheck();
+    }
+
+    /* ---- the sleep button ------------------------------------------------
+     *
+     * > "there's also a sleep icon (zzz diagonal) to the right of pip that if
+     * > you click, sends him back to sleep at the top."
+     *
+     * ON THE PANEL'S TOP EDGE, AT THE RIGHT-HAND END OF IT — the same edge he
+     * is perched on, so it is to the right of him wherever on that edge he
+     * happens to be sitting.
+     *
+     * It was anchored to his seat first, at a fixed offset, which is what the
+     * ask literally describes and is wrong for a reason the ask could not
+     * have known: a chat perch comes with furniture. The book beside
+     * perchIncantation reaches 75px past his centre, so a button 35px out
+     * from it was drawn on top of the book. Widening the offset to clear the
+     * worst case only moves the problem — on the four narrower perches the
+     * zzz then floats in mid-air, attached to nothing.
+     *
+     * The corner is fixed, always clear, and always in the same place twice.
+     * layoutChat gives up ZZZ_SEAT_CLEAR of the seat's right-hand travel to
+     * keep his furniture out of it.
+     *
+     * It is hit-tested by hand off the window pointerdown listener, exactly
+     * as the chips are and for the same reason: it is a painting, and a
+     * painting has nothing to hang a listener on. The visually-hidden button
+     * in the JSX is its other half.
+     * --------------------------------------------------------------------- */
+    const zzz = { x: 0, y: 0, hot: false };
+    function layoutZzz() {
+      /* Squared to the edge the panel is actually DRAWN at. Its width is a
+         whole number of cells taken from a rounded origin and chatUi.w is
+         neither of those things — the same trap positionInput documents. */
+      const panelX = Math.round(chatUi.x);
+      const panelW = Math.floor(chatUi.w / FONT_PX) * FONT_PX;
+      zzz.x = Math.min(W - 6 - ZZZ_W, panelX + panelW - ZZZ_W);
+      /* Just clear of the top border rather than sitting on it: he stands on
+         that edge and the button should read as being on it too, not as a
+         notch cut out of the frame. */
+      zzz.y = Math.max(4, Math.round(chatUi.y) - ZZZ_H - 2);
+    }
+    function inZzz(cx: number, cy: number): boolean {
+      if (!chat.current.open) return false;
+      layoutZzz();
+      return cx >= zzz.x && cx <= zzz.x + ZZZ_W && cy >= zzz.y && cy <= zzz.y + ZZZ_H;
+    }
+    function drawZzz() {
+      layoutZzz();
+      /* Vermilion under the pointer, which is the tell every other control on
+         the page uses. Ink-3 otherwise: present, and quieter than the words. */
+      const col = zzz.hot ? theme.verm : theme.ink3;
+      for (let i = 0; i < ZZZ_STEPS.length; i++) {
+        const step = ZZZ_STEPS[i];
+        ctx!.save();
+        ctx!.translate(zzz.x + step[1], zzz.y + step[2]);
+        blitText(ctx!, 'Z', 0, 0, step[0], col);
+        ctx!.restore();
+      }
+    }
+
+    /* The other half of the bridge to the visually-hidden control. Same
+       pattern the chips use, and for the same reason. */
+    dockRef.current = sendToDock;
+
     /* ---- hover / click --------------------------------------------------- */
     function hitTest(cx: number, cy: number) {
       const sx = bird.x - scrollXNow;
       const sy = bird.y - scrollYNow;
       const halfW = (SPRITE_WIDTH * PIXEL_SCALE) / 2;
-      const hgt = SPRITE_HEIGHT * PIXEL_SCALE;
+      /*
+       * THE BOX SHRINKS TO THE SLEEPING POSE WHILE HE IS DOCKED, and this is
+       * not a nicety.
+       *
+       * The full sprite box is 112px tall and he is 72 of it, so the ordinary
+       * hit box reaches 40px of empty air above his head. Parked in the
+       * top-right corner of a PHONE that puts the box over the plate bar, and
+       * over the index button at the right-hand end of it — and because a
+       * press on him calls preventDefault, which suppresses the click that
+       * would have followed, the bird would silently eat every tap on the
+       * control that opens the plate list. He is not standing in front of it;
+       * he is not even drawn there.
+       *
+       * Six pixels of slack over DOCK_RISE, which is the breath.
+       */
+      const hgt = docked() ? DOCK_RISE + 6 : SPRITE_HEIGHT * PIXEL_SCALE;
       return cx > sx - halfW && cx < sx + halfW && cy > sy - hgt && cy < sy + 12;
     }
     function inChatBox(cx: number, cy: number) {
@@ -4602,7 +4980,12 @@ export default function Companion({
           }
         }
       }
-      const wantEvents = h || inChatBox(pointer.x, pointer.y);
+      /* The zzz sits ABOVE the panel's top edge, so it is outside the chat
+         box and off the bird, and neither test either side of this line finds
+         it. Turning the canvas's own pointer-events on over it is also what
+         keeps the press off whatever page content is underneath. */
+      zzz.hot = inZzz(pointer.x, pointer.y);
+      const wantEvents = h || zzz.hot || inChatBox(pointer.x, pointer.y);
       if (wantEvents !== peOn) {
         peOn = wantEvents;
         canvas!.style.pointerEvents = wantEvents ? 'auto' : 'none';
@@ -4611,7 +4994,7 @@ export default function Companion({
          style on the element beats an inherited one on <html> — so while the
          swap is in force it has to name `none` itself or the real pointer
          reappears over the bird and there are two of them. */
-      const want = swap.on ? 'none' : h ? 'pointer' : '';
+      const want = swap.on ? 'none' : h || zzz.hot ? 'pointer' : '';
       if (want !== peCursorVal) {
         peCursorVal = want;
         canvas!.style.cursor = want;
@@ -4657,6 +5040,24 @@ export default function Companion({
        * rather than the rects into the screen's; the panel moves and they do
        * not.
        */
+      /*
+       * AND THE SLEEP BUTTON BEFORE EVEN THAT.
+       *
+       * It is painted just OUTSIDE the panel, above its top edge, so as far
+       * as every test below is concerned a press on it is a press on the page
+       * — and the branch that handles those, further down, closes the chat
+       * and returns. Pressing the zzz would have left him out on the page
+       * with the window shut, which is the opposite of what it says.
+       *
+       * preventDefault does the same job here that it does for a chip: on
+       * pointerdown it suppresses the compatibility mouse events, so nothing
+       * under the canvas ever sees the click.
+       */
+      if (inZzz(e.clientX, e.clientY)) {
+        e.preventDefault();
+        sendToDock();
+        return;
+      }
       if (chat.current.open && inChatBox(e.clientX, e.clientY)) {
         const lx = e.clientX - chatUi.x;
         const ly = e.clientY - chatUi.y;
@@ -4747,7 +5148,11 @@ export default function Companion({
       }
       /* Never travelled: it was a click, and a click is the chat. */
       drag.pressed = false;
-      if (chat.current.open) closeChat();
+      /* Except on a docked bird, where it is the whole of the invitation. He
+         wakes and goes to live on the page; the chat is a second click, on
+         the bird the reader has by then actually met. */
+      if (docked()) wakeFromDock();
+      else if (chat.current.open) closeChat();
       else openChat();
     }
 
@@ -5690,6 +6095,14 @@ export default function Companion({
          dividing it by a clamped step would overstate the gesture. */
       trackScroll(wall);
       serviceErrand();
+
+      /* THE DOCK PARKS THE ENGINE. Every line below this one is about a bird
+         who is out on the page — the comfort band, the transits, the set
+         pieces, the cursor perch, the whispers. He is not out on the page. */
+      if (docked()) {
+        updateDock(dt);
+        return;
+      }
       /* velocityRef is px/frame; scrollVel is px/sec. Compare like for like
          and take whichever is reporting the faster gesture. */
       const refVel = velRef.current?.current ?? 0;
@@ -5796,9 +6209,15 @@ export default function Companion({
       /* Being held is not a scroll problem. A transit fired mid-drag would
          tear him out of the reader's hand for reasons neither of them
          understands, so the drag outranks it. */
+      /* The flight home is excluded for the same reason a drag is: the reader
+         has said where they want him and a transit would take him somewhere
+         else. It is the one flight that ends ABOVE the comfort band on
+         purpose, so it is also the one most likely to look stranded to a
+         reader who scrolls hard while it is in the air. */
       const transitOk =
         !chat.current.open &&
         !onErrand() &&
+        !dockHoming &&
         bird.mode !== 'transit' &&
         bird.mode !== 'pvz' &&
         bird.mode !== 'bit' &&
@@ -6387,6 +6806,19 @@ export default function Companion({
         }
 
         case 'fly': {
+          /* THE DOCK IS A SCREEN POSITION, so the target is re-derived every
+             frame rather than fixed at launch: a reader who scrolls while he
+             is on his way home would otherwise send him to wherever the
+             corner used to be over the page. Arrival is checked here too,
+             because landing is for furniture and there is none up there. */
+          if (dockHoming) {
+            bird.flyX = scrollXNow + dockX();
+            bird.flyY = scrollYNow + dockY();
+            if (Math.hypot(bird.flyX - bird.x, bird.flyY - bird.y) < 9) {
+              settleOnDock();
+              break;
+            }
+          }
           const dx = bird.flyX - bird.x;
           const dy = bird.flyY - bird.y;
           const d = Math.hypot(dx, dy);
@@ -6488,6 +6920,15 @@ export default function Companion({
           break;
         }
       }
+
+      /* THE WAKE HAS FINISHED. enterIdle is the act queue's one exit, so the
+         frame he lands in idle is the frame he has finished opening his eyes
+         and is ready to go somewhere. */
+      if (dockLeaving && bird.mode === 'idle') leaveDock();
+      /* And anything that took him off the flight home cancels it: a drag, a
+         fall, a set piece, the reader clicking him on the way past. A trip
+         nobody is on any more must not resume when he next enters fly. */
+      if (dockHoming && bird.mode !== 'fly') dockHoming = false;
 
       moveDeliveryPacket();
       updateRig(dt);
@@ -6672,6 +7113,25 @@ export default function Companion({
       bird.clock += dt * 1000;
       trackScroll(dt);
       bird.animT = 0;
+      if (docked()) {
+        /* Held, not animated. The dream never changes and the sleep pose is
+           frozen on its first frame, which is the whole bargain here. */
+        bird.perch = null;
+        bird.x = scrollXNow + dockX();
+        bird.y = scrollYNow + dockY();
+        bird.facing = -1;
+        if (bird.anim !== 'sleep') startAnim('sleep', 0);
+        rig.flight = 0;
+        rig.bob = 0;
+        rig.pitch = 0;
+        rig.gaze = 0;
+        rig.shakeX = 0;
+        rig.shakeY = 0;
+        if (swap.hold !== 0) dropCursor(false);
+        checkOverUi();
+        onHoverCheck();
+        return;
+      }
       if (chat.current.open) {
         if (bird.mode !== 'chat') {
           setMode('chat');
@@ -7227,7 +7687,14 @@ export default function Companion({
        * while he is still on his way, so the surface is already right before
        * he lands and there is no correction on the frame he arrives.
        */
-      let anchoredNow = bird.perch?.fixed === true || bird.flyPerch?.fixed === true;
+      /* The dock is viewport furniture in everything but name, so it takes
+         the same exception a fixed perch does — including on the way there,
+         so the surface is already right before he arrives. */
+      let anchoredNow =
+        bird.perch?.fixed === true ||
+        bird.flyPerch?.fixed === true ||
+        docked() ||
+        dockHoming;
       for (let i = planIdx; !anchoredNow && i < planLen; i++)
         anchoredNow = PLAN[i].perch?.fixed === true;
 
@@ -7467,6 +7934,11 @@ export default function Companion({
             GLYPH_H * FONT_PX
           );
         }
+        /* THE SLEEP BUTTON, after the window and therefore over it. It sits
+           clear above the panel's top edge, so in practice there is nothing
+           to be over — but this is the order to be in if a short screen ever
+           pushes the two together. */
+        drawZzz();
       } else if (bubble.text && bubble.until > bird.clock && onScreen) {
         /* ---- speech bubble ---- */
         if (bubble.dirty) buildBubble();
@@ -7549,16 +8021,17 @@ export default function Companion({
     readTheme();
     measure();
     lastScrollY = scrollYNow;
-    (function seat() {
-      /* never open on viewport-anchored furniture: that is a screen position,
-         not a place on the page, and on narrow screens the rail is the
-         topmost perch there is */
-      const p = perches.find((q) => q.w > 220 && !q.fixed) ?? perches.find((q) => !q.fixed);
-      if (!p) return;
-      bird.perch = p;
-      bird.x = p.x0 + Math.min(140, (p.x1 - p.x0) * 0.3);
-      bird.y = p.y;
-    })();
+    /*
+     * HE OPENS THE PAGE ASLEEP IN THE CORNER, not on the hero rule.
+     *
+     * The seat that used to be chosen here — the widest unfixed perch on the
+     * page, which on the front page is the hard rule under the eyebrow — is
+     * now chosen at WAKE time by pickBandPerch instead, and that is the
+     * better place for it: by the time anybody asks for him the reader has
+     * usually scrolled, and the top of the document is no longer anywhere
+     * near the top of their screen. See THE DOCK.
+     */
+    settleOnDock();
 
     /*
      * RE-MEASURING IS NOT FREE AND IT IS NOT INVISIBLE.
@@ -7584,7 +8057,13 @@ export default function Companion({
      */
     function viewportChanged(): boolean {
       const d = Math.min(window.devicePixelRatio || 1, 2);
-      return W !== window.innerWidth || H !== window.innerHeight || dpr !== d;
+      /* Same two sources resize() reads, or this asks a question resize()
+         cannot answer and every remeasure reallocates both canvases. */
+      return (
+        W !== (document.documentElement.clientWidth || window.innerWidth) ||
+        H !== window.innerHeight ||
+        dpr !== d
+      );
     }
 
     let measureRaf = 0;
@@ -8048,6 +8527,18 @@ export default function Companion({
         forceJump: () => planTo(pickBandPerch(1), 1),
         forceWalk: (name?: AnimationName) =>
           startWalk(name ?? WALKS[(Math.random() * WALKS.length) | 0]),
+        /* The dock, on demand, from both ends. */
+        forceDock: settleOnDock,
+        forceWake: wakeFromDock,
+        sendToDock,
+        dockState: () => ({
+          mode: bird.mode,
+          leaving: dockLeaving,
+          homing: dockHoming,
+          x: dockX(),
+          y: dockY(),
+          zzz: { x: zzz.x, y: zzz.y, w: ZZZ_W, h: ZZZ_H, hot: zzz.hot }
+        }),
         forceSleep: () => {
           setMode('sleep');
           bird.sleepUntil = bird.clock + 60000;
@@ -8307,6 +8798,17 @@ export default function Companion({
             }
           }}
         />
+      ) : null}
+      {/* THE SLEEP BUTTON, AS A REAL CONTROL. The zzz on the canvas is a
+          painting hit-tested by hand, which a keyboard cannot reach and a
+          screen reader cannot see — the same bargain the chips and the draft
+          input already make, answered the same way. Outside the log below
+          rather than inside it, because it is a control and that is a
+          transcript. */}
+      {chatting ? (
+        <button type="button" className="v2-sr" onClick={() => dockRef.current()}>
+          Send Pip back to sleep
+        </button>
       ) : null}
       <div className="v2-bird-sr" role="log" aria-live="polite">
         {srLog.map((m, i) => (

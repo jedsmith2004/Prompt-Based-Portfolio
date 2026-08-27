@@ -91,8 +91,15 @@ export default function Hero({
             0.86 line-height of .v2-display, and being in em it holds from the
             56px end of the clamp to the 210px end. The h1's own box does not
             move during the mask-and-lift entrance — only the inner spans do —
-            so this one perch is correct from the first frame, which matters
-            because it is what the bird opens the page sitting on. */}
+            so this one perch is correct from the first frame.
+
+            It used to be the seat the bird opened the page on, which is what
+            made "correct from the first frame" matter here rather than
+            eventually. He now opens the page asleep in the top-right corner
+            of the viewport instead — see THE DOCK — and picks a seat at wake
+            time, so the first frame is no longer the one being measured
+            against. The inset is still measured and still right; only the
+            reason it had to be right at boot has gone. */}
         <hr className="v2-rule-hard" data-perch />
 
         <h1 className="v2-hero-title" data-perch data-perch-text data-perch-inset="0.04em">
