@@ -66,6 +66,46 @@ function KineticTitle({ text }: { text: string }) {
   );
 }
 
+
+const EMPHASIS = [
+  'Computer Science',
+  'first class',
+  'software rasterizer',
+  'SVM written by hand',
+  'Nothing leaves the machine',
+  'local Python backend',
+  'more than 300',
+  'six countries',
+  'without a rope',
+  'own hardware',
+  'no signal'
+] as const;
+
+/** Pulls a small set of concrete claims out of long copy without changing it. */
+export function HighlightedCopy({ text }: { text: string }) {
+  const escaped = EMPHASIS.map((phrase) => phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const parts = text.split(new RegExp('(\\b(?:' + escaped.join('|') + ')\\b)', 'gi'));
+  let hit = 0;
+  return (
+    <>
+      {parts.map((part, i) => {
+        const important = EMPHASIS.some((phrase) => phrase.toLowerCase() === part.toLowerCase());
+        if (!important) return <Fragment key={part + '-' + i}>{part}</Fragment>;
+        const style = hit++ % 3;
+        return (
+          <mark
+            key={part + '-' + i}
+            className={'v2-em v2-em-' + (style + 1)}
+            data-word={part}
+          >
+            {part}
+          </mark>
+        );
+      })}
+    </>
+  );
+}
+
 export interface SpineSectionProps {
   id: string;
   eyebrow: string;
@@ -170,7 +210,7 @@ export default function SpineSection({
               data-perch-text
               data-perch-inset="0.33em"
             >
-              {lede}
+              <HighlightedCopy text={lede} />
             </p>
           ) : null}
         </div>

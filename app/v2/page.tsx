@@ -28,7 +28,7 @@ import SectionBackdrops from '@/components/v2/SectionBackdrops';
 import { usePalette } from '@/components/v2/usePalette';
 import CareerLine from '@/components/v2/CareerLine';
 import AwardsClippings from '@/components/v2/AwardsClippings';
-import ContactPlate from '@/components/v2/ContactPlate';
+import ContactPlate, { type ContactPlateHandle } from '@/components/v2/ContactPlate';
 import CurriculumVitae from '@/components/v2/CurriculumVitae';
 import { HERO, SECTIONS, SECTION_WORLDS, WHISPERS, type SectionShape } from '@/lib/v2/content';
 import {
@@ -44,6 +44,14 @@ import './home.css';
 
 /* The hitchhiking route, normalised from the real stop coordinates in
    public/context.json. Split to Tagounite, summer 2025. */
+const MAIL_LINES = [
+  "I'll get it to him.",
+  'Special delivery — I know a shortcut.',
+  'Leave it with me.',
+  'Air mail. Obviously.',
+  'On it. First-class post.'
+] as const;
+
 const ROUTE_STOPS: Array<[number, number]> = [
   [16.443, 43.514],  // Split
   [15.802, 43.803],  // Sibenik
@@ -85,7 +93,7 @@ function normalisedRoute() {
 
 /* Which interactive piece belongs to which plate. Kept as a lookup rather than
    scattered conditionals so adding a section does not mean editing the tree. */
-function sectionExtra(id: string) {
+function sectionExtra(id: string, contactExtra?: React.ReactNode) {
   switch (id) {
     case 'from-scratch':
       return <NeuralPlayground />;
@@ -165,7 +173,7 @@ function sectionExtra(id: string) {
        * for a fact you read rather than a door you go through. They are gone
        * from the stats in lib/v2/content.ts, so they exist once.
        */
-      return <ContactPlate />;
+      return contactExtra ?? <ContactPlate />;
     default:
       return null;
   }
@@ -225,8 +233,35 @@ export default function V2Page() {
   /* --- the light switch, and the bird who works it ----------------------- */
   const [errand, setErrand] = useState<CompanionErrand | null>(null);
   const switchRef = useRef<LightSwitchHandle | null>(null);
-  const onErrandArrive = useCallback(() => switchRef.current?.arrive(), []);
-  const onErrandFail = useCallback(() => switchRef.current?.fail(), []);
+  const contactRef = useRef<ContactPlateHandle | null>(null);
+  const mailKey = useRef(10000);
+  const requestSwitchErrand = useCallback((next: CompanionErrand | null) => {
+    setErrand(next ? { ...next, kind: 'switch' } : null);
+  }, []);
+  const requestMailErrand = useCallback(() => {
+    setErrand({
+      key: mailKey.current++,
+      selector: '[data-mail-perch]',
+      kind: 'delivery',
+      line: MAIL_LINES[Math.floor(Math.random() * MAIL_LINES.length)]
+    });
+  }, []);
+  const onErrandArrive = useCallback(() => {
+    if (errand?.kind === 'delivery') {
+      contactRef.current?.collect();
+      window.setTimeout(() => setErrand(null), 1800);
+    } else {
+      switchRef.current?.arrive();
+    }
+  }, [errand]);
+  const onErrandFail = useCallback(() => {
+    if (errand?.kind === 'delivery') {
+      contactRef.current?.collectWithoutPip();
+      setErrand(null);
+    } else {
+      switchRef.current?.fail();
+    }
+  }, [errand]);
 
   const route = useMemo(() => normalisedRoute(), []);
 
@@ -385,7 +420,12 @@ export default function V2Page() {
             lede={s.lede}
             stats={s.stats}
           >
-            {sectionExtra(s.id)}
+            {sectionExtra(
+              s.id,
+              s.id === 'contact' ? (
+                <ContactPlate ref={contactRef} onLetterReady={requestMailErrand} />
+              ) : undefined
+            )}
           </SpineSection>
         ))}
         <footer className="v2-foot">
@@ -431,7 +471,7 @@ export default function V2Page() {
           key={event.key}
           ref={switchRef}
           to={event.to}
-          onErrand={setErrand}
+          onErrand={requestSwitchErrand}
           /* Bound to THIS event's key. A device that is torn down mid-sequence
              must not be able to commit or finish the next one: see the
              ModeHandle contract in useMode.ts. */

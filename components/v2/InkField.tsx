@@ -336,6 +336,7 @@ void main(){
     vel.xy += dir * uMouse.z * exp(-dist * dist * 7.5) * 1.35;
   }
 
+
   p += vel * uDt;
   p = clamp(p, vec3(-2.6, -2.6, -1.6), vec3(2.6, 2.6, 1.6));
 

@@ -332,8 +332,8 @@ export function ridgeline(seed: number = 1): ShapePainter {
      * this size reads as ground behind a sign. It no longer crosses a word
      * anyone has to read.
      *
-     *   far band  0.500 - 0.130 .. 0.500 + 0.130 + 0.098  =  0.370 .. 0.728
-     *   near bank 0.965 - 0.045 .. floor                  =  0.920 .. 1
+     *   far band  0.500 - 0.130 .. 0.500 + 0.130 + 0.082  =  0.370 .. 0.712
+     *   near bank 0.945 - 0.045 .. floor                  =  0.900 .. 1
      *
      * The near layer also had to move: it is a fill to the floor, so lowering
      * its crest is what turns it from a mass covering the bottom third into a
@@ -342,8 +342,8 @@ export function ridgeline(seed: number = 1): ShapePainter {
      * particle budget is fixed, so what is left simply reads denser.
      */
     const layers = [
-      { base: 0.500, amp: 0.130, depth: 0.098, rough: 0.52, alpha: 0.78, oct: 7 },
-      { base: 0.965, amp: 0.045, depth: -1, rough: 0.48, alpha: 1.0, oct: 7 }
+      { base: 0.500, amp: 0.130, depth: 0.082, rough: 0.52, alpha: 0.78, oct: 7 },
+      { base: 0.945, amp: 0.045, depth: -1, rough: 0.48, alpha: 1.0, oct: 7 }
     ];
 
     const prevAlpha = ctx.globalAlpha;

@@ -334,6 +334,8 @@ export const PLATES: readonly Plate[] = [
     name: 'Sun-bleached',
     mood: 'sand and terracotta, the light too strong',
     mode: 'light',
+    /* Reverse the same sunset device when the reader scrolls back out of night. */
+    via: 'dial',
     light: {
       paper: '#EDE2D2',
       paper2: '#E4D6C2',

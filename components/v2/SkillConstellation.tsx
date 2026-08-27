@@ -59,6 +59,7 @@
    once and never again.
    ========================================================================== */
 
+import Link from 'next/link';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { projects as ALL_PROJECTS } from '@/lib/projects-data';
 import { buildTechLedger, type TechRow } from './SkillsFromWork';
@@ -117,10 +118,10 @@ const TILT = 0.36;
 /** Carousel speed, px per second. */
 const CAROUSEL = 26;
 
-/** How often the idle cycle picks a new project, ms. */
-const IDLE_EVERY = 4200;
+/** How often the idle cycle picks a new project, ms. Kept deliberately unhurried. */
+const IDLE_EVERY = 9000;
 /** How long it holds one, ms. */
-const IDLE_HOLD = 2600;
+const IDLE_HOLD = 3400;
 
 /**
  * Place every project on a Fibonacci lattice, then hang each technology at the
@@ -290,7 +291,14 @@ export default function SkillConstellation({
    */
   const [active, setActive] = useState<string | null>(null);
   const [idle, setIdle] = useState<string | null>(null);
+  const [hoveredTech, setHoveredTech] = useState<{
+    label: string;
+    projects: string[];
+    projectNames: string[];
+    connected: string[];
+  } | null>(null);
   const shownId = active ?? idle;
+  const highlightedProjects = hoveredTech?.projects ?? (shownId ? [shownId] : []);
 
   const ledger = useMemo(() => buildTechLedger(ALL_PROJECTS), []);
   const chart = useMemo(() => {
@@ -408,11 +416,13 @@ export default function SkillConstellation({
       }
 
       const act = activeRef.current;
+      const focus = hovered >= 0 ? stars[hovered] : null;
+      const focusProjects = focus ? new Set(focus.projects) : null;
 
       /* --- constellation lines, behind the stars --- */
       for (const c of lines) {
-        const on = act === c.id;
-        if (act && !on) continue;
+        const on = focusProjects ? focusProjects.has(c.id) : act === c.id;
+        if ((focusProjects || act) && !on) continue;
         ctx!.lineWidth = on ? 1.5 : 0.7;
         for (let k = 0; k < c.chain.length - 1; k++) {
           const a = c.chain[k] * 4;
@@ -440,35 +450,44 @@ export default function SkillConstellation({
         const s = stars[i];
         const o = i * 4;
         const near = 0.5 + 0.5 * scr[o + 3];
-        const on = !act || s.projects.includes(act);
+        const connected = focusProjects
+          ? s.projects.some((id) => focusProjects.has(id))
+          : !act || s.projects.includes(act);
         const r = (1.1 + s.mag * 3.9) * scr[o + 2] * (i === hovered ? 1.9 : 1);
-        const base = 0.2 + 0.62 * near;
-        const a = on ? base * (0.5 + 0.5 * s.mag) + (i === hovered ? 0.35 : 0) : base * 0.13;
-        const col = i === hovered || (act && on) ? C.verm : s.era === 0 ? C.ink : s.era === 1 ? C.ink3 : C.blue;
+        /* Rear-hemisphere stars retain a firm floor instead of disappearing. */
+        const base = 0.34 + 0.48 * near;
+        const a = connected
+          ? base * (0.58 + 0.42 * s.mag) + (i === hovered ? 0.3 : 0)
+          : base * 0.12;
+        const col = i === hovered || ((focusProjects || act) && connected)
+          ? C.verm
+          : s.era === 0
+          ? C.ink
+          : s.era === 1
+          ? C.ink3
+          : C.blue;
         ctx!.fillStyle = withAlpha(col, Math.min(1, a));
         ctx!.beginPath();
         ctx!.arc(scr[o], scr[o + 1], Math.max(0.6, r), 0, Math.PI * 2);
         ctx!.fill();
       }
 
-      /* --- labels: front hemisphere only, and only stars that earn one --- */
+      /* --- labels: selected relationships remain legible through the sphere --- */
       ctx!.font = `500 11.5px ${C.mono}`;
       ctx!.textBaseline = 'middle';
       for (const i of order) {
         const s = stars[i];
         const o = i * 4;
-        if (scr[o + 3] < 0.06) continue; // behind the sphere: no label
-        const on = !act || s.projects.includes(act);
-        if (act && !on) continue;
-        if (!act && i !== hovered && s.mag < 0.42) continue;
+        const connected = focusProjects
+          ? s.projects.some((id) => focusProjects.has(id))
+          : !act || s.projects.includes(act);
+        if ((focusProjects || act) && !connected) continue;
+        if (!focusProjects && !act && i !== hovered && s.mag < 0.42) continue;
         const near = 0.5 + 0.5 * scr[o + 3];
         const r = (1.1 + s.mag * 3.9) * scr[o + 2];
         const left = scr[o] > cx;
         ctx!.textAlign = left ? 'right' : 'left';
-        ctx!.fillStyle = withAlpha(
-          i === hovered || act ? C.ink : C.ink,
-          i === hovered ? 1 : (act ? 0.9 : 0.3 + 0.5 * s.mag) * near
-        );
+        ctx!.fillStyle = withAlpha(C.ink, i === hovered ? 1 : (focusProjects || act ? 0.88 : 0.5) * (0.62 + 0.38 * near));
         ctx!.fillText(s.label, scr[o] + (left ? -(r + 6) : r + 6), scr[o + 1]);
       }
     }
@@ -493,12 +512,15 @@ export default function SkillConstellation({
       const dt = last === 0 ? 0.016 : Math.min(0.05, (now - last) / 1000);
       last = now;
 
-      if (!dragging) {
+      const inspectingTechnology = hovered >= 0 && !dragging;
+      if (!dragging && !inspectingTechnology) {
         /* Eased back to the resting rate, so a flick decays into the drift
            rather than stopping dead or spinning forever. */
         spin += (SPIN - spin) * Math.min(1, dt * 1.6);
       }
-      theta += spin * dt;
+      /* Hold the globe still while a technology is being inspected. The saved
+         angular velocity resumes as soon as the pointer leaves the star. */
+      if (!inspectingTechnology) theta += spin * dt;
 
       /* the carousel */
       if (rail && railSpan > 0) {
@@ -557,12 +579,10 @@ export default function SkillConstellation({
         const c = el.offsetLeft + el.offsetWidth / 2 + railX;
         if (c > 16 && c < stripW - 16) inView.push(i);
       }
-      if (!inView.length) return (idleIdx + 1) % p.length;
-      /* Step forward through what is on screen rather than picking at random,
-         so the cycle reads as a sweep and never lights the same card twice
-         in a row while three others were also available. */
-      for (const i of inView) if (i > idleIdx) return i;
-      return inView[0];
+      if (!inView.length) return Math.floor(Math.random() * p.length);
+      const choices = inView.filter((i) => i !== idleIdx);
+      const pool = choices.length ? choices : inView;
+      return pool[Math.floor(Math.random() * pool.length)];
     }
 
     const readerPickRef = { current: null as string | null };
@@ -610,7 +630,6 @@ export default function SkillConstellation({
       let bestD = 17 * 17;
       for (let i = 0; i < stars.length; i++) {
         const o = i * 4;
-        if (scr[o + 3] < 0) continue; // only the front hemisphere is clickable
         const dx = scr[o] - mx;
         const dy = scr[o + 1] - my;
         const d = dx * dx + dy * dy;
@@ -622,12 +641,29 @@ export default function SkillConstellation({
       if (best !== hovered) {
         hovered = best;
         canvas!.style.cursor = best >= 0 ? 'pointer' : 'grab';
-        /* Hovering a star lights the project it belongs to most: the first
-           source is the most recent one the ledger recorded. */
         const s = best >= 0 ? stars[best] : null;
-        readerPickRef.current = s?.projects[0] ?? null;
+        readerPickRef.current = s?.key ?? null;
         setIdle(null);
-        setActive(s?.projects[0] ?? null);
+        if (!s) {
+          setHoveredTech(null);
+        } else {
+          const projectSet = new Set(s.projects);
+          const names = projectsRef.current
+            .filter((project) => projectSet.has(project.id))
+            .map((project) => project.title);
+          const connected = stars
+            .filter((candidate, index) =>
+              index !== best && candidate.projects.some((id) => projectSet.has(id))
+            )
+            .sort((a, b) => b.mag - a.mag)
+            .map((candidate) => candidate.label);
+          setHoveredTech({
+            label: s.label,
+            projects: s.projects,
+            projectNames: names,
+            connected
+          });
+        }
       }
     }
     function onUp(e: PointerEvent) {
@@ -643,7 +679,7 @@ export default function SkillConstellation({
       if (hovered >= 0) {
         hovered = -1;
         readerPickRef.current = null;
-        setActive(null);
+        setHoveredTech(null);
       }
     }
 
@@ -699,7 +735,14 @@ export default function SkillConstellation({
           raf = 0;
         },
         stars: () => chartRef.current.stars.length,
-        lines: () => chartRef.current.lines.length
+        lines: () => chartRef.current.lines.length,
+        state: () => ({
+          theta,
+          hovered,
+          firstStar: screenRef.current.length >= 2
+            ? [screenRef.current[0], screenRef.current[1]]
+            : null
+        })
       };
     }
 
@@ -725,6 +768,23 @@ export default function SkillConstellation({
           brightness is recency-weighted use · a line joins what was used
           together · drag to turn it
         </p>
+        <aside className={`v2-const-inspector${hoveredTech ? ' is-on' : ''}`} aria-live="polite">
+          {hoveredTech ? (
+            <>
+              <span>Technology</span>
+              <strong>{hoveredTech.label}</strong>
+              <b>Used in {hoveredTech.projects.length} {hoveredTech.projects.length === 1 ? 'project' : 'projects'}</b>
+              <p>{hoveredTech.projectNames.join(' · ')}</p>
+              <small>
+                Connected technologies: {hoveredTech.connected.length
+                  ? hoveredTech.connected.slice(0, 10).join(' · ') + (hoveredTech.connected.length > 10 ? ' · …' : '')
+                  : 'none yet'}
+              </small>
+            </>
+          ) : (
+            <span>Hover any technology to inspect its project network</span>
+          )}
+        </aside>
       </div>
 
       {/*
@@ -753,25 +813,25 @@ export default function SkillConstellation({
       <div className="v2-const-rail" aria-label="Projects" id={listId} data-perch>
         <div className="v2-const-rail-in" ref={railRef}>
           {projects.map((c) => (
-            <button
+            <Link
               key={c.id}
-              type="button"
-              className={`v2-const-card${shownId === c.id ? ' is-on' : ''}`}
-              aria-pressed={shownId === c.id}
+              href={`/v2/projects/${c.id}`}
+              prefetch={false}
+              className={`v2-const-card${highlightedProjects.includes(c.id) ? ' is-on' : ''}`}
+              aria-label={`Read the ${c.title} project story`}
               onPointerEnter={() => onCardEnter(c.id)}
               onPointerLeave={() => onCardLeave(c.id)}
               onFocus={() => onCardEnter(c.id)}
               onBlur={() => onCardLeave(c.id)}
-              onClick={() => setActive((a) => (a === c.id ? null : c.id))}
             >
               <b>{c.title}</b>
               <i>{c.count}</i>
-            </button>
+            </Link>
           ))}
           {projects.map((c) => (
             <span
               key={`${c.id}-echo`}
-              className={`v2-const-card is-echo${shownId === c.id ? ' is-on' : ''}`}
+              className={`v2-const-card is-echo${highlightedProjects.includes(c.id) ? ' is-on' : ''}`}
               aria-hidden="true"
             >
               <b>{c.title}</b>

@@ -30,7 +30,7 @@
    rather than a deliberate move.
    ========================================================================== */
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import {
   BASE_PALETTE,
   PALETTE_VARS,
@@ -42,6 +42,13 @@ import {
 } from '@/lib/v2/palettes';
 
 const DRIVEN_CLASS = 'v2-palette-driven';
+const MODE_TRANSITION_CLASS = 'v2-mode-transition';
+const MODE_VIEW_TRANSITION_CLASS = 'v2-mode-view-transition';
+const MODE_TRANSITION_MS = 680;
+
+type ViewTransitionDocument = Document & {
+  startViewTransition?: (update: () => void) => { finished: Promise<unknown> };
+};
 
 /**
  * How far into the ground's travel the tokens cut, ms.
@@ -68,6 +75,7 @@ const CUT_MS = 470;
 export function usePalette(activeId: string, mode: PaletteMode): SectionPalette {
   const palette = paletteForSection(activeId, mode);
   const plateId = plateFor(activeId).id;
+  const previousModeRef = useRef(mode);
 
   /*
    * The ground leaves now; the tokens follow at the crossover.
@@ -79,8 +87,8 @@ export function usePalette(activeId: string, mode: PaletteMode): SectionPalette 
   useEffect(() => {
     const root = document.documentElement;
     const body = document.body;
-
-    body.style.setProperty('--ground', String(palette.paper));
+    const modeChanged = previousModeRef.current !== mode;
+    previousModeRef.current = mode;
 
     const applyTokens = () => {
       for (const [key, prop] of PALETTE_VARS) {
@@ -88,6 +96,7 @@ export function usePalette(activeId: string, mode: PaletteMode): SectionPalette 
       }
       root.dataset.v2Palette = plateId;
       root.dataset.v2Mode = palette.dark ? 'dark' : 'light';
+      root.dataset.v2Theme = palette.dark ? 'dark' : 'light';
       /* Kept as well as data-v2-mode: several components and the whole of the
          projects page already branch on this attribute, and renaming it would
          be a silent visual regression in every one of them. */
@@ -112,6 +121,39 @@ export function usePalette(activeId: string, mode: PaletteMode): SectionPalette 
       document.hidden ||
       window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+    if (modeChanged && !settled) {
+      /* The dial has reached its horizon. Modern browsers cross-fade snapshots
+         on the compositor, so the whole page changes smoothly without asking
+         every inheriting element to recalculate sixteen colours every frame. */
+      const viewDocument = document as ViewTransitionDocument;
+      if (viewDocument.startViewTransition) {
+        root.classList.add(MODE_VIEW_TRANSITION_CLASS);
+        const transition = viewDocument.startViewTransition(() => {
+          body.style.setProperty('--ground', String(palette.paper));
+          applyTokens();
+        });
+        void transition.finished.finally(() => {
+          root.classList.remove(MODE_VIEW_TRANSITION_CLASS);
+        });
+        return;
+      }
+
+      /* Registered-property interpolation is the graceful fallback. */
+      root.classList.add(MODE_TRANSITION_CLASS);
+      void root.offsetWidth;
+      body.style.setProperty('--ground', String(palette.paper));
+      applyTokens();
+      const t = window.setTimeout(
+        () => root.classList.remove(MODE_TRANSITION_CLASS),
+        MODE_TRANSITION_MS
+      );
+      return () => {
+        window.clearTimeout(t);
+        root.classList.remove(MODE_TRANSITION_CLASS);
+      };
+    }
+
+    body.style.setProperty('--ground', String(palette.paper));
     if (settled || CUT_MS <= 0) {
       applyTokens();
       return;
@@ -121,7 +163,7 @@ export function usePalette(activeId: string, mode: PaletteMode): SectionPalette 
        them: the cleanup cancels a pending cut before the next one is set. */
     const t = window.setTimeout(applyTokens, CUT_MS);
     return () => window.clearTimeout(t);
-  }, [palette, plateId]);
+  }, [mode, palette, plateId]);
 
   /*
    * Arm the transition, once, and hand everything back on unmount.
@@ -151,10 +193,13 @@ export function usePalette(activeId: string, mode: PaletteMode): SectionPalette 
     return () => {
       window.clearTimeout(t);
       root.classList.remove(DRIVEN_CLASS);
+      root.classList.remove(MODE_TRANSITION_CLASS);
+      root.classList.remove(MODE_VIEW_TRANSITION_CLASS);
       document.body.style.removeProperty('--ground');
       for (const [, prop] of PALETTE_VARS) root.style.removeProperty(prop);
       delete root.dataset.v2Palette;
       delete root.dataset.v2Mode;
+      delete root.dataset.v2Theme;
       delete root.dataset.v2PaletteDark;
     };
   }, []);
@@ -179,6 +224,7 @@ export function usePalette(activeId: string, mode: PaletteMode): SectionPalette 
         }
         root.dataset.v2Palette = id;
         root.dataset.v2Mode = pal.dark ? 'dark' : 'light';
+        root.dataset.v2Theme = pal.dark ? 'dark' : 'light';
         root.dataset.v2PaletteDark = pal.dark ? 'true' : 'false';
         return pal;
       },

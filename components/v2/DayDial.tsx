@@ -65,7 +65,7 @@
    there is room, and the number below is what it costs.
    ========================================================================== */
 
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import type { PaletteMode } from '@/lib/v2/palettes';
 
 /** The horizon draws itself out from the middle. */
@@ -76,10 +76,11 @@ const POP_MS = 260;
 const HOLD_MS = 720;
 /** Half a turn about the middle of the line. */
 const SPIN_MS = 640;
-/** Back into the line. */
-const EXIT_MS = 300;
+/** Back into the line. Equal to line + pop, so the exchange is exactly centred. */
+const EXIT_MS = LINE_MS + POP_MS;
 
 const TOTAL_MS = LINE_MS + POP_MS + HOLD_MS + SPIN_MS + HOLD_MS + EXIT_MS;
+const COMMIT_MS = TOTAL_MS / 2;
 
 /**
  * Half a turn, and where the two bodies sit on it.
@@ -91,14 +92,6 @@ const TOTAL_MS = LINE_MS + POP_MS + HOLD_MS + SPIN_MS + HOLD_MS + EXIT_MS;
 const SWEEP = 180;
 const SUN_A = 90;
 const MOON_A = -90;
-
-/**
- * Fraction of the sweep at which the sun is on the horizon.
- *
- * Both directions: the sun runs 90 to -90 at dusk and -90 to 90 at dawn, and
- * crosses zero half way through either.
- */
-const CROSS = 0.5;
 
 /* The plate, in the SVG's own user space. The horizon is the bottom edge of
    the sky; the arc's centre is the middle of it. */
@@ -128,19 +121,24 @@ export default function DayDial({ to, onCommit, onDone }: DayDialProps) {
   commitCb.current = onCommit;
   const doneCb = useRef(onDone);
   doneCb.current = onDone;
+  const committedRef = useRef(false);
+  const commitNow = useCallback(() => {
+    if (committedRef.current) return;
+    committedRef.current = true;
+    commitCb.current();
+  }, []);
 
   useEffect(() => {
     const timers = [
-      window.setTimeout(
-        () => commitCb.current(),
-        LINE_MS + POP_MS + HOLD_MS + SPIN_MS * CROSS
-      ),
+      /* CSS owns the exact crossing frame below. This is only a watchdog for
+         engines that suppress animation events. */
+      window.setTimeout(commitNow, COMMIT_MS + 700),
       window.setTimeout(() => doneCb.current(), TOTAL_MS)
     ];
     return () => {
       for (const t of timers) window.clearTimeout(t);
     };
-  }, []);
+  }, [commitNow]);
 
   const sun = at(SUN_A, ORBIT_R);
   const moon = at(MOON_A, ORBIT_R);
@@ -163,11 +161,13 @@ export default function DayDial({ to, onCommit, onDone }: DayDialProps) {
           '--hold': `${HOLD_MS}ms`,
           '--spin': `${SPIN_MS}ms`,
           '--exit': `${EXIT_MS}ms`,
+          '--commit': `${COMMIT_MS}ms`,
           '--from': `${from}deg`,
           '--until': `${until}deg`
         } as React.CSSProperties
       }
     >
+      <i className="v2-dial-commit" onAnimationStart={commitNow} />
       <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} className="v2-dial-svg">
         <defs>
           {/* The sky. Everything below the horizon is not drawn, which is what

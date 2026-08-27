@@ -10,7 +10,7 @@
    ========================================================================== */
 
 import { useEffect, useState } from 'react';
-import type { Stat } from './SpineSection';
+import { HighlightedCopy, type Stat } from './SpineSection';
 import { CV_EDITIONS } from './CurriculumVitae';
 
 export interface HeroProps {
@@ -42,6 +42,27 @@ export default function Hero({
 
   return (
     <header className={`v2-hero${lit ? ' is-lit' : ''}`} id="top">
+      <div className="v2-hero-pattern" aria-hidden="true">
+        <i /><i /><i /><i />
+      </div>
+      <nav className="v2-cv-hanger" aria-label="Curriculum vitae downloads">
+        <span className="v2-cv-rail" data-perch aria-hidden="true" />
+        <span className="v2-cv-rope is-left" aria-hidden="true" />
+        <span className="v2-cv-rope is-right" aria-hidden="true" />
+        {[...CV_EDITIONS].sort((a, b) => a.pages - b.pages).map((cv) => (
+          <a
+            key={cv.href}
+            href={cv.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={cv.primary ? 'is-lead' : undefined}
+          >
+            <strong>{cv.pages}</strong>
+            <span>page CV</span>
+            <i aria-hidden="true">PDF ↗</i>
+          </a>
+        ))}
+      </nav>
       <div className="v2-wrap v2-hero-inner">
         <div className="v2-hero-meta">
           <span>{eyebrowLeft}</span>
@@ -62,20 +83,6 @@ export default function Hero({
           Read from CV_EDITIONS rather than written out, so the two places the
           CV is offered cannot disagree about how many editions there are.
         */}
-        <p className="v2-hero-cv">
-          {CV_EDITIONS.map((cv, i) => (
-            <a
-              key={cv.href}
-              href={cv.href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={cv.primary ? 'is-lead' : undefined}
-            >
-              {i === 0 ? 'CV' : cv.label}
-              <i aria-hidden="true">{cv.pages}pp</i>
-            </a>
-          ))}
-        </p>
         {/* data-perch: see THE PERCH CONTRACT in components/v2/Companion.tsx.
             The title is measured as text, so he lands on the first line's ink
             rather than on the full column: "JACK" and the column it is set in
@@ -109,7 +116,7 @@ export default function Hero({
             data-perch-text
             data-perch-inset="0.33em"
           >
-            {lede}
+            <HighlightedCopy text={lede} />
           </p>
 
           <div
@@ -131,7 +138,12 @@ export default function Hero({
             box already IS its ink, and narrowing to the measured line would
             cost half a pixel of an already tight span. The inset still names
             the top of the lettering. */}
-        <a className="v2-cue" href={`#${nextId}`} data-perch data-perch-inset="0.38em">
+        <a
+          className="v2-cue"
+          href={`#${nextId}`}
+          data-perch
+          data-perch-inset="0.38em"
+        >
           <span>Read on</span>
           <svg width="11" height="26" viewBox="0 0 11 26" aria-hidden="true">
             <path

@@ -1072,6 +1072,9 @@ interface ChatMsg {
 export interface CompanionErrand {
   /** Fresh per errand. Changing it is what starts one. */
   key: number;
+  kind?: 'switch' | 'delivery';
+  /** Optional line spoken while carrying a delivery away. */
+  line?: string;
   /**
    * CSS selector for the thing to stand on. It must carry `data-perch`, and
    * it must already be in the DOM when the errand is handed over: the engine
@@ -1616,6 +1619,12 @@ export default function Companion({
     if (motionQuery.addEventListener) motionQuery.addEventListener('change', onMotion);
 
     const atlas = buildAtlas();
+    /* Mojang's unmodified 16×16 item texture. It is kept as an image rather
+       than approximated in the sprite alphabet so every source pixel survives. */
+    const totemTexture = new Image();
+    totemTexture.decoding = 'async';
+    totemTexture.src = '/v2/totem_of_undying.png';
+
     /* Rasterised once, like everything else the compositor draws. Null means
        the swap can never engage, which is the correct way for it to fail. */
     const cursorImg = rasterise(CURSOR_MATRIX);
@@ -2042,9 +2051,10 @@ export default function Companion({
        * eight seconds of accrued calm.
        */
       calmMs: 0,
-      /** How long he has been off the screen, in ms. Only this fires an
-          ability; see the trigger in update(). */
+      /** How long he has been off the screen, in ms. */
       strandedMs: 0,
+      /** How long he has remained in an edge band without a better perch. */
+      edgeMs: 0,
       /* continuous drift for locomotion idles — see BUG 1 cause (c) */
       driftVx: 0,
       driftUntil: 0,
@@ -2682,6 +2692,13 @@ export default function Companion({
       if (swap.on && performance.now() - swap.paintedAt > 400) restoreCursor();
       if (drag.pressed) onDragMove();
     }
+    function onPointerExit() {
+      pointer.seen = false;
+      pointer.x = pointer.y = pointer.prevX = pointer.prevY = -9999;
+      pointer.speed = pointer.jerk = 0;
+      pointer.overUi = false;
+      restoreCursor();
+    }
     function pointerDocX() {
       return pointer.x + scrollXNow;
     }
@@ -3167,6 +3184,32 @@ export default function Companion({
     let errandPerch: Perch | null = null;
     let errandDeadline = 0;
     let errandArrived = false;
+    let errandDepartAt = 0;
+    let deliveryPacket: HTMLElement | null = null;
+    let deliveryStartX = 0;
+    let deliveryStartY = 0;
+
+    function takeDeliveryPacket(p: Perch) {
+      deliveryPacket = p.el?.closest<HTMLElement>('[data-mail-packet]') ?? null;
+      deliveryStartX = bird.x;
+      deliveryStartY = bird.y;
+      if (!deliveryPacket) return;
+      deliveryPacket.style.setProperty('--mail-carry-x', '0px');
+      deliveryPacket.style.setProperty('--mail-carry-y', '0px');
+      deliveryPacket.style.setProperty('--mail-carry-opacity', '1');
+    }
+
+    function moveDeliveryPacket() {
+      if (!deliveryPacket) return;
+      deliveryPacket.style.setProperty('--mail-carry-x', (bird.x - deliveryStartX).toFixed(2) + 'px');
+      deliveryPacket.style.setProperty('--mail-carry-y', (bird.y - deliveryStartY).toFixed(2) + 'px');
+      if (bird.x - scrollXNow > W + 40) deliveryPacket.style.setProperty('--mail-carry-opacity', '0');
+    }
+
+    function releaseDeliveryPacket() {
+      if (deliveryPacket) deliveryPacket.style.setProperty('--mail-carry-opacity', '0');
+      deliveryPacket = null;
+    }
 
     /** True while he is committed to a job and must not be re-planned. */
     function onErrand(): boolean {
@@ -3249,6 +3292,7 @@ export default function Companion({
       errandPerch = null;
       errandArrived = false;
       errandDeadline = 0;
+      errandDepartAt = 0;
       letGoOfErrand(was);
       if (fail && wasRunning) onErrandFailRef.current?.();
     }
@@ -3295,9 +3339,11 @@ export default function Companion({
         /* A new errand, or a release. Either way the old one is over, and it
            is not a failure: the caller is the one who ended it. */
         const was = errandPerch;
+        releaseDeliveryPacket();
         errandPerch = null;
         errandArrived = false;
         errandDeadline = 0;
+        errandDepartAt = 0;
         if (!e) {
           letGoOfErrand(was);
           return;
@@ -3324,6 +3370,13 @@ export default function Companion({
           onErrandFailRef.current?.();
           return;
         }
+        /* An errand outranks whatever private performance Pip was in. Use the
+           same exits as a normal interruption: cutBit lets independent scenery
+           finish without keeping him attached (notably the BTTF car), while
+           enterIdle clears a ride/transit and resets his authored pose before
+           the route launches. */
+        cutBit();
+        enterIdle();
         errandPerch = p;
         errandDeadline = bird.clock + ERRAND_DEADLINE;
         onCursor = false;
@@ -3331,7 +3384,17 @@ export default function Companion({
         return;
       }
 
-      if (!errandPerch || errandArrived) return;
+      if (errandArrived) {
+        if (e?.kind === 'delivery' && errandDepartAt > 0 && bird.clock >= errandDepartAt) {
+          const was = errandPerch;
+          errandPerch = null;
+          errandDepartAt = 0;
+          if (bird.perch === was) bird.perch = null;
+          enterFly(scrollXNow + W + 150, scrollYNow + H * 0.22, null, 900);
+        }
+        return;
+      }
+      if (!errandPerch) return;
       if (bird.clock > errandDeadline) endErrand(true);
     }
 
@@ -3438,6 +3501,12 @@ export default function Companion({
          asked was "is he standing on it", not "did the plan finish". */
       if (p !== null && p === errandPerch && !errandArrived) {
         errandArrived = true;
+        const task = errandRef.current;
+        if (task?.kind === 'delivery') {
+          takeDeliveryPacket(p);
+          say(task.line || "I'll get it to him.", 3000);
+          errandDepartAt = bird.clock + 320;
+        }
         onErrandArriveRef.current?.();
       }
     }
@@ -5152,6 +5221,9 @@ export default function Companion({
         const gone = sy < -OFF_SCREEN_MARGIN || sy > H + OFF_SCREEN_MARGIN;
         if (gone) bird.strandedMs += dt * 1000;
         else bird.strandedMs = 0;
+        const edgeUrgency = urgencyAt(sy);
+        if (!gone && edgeUrgency > 0.08) bird.edgeMs += dt * 1000;
+        else bird.edgeMs = 0;
         if (transitOk && bird.strandedMs > OFF_SCREEN_SUSTAIN) {
           bird.strandedMs = 0;
           /* Off the TOP means the page has run on ahead of him and he has to
@@ -5228,9 +5300,18 @@ export default function Companion({
             const cand = pickBandPerch(u);
             if (cand && perchUrgency(cand) < u - 0.12) {
               bird.hopGate = bird.clock + (720 - 580 * Math.min(1, u));
+              bird.edgeMs = 0;
               if (u > 0.7 && Math.random() < 0.25) say(pickLine(LINE_CHASE), 2600);
               onCursor = false;
               planTo(cand, u);
+              break;
+            }
+            /* No furniture in reach must not strand him at a screen edge. Give
+               ordinary hopping a short chance, then use a transit proactively. */
+            if (!cand && transitOk && u > 0.2 && bird.edgeMs > 720) {
+              bird.edgeMs = 0;
+              onCursor = false;
+              startTransit(psy > H * 0.5);
               break;
             }
             /* Nothing better within reach. Sit tight — but look again much
@@ -5756,6 +5837,7 @@ export default function Companion({
         }
       }
 
+      moveDeliveryPacket();
       updateRig(dt);
       updateTheft(dt);
       checkOverUi();
@@ -6215,10 +6297,16 @@ export default function Companion({
       grow = 1,
       mirror = false
     ) {
-      const img = atlas.get(`prop:${name}`);
+      const fallback = atlas.get(`prop:${name}`);
+      const useAuthenticTotem = name === 'totem'
+        && totemTexture.complete
+        && totemTexture.naturalWidth > 0;
+      const img = useAuthenticTotem ? totemTexture : fallback;
       if (!img || alpha <= 0.004) return;
-      const w = img.width * PIXEL_SCALE * grow;
-      const h = img.height * PIXEL_SCALE * grow;
+      const sourceW = useAuthenticTotem ? totemTexture.naturalWidth : img.width;
+      const sourceH = useAuthenticTotem ? totemTexture.naturalHeight : img.height;
+      const w = sourceW * PIXEL_SCALE * grow;
+      const h = sourceH * PIXEL_SCALE * grow;
       ctx!.save();
       ctx!.globalAlpha = Math.min(1, alpha);
       ctx!.imageSmoothingEnabled = false;
@@ -6338,20 +6426,9 @@ export default function Companion({
           }
           if (bit.t >= CREEP.totem) {
             const u = (bit.t - CREEP.totem) / (CREEP.len - CREEP.totem);
-            /*
-             * A SLOW WOBBLE, not a spin.
-             *
-             * This was cos(t * 0.0092), which is 1.46 revolutions a second, and
-             * a turn is drawn by squashing toward the centre line. The totem
-             * therefore spent most of its two seconds as a vertical sliver, and
-             * a sliver of a face is a couple of green pixels. That is the other
-             * half of "it doesn't have a green face, just green eyes": the face
-             * was there, and it was edge-on nearly every frame you looked at.
-             *
-             * It never goes narrower than 0.88 now, so the face is always a
-             * face and the movement is a hover rather than a coin toss.
-             */
-            const turn = 0.94 + 0.06 * Math.cos((bit.t - CREEP.totem) * 0.0042);
+            /* A full Minecraft-style item spin. drawActor mirrors at the
+               negative half-turn and compresses through an edge-on silhouette. */
+            const turn = Math.cos((bit.t - CREEP.totem) * 0.0115);
             const a = f * (u < 0.7 ? 1 : Math.max(0, 1 - (u - 0.7) / 0.3));
             /* grow 1.1: the sprite went from 18 rows to 22 when the face
                was given room to be a face, and 1.3 made it taller than him. */
@@ -6370,7 +6447,7 @@ export default function Companion({
                 bit.by - offY - 70 - u * 54,
                 f * (1 - u) * 0.9,
                 1,
-                1
+                0.68
               );
             }
           }
@@ -6913,6 +6990,8 @@ export default function Companion({
      */
     document.addEventListener('animationend', remeasureWhenQuiet, true);
     window.addEventListener('pointermove', onMove, { passive: true });
+    window.addEventListener('blur', onPointerExit);
+    document.documentElement.addEventListener('pointerleave', onPointerExit);
     window.addEventListener('pointerdown', onDown);
     window.addEventListener('pointerup', onUp);
     window.addEventListener('pointercancel', onCancel);
@@ -7363,6 +7442,8 @@ export default function Companion({
       band.remove();
       window.removeEventListener('resize', remeasure);
       window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('blur', onPointerExit);
+      document.documentElement.removeEventListener('pointerleave', onPointerExit);
       window.removeEventListener('pointerdown', onDown);
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('pointercancel', onCancel);

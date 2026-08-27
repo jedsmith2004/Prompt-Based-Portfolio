@@ -299,22 +299,9 @@ export const PALETTE: { readonly [C in PaletteChar]: string } = {
   n: '#5C7BA8', // blue light     — screen glow, tractor beam
   W: '#F0ECE3', // paper-hi       — page, orb core, paper plane
 
-  /* --- one gold, added 2026-08-25 -----------------------------------------
-     The palette was closed at fourteen and this is the single exception, so
-     it needs a reason better than "it looked nice".
-
-     Jack asked for the incantation book to have "a brown and golden spine".
-     There is no yellow anywhere in this palette and nothing in it can stand
-     in: the two browns are plumage and read as more bird, and the vermilions
-     read as beak. Tooling on a book spine is the one thing on the page that
-     is genuinely, specifically gold, and a gold that is actually brown is
-     just a book with a brown spine.
-
-     Muted rather than bright. #A8842E sits between the plumage light (#8C6E49)
-     and the vermilion (#B5402F) in both value and saturation, so it belongs to
-     the same ink-on-paper world rather than announcing itself as a fifteenth
-     colour. It is used by exactly one prop and should stay that way. */
-  Y: '#A8842E', // gold           — book tooling, and nothing else
+  /* A clearer item-gold: bright enough for the Totem of Undying silhouette,
+     still warm enough to sit on paper and double as the caster book tooling. */
+  Y: '#D8B43F', // gold           — totem body and book tooling
 };
 
 /* ==========================================================================
@@ -4158,8 +4145,8 @@ export const TRANSIT_DOWN_ANIMATIONS: { readonly [N in TransitDownName]: Animati
   },
 
   /**
-   * Rare. No vehicle, no plan. Tumbles once head-over-tail, hits the floor
-   * flat, lies there for 420ms of pure stillness — which is the funniest
+   * Rare. No vehicle, no plan. Falls cleanly first, then tumbles head-over-tail,
+   * hits the floor flat, lies there for 420ms of pure stillness — which is the funniest
    * frame in the file and must not be trimmed — and then shakes it off in
    * three whole-pixel jerks and stands up as if nothing happened.
    *
@@ -4172,21 +4159,23 @@ export const TRANSIT_DOWN_ANIMATIONS: { readonly [N in TransitDownName]: Animati
     loop: false,
     frames: [
       {
-        d: 100,
+        /* A readable fall before the gag. The old 100ms setup was effectively
+           already an impact pose by the first painted frame. */
+        d: 430,
         ease: 'in',
         pose: {
-          wing: { variant: 'tucked' },
+          wing: { variant: 'spread', dy: -1 },
           tail: { variant: 'streamer' },
-          head: { variant: 'sleek' },
-          eye: { dy: 1, variant: 'wide' },
-          beak: { dy: 1, variant: 'wide' },
+          head: { variant: 'sleek', dy: -1 },
+          eye: { dy: 0, variant: 'wide' },
+          beak: { dy: 0 },
           legFront: { variant: 'tucked' },
           legBack: { variant: 'tucked' },
           shadow: { variant: 'none' },
         },
       },
       {
-        d: 180,
+        d: 240,
         ease: 'hold',
         pose: {
           wing: { variant: 'flare', dy: 3 },
@@ -8210,37 +8199,30 @@ export const PROPS: { readonly [P in PropName]: PropSprite } = {
     ox: 0,
     oy: 0,
     layer: 'front',
-    /*
-     * The face WAS green. The green was G (#4F5E34), the palette's deep
-     * foliage, which against Y gold at this size reads as a dark hole with two
-     * darker dots in it, which is exactly what Jack saw. It is g (#77874C)
-     * now, and the gold that boxed the face in on all four sides is gone: a
-     * Totem of Undying is a green face with a gold crest above it and gold
-     * arms below, not a portrait in a frame.
-     */
+    /* Minecraft's Totem of Undying: a compact golden idol, emerald square
+       eyes, raised wing-like arms and the narrow green/gold robe below. */
     matrix: [
-      '.....KKKKK.....',
-      '....KYYYYYK....',
-      '...KYYYYYYYK...',
-      '..KYYKKKKKYYK..',
-      '..KYKgggggKYK..',
-      '..KKgggggggKK..',
-      '..KggKgggKggK..',
-      '..KgggggggggK..',
-      '..KggKKKKKggK..',
-      '..KgggggggggK..',
-      '..KKgggggggKK..',
-      '...KKgggggKK...',
-      '....KKKKKKK....',
-      '..KKKKYYYKKKK..',
-      '.KYYYYYYYYYYYK.',
-      '.KYYKKKYYYKKYYK',
-      '.KKK..KYYYK.KKK',
-      '......KYYYK....',
-      '.....KYYYYYK...',
-      '.....KYYYYYK...',
-      '....KYYYYYYYK..',
-      '....KKKKKKKKK..',
+      '.....KYYYYK.....',
+      '...KYYYYYYYYK...',
+      '..KYYYYYYYYYYK..',
+      '..KYYggYYggYYK..',
+      '..KYYggYYggYYK..',
+      '..KYYYYYYYYYYK..',
+      '...KYYYYYYYYK...',
+      '.KYYYYKYYKYYYYK.',
+      'KYYYYYKYYKYYYYYK',
+      'KYYYYKYYYYKYYYYK',
+      '.KYYYKYYYYKYYYK.',
+      '..KYKYYYYYYKYK..',
+      '...KYYYYYYYYK...',
+      '....KYYGGYYK....',
+      '....KYGggGYK....',
+      '....KYYGGYYK....',
+      '.....KYYYYK.....',
+      '.....KYYYYK.....',
+      '.....KYKKYK.....',
+      '....KYYKKYYK....',
+      '...KYYYKKYYYK...',
     ],
   },
   delorean: {
@@ -8447,48 +8429,40 @@ export const PROPS: { readonly [P in PropName]: PropSprite } = {
     ox: 0,
     oy: 0,
     layer: 'front',
-    /*
-     * Dark hair. It was B/b, the sparrow's own two plumage browns, which is
-     * why it read as a light tan bob; M is the darkest thing in the palette
-     * that is not the outline itself.
-     */
+    /* Side-swept dark hair, white shirt, red puffer vest, denim and trainers:
+       the silhouette is deliberately narrower than the old square figure. */
     matrix: [
-      '....KKKK....',
-      '...KMMMMKK..',
-      '..KMMMMMMMK.',
-      '..KMMCCCCMK.',
-      '..KCCCCCCCK.',
-      '..KCKCCKCCK.',
-      '..KCCCCCCCK.',
-      '..KCCKKCCCK.',
-      '...KCCCCCK..',
-      '...KHHHHK...',
-      '.KVVHHHHVVK.',
-      'KVVVHHHHVVVK',
-      'KVVVHHHHVVVK',
-      'KVVVHHHHVVVK',
-      'KVVVVVVVVVVK',
-      '.KVVVVVVVVK.',
-      '..KNNNNNNK..',
-      '..KNNNNNNK..',
-      '..KNNKKNNK..',
-      '..KNNKKNNK..',
-      '..KNNKKNNK..',
-      '.KWWWKKWWWK.',
-      '.KKKKKKKKKK.',
+      '....KKKK.....',
+      '...KMMMMKK...',
+      '..KMMMMMMMK..',
+      '..KMMMCCCMMK.',
+      '..KMCCCCCCK..',
+      '..KCKCCKCCK..',
+      '..KCCCCCCCK..',
+      '...KCCCKCCK..',
+      '....KCCCCK...',
+      '...KKHHHHKK..',
+      '..KVVHHHHVVK.',
+      '.KVVVKHHKVVVK',
+      '.KVVVKHHKVVVK',
+      '.KVVVKHHKVVVK',
+      '..KVVVVVVVVK.',
+      '...KVVVVVK...',
+      '...KNNNNNK...',
+      '...KNNNNNK...',
+      '...KNNKNNK...',
+      '...KNNKNNK...',
+      '...KNNKNNK...',
+      '..KWWWKWWWK..',
+      '..KKKK.KKKK..',
     ],
   },
   martyPlay: {
     ox: 0,
     oy: 0,
     layer: 'front',
-    /*
-     * The guitar was a seven-pixel brown blob. A guitar is a waisted body, a
-     * neck long enough to be a neck, and a headstock, and none of that fits in
-     * seven pixels. The waist loses one column each side, not two: two pinched
-     * it into a gingerbread man. The neck is three wide, not two, because the
-     * outline eats a pixel off each edge and a two-wide neck is all outline.
-     */
+    /* A long dark fretboard, offset double-cut body, white pickups and a
+       cherry-red finish make the Gibson readable before the pose is. */
     matrix: [
       '....KKKK.................',
       '...KMMMMKK...............',
@@ -8502,14 +8476,14 @@ export const PROPS: { readonly [P in PropName]: PropSprite } = {
       '...KHHHHK.......KMK......',
       '.KVVHHHHVVK....KMK.......',
       'KVVVHHHHKKKKK.KMK........',
-      'KVVVHHHKbbbbbKMK.........',
-      'KVVVHHKBbCCBMMK..........',
-      'KVVVVVKBbbbBbbK..........',
-      '.KVVVVVKbbbbbK...........',
-      '..KNNNNKbbbbbK...........',
-      '..KNNNKbbbbbbbK..........',
-      '..KNNKKBbbbBbbK..........',
-      '..KNNKKKbbbBbK...........',
+      'KVVVHHHKvvvvvKMK.........',
+      'KVVVHHKVvHHVMMK..........',
+      'KVVVVVKVvvvVvvK..........',
+      '.KVVVVVKvvvvvK...........',
+      '..KNNNNKvvvvvK...........',
+      '..KNNNKvvvvvvvK..........',
+      '..KNNKKVvvvVvvK..........',
+      '..KNNKKKvvvVvK...........',
       '..KNNKKNKKKKK............',
       '.KWWWKKWWWK..............',
       '.KKKKKKKKKK..............',
@@ -8530,14 +8504,14 @@ export const PROPS: { readonly [P in PropName]: PropSprite } = {
       '..KCKCCKCCK.....KMK......',
       '..KCCCCCCCK....KMK.......',
       '..KCCKKCKKKKK.KMK........',
-      '...KCCCKbbbbbKMK.........',
-      '...KHHKBbCCBMMK..........',
-      '.KVVHHKBbbbBbbK..........',
-      'KVVVHHHKbbbbbK...........',
-      'KVVVHHHKbbbbbK...........',
-      'KVVVVVKbbbbbbbK..........',
-      '.KVVVVKBbbbBbbK..........',
-      '..KNNNNKbbbBbK...........',
+      '...KCCCKvvvvvKMK.........',
+      '...KHHKVvHHVMMK..........',
+      '.KVVHHKVvvvVvvK..........',
+      'KVVVHHHKvvvvvK...........',
+      'KVVVHHHKvvvvvK...........',
+      'KVVVVVKvvvvvvvK..........',
+      '.KVVVVKVvvvVvvK..........',
+      '..KNNNNKvvvVvK...........',
       '..KNNNNNKKKKK............',
       '.KNNNNNNNNNK.............',
       '.KNNKKKNNNNK.............',
@@ -8549,18 +8523,15 @@ export const PROPS: { readonly [P in PropName]: PropSprite } = {
     ox: 0,
     oy: 0,
     layer: 'front',
+    /* Small solid-ink quaver: no white fill, no billboard-sized outline. */
     matrix: [
-      '.....KKKK',
-      '....KWWWK',
-      '....KWKKK',
-      '...KKWK..',
-      '...KWWK..',
-      '...KWWK..',
-      '.KKKWWK..',
-      'KWWKWWK..',
-      'KWWWWWK..',
-      'KWWWWK...',
-      '.KKKK....',
+      '..KKK',
+      '..K.K',
+      '..K.K',
+      '..K.K',
+      'KKK.K',
+      'KK..K',
+      '....K',
     ],
   },
   bolt: {

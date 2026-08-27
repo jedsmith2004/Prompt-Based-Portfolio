@@ -25,11 +25,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: 'Invalid email format' });
     }
 
-    // Check if Resend API key is configured
+    // Preview mode: accept the message so the full letter/Pip sequence can be
+    // reviewed locally before a Resend key is attached. No email is delivered.
     const resendApiKey = process.env.RESEND_API_KEY;
     if (!resendApiKey) {
-      console.error('RESEND_API_KEY not configured');
-      return res.status(500).json({ error: 'Email service not configured' });
+      return res.status(200).json({
+        success: true,
+        preview: true,
+        message: 'Email accepted in preview mode',
+        id: 'preview-local'
+      });
     }
 
     // Send email using Resend
