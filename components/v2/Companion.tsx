@@ -1044,14 +1044,19 @@ const SEASON_WINDOW: Partial<Record<BitName, [number, number, number, number]>> 
 };
 
 /**
- * Jack, 2026-08-26: "put those ones in now so I can see them."
+ * Preview mode: every seasonal bit in the hat all year, at a fraction of the
+ * weight it carries in its own window.
  *
- * While this is true every seasonal bit is in the hat all year, at a fraction
- * of the weight it carries in its own window. It is one line to turn off, and
- * turning it off is the only thing that has to happen for the seasons to
- * behave like seasons.
+ * OFF, 2026-08-27. Jack: "Make seasonal animations seasonal." It was switched
+ * on for one reason — "put those ones in now so I can see them" — and the note
+ * here promised it was one line to turn off and the only thing standing
+ * between this and real seasons. It was, and this is it.
+ *
+ * With it off, `inSeason` returning false means weight 0, and `push` drops a
+ * zero-weight bit out of the hat entirely. A pumpkin in July is not a rare
+ * treat, it is a bug that makes the ones in October mean nothing.
  */
-const SEASON_PREVIEW = true;
+const SEASON_PREVIEW = false;
 /** Weight in season, and weight the rest of the year while previewing. */
 const SEASON_WEIGHT = { inSeason: 22, preview: 5 };
 
@@ -4399,6 +4404,30 @@ export default function Companion({
       : { settle: 1, rate: 1, cool: 1, bttf: 1 };
 
     /**
+     * HOW RARE, on top of the authored pacing.
+     *
+     * Jack, 2026-08-27: "make them less common, they're meant to be easter
+     * eggs, maybe 5x less common."
+     *
+     * The authored numbers put a set piece roughly every 37 seconds of settled
+     * reading — 26s of cooldown, 4.5s of quiet to qualify, and about 6s of
+     * rolling at 0.16/s. That is a recurring feature, not a thing you stumble
+     * on, which is what he means by easter egg.
+     *
+     * It divides the ODDS and multiplies the COOLDOWNS, because scaling only
+     * one of them does not get you there: the cooldown is most of the wait, so
+     * dividing the rate alone moves 37s to 62s, under twice as rare rather
+     * than five times.
+     *
+     * Both together measure 166s, which is 4.5x rather than a round 5x. The
+     * missing half comes from BIT_SETTLE_MS, which is deliberately NOT scaled:
+     * it asks whether anybody is looking at him, not how often he should
+     * perform, and making a reader sit still for longer to qualify is a
+     * different and worse change than making the roll rarer.
+     */
+    const BIT_RARITY = 5;
+
+    /**
      * How quiet the page has to have been, in ms, before any bit is in the hat.
      *
      * Was 9000 against the old measure. Halved, because the new one is a real
@@ -4418,10 +4447,10 @@ export default function Companion({
     const BTTF_SETTLE_MS = 60000 * RUSH.bttf;
     /** Per-second odds once he qualifies. 0.05 was one every twenty seconds
         of quiet ON TOP of a gate nobody reached. */
-    const BIT_RATE = 0.16 * RUSH.rate;
+    const BIT_RATE = (0.16 * RUSH.rate) / BIT_RARITY;
     /** Quiet afterwards, so two never run into one another. */
-    const BIT_COOLDOWN = 26000 * RUSH.cool;
-    const BTTF_COOLDOWN = 120000 * RUSH.bttf;
+    const BIT_COOLDOWN = 26000 * RUSH.cool * BIT_RARITY;
+    const BTTF_COOLDOWN = 120000 * RUSH.bttf * BIT_RARITY;
     /** Every bit fades its actors out over its own last stretch. */
     const BIT_FADE_MS = 380;
 
