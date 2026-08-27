@@ -511,7 +511,26 @@ html { overflow-x: hidden; }
   flex-direction: column;
   gap: 3px;
 }
-.v2-nav button {
+/*
+   SCOPED TO THE LIST, AND IT HAS TO BE.
+
+   This block styles the plate buttons, and it used to be written `.v2-nav
+   button`. That was harmless for as long as the mark above was a `<span>`.
+   The moment it became a `<button>` — so that it could go to the splash — it
+   started matching this selector too, and `.v2-nav button` is one class plus a
+   type, which outranks the single class `.v2-nav-mark`. Two things broke and
+   neither was obvious:
+
+     - the mark rendered in JetBrains Mono at 11.5px instead of Bricolage at
+       15px, because `font-family` here won;
+     - `display: flex` here beat `display: none` in the 760px block, so on a
+       phone the rail's mark was still painted — centred in a 3px tall bar, in
+       the middle of the top of the screen, next to the plate bar's own mark.
+       Two JS marks, and the one that worked was the one nobody meant to see.
+
+   Scoping to `ol` says what was always meant: these are the plate buttons.
+*/
+.v2-nav ol button {
   appearance: none;
   background: none;
   border: 0;
@@ -527,12 +546,12 @@ html { overflow-x: hidden; }
   color: var(--ink-3);
   transition: color 0.22s var(--ease);
 }
-.v2-nav button i {
+.v2-nav ol button i {
   font-style: normal;
   font-variant-numeric: tabular-nums;
 }
 /* the label only appears on hover, so the rail stays quiet */
-.v2-nav button span {
+.v2-nav ol button span {
   position: absolute;
   left: 54px;
   padding: 4px 9px;
@@ -544,13 +563,13 @@ html { overflow-x: hidden; }
   pointer-events: none;
   transition: opacity 0.18s var(--ease), transform 0.18s var(--ease);
 }
-.v2-nav button:hover { color: var(--ink); }
-.v2-nav button:hover span,
-.v2-nav button:focus-visible span {
+.v2-nav ol button:hover { color: var(--ink); }
+.v2-nav ol button:hover span,
+.v2-nav ol button:focus-visible span {
   opacity: 1;
   transform: none;
 }
-.v2-nav button[aria-current='true'] { color: var(--verm-text); }
+.v2-nav ol button[aria-current='true'] { color: var(--verm-text); }
 
 .v2-nav-progress {
   width: 1px;
@@ -607,7 +626,9 @@ html { overflow-x: hidden; }
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
   }
-  .v2-nav-mark, .v2-nav ol { display: none; }
+  /* `.v2-nav .v2-nav-mark` rather than `.v2-nav-mark`: two classes, so a rule
+     that reaches the mark through its element type cannot outrank it again. */
+  .v2-nav .v2-nav-mark, .v2-nav ol { display: none; }
   .v2-nav-progress {
     width: 100%;
     height: 3px;
@@ -633,13 +654,35 @@ html { overflow-x: hidden; }
 .v2-platesheet { display: none; }
 
 @media (max-width: 760px) {
-  /* The bar sits UNDER the 3px progress hairline, which is why the hairline
-     keeps z-index 3 and this takes 2: progress is the one piece of the rail
-     that survived down here and it should not be covered by its replacement. */
+  /*
+     IN FRONT OF THE PAGE, AND FLUSH TO THE TOP OF IT.
+
+     Jack, 2026-08-27: "The header also is beneath everything, it should be in
+     front (mobile)" and "There is a gap between the banner and the top of the
+     page."
+
+     Both were one mistake each, and the first one is why the index appeared to
+     have no dropdown at all: at `z-index: 2` the bar tied with `.v2-above` and
+     `.v2-hero`, which are also 2 and come later in the document, so the hero
+     painted over it and — the part that actually mattered — took every tap.
+     `elementFromPoint` at the centre of the index button returned `.v2-hero`.
+     The button was never broken; nothing was ever reaching it.
+
+     30 clears the page (2), the section worlds and the rail (3), and stays
+     under the companion layer at 40 so the bird still flies over the bar
+     rather than being clipped behind it.
+
+     The gap was the 3px progress hairline: the bar started at `top: 3px` to
+     sit below it, which left a translucent ink strip between the bar and the
+     top of the screen reading as a seam. The bar goes to `top: 0` and the
+     hairline is lifted above it instead, so progress draws ACROSS the bar's
+     top edge and there is nothing between the bar and the screen.
+  */
+  .v2-nav { z-index: 31; }
   .v2-platebar {
     position: fixed;
-    z-index: 2;
-    top: 3px;
+    z-index: 30;
+    top: 0;
     left: 0;
     right: 0;
     height: 42px;
@@ -710,7 +753,9 @@ html { overflow-x: hidden; }
   .v2-platesheet {
     display: block;
     position: fixed;
-    z-index: 40;
+    /* Above the companion layer at 40. A modal that the bird can fly in front
+       of is a modal with a bird stuck to it. */
+    z-index: 41;
     inset: 0;
   }
   .v2-platesheet-scrim {
@@ -907,23 +952,32 @@ html { overflow-x: hidden; }
    which the solid first line does not pay. "From the metal up." overshot by
    1.7px on the 'p', which is the same bug one letter quieter.
 
-   Measured against the loaded face, "Out to the edge." wants 0.068em of
-   padding to clear its own ink. 0.1em is that plus about 4px of headroom at
-   the top of the clamp, which is the margin the fallback stack needs during
-   the moment before the webfont lands — Helvetica Neue's descenders sit
-   0.125em below this line-height and system-ui's 0.227em, so a value tuned
-   exactly to Bricolage would clip on the way in and then stop clipping.
+   THE REQUIREMENT IS NOT CONSTANT IN EMS, WHICH IS WHY 0.1em WAS NOT ENOUGH.
 
-   Both numbers are ems, so one value holds from the 44px end of the clamp to
-   the 210px end. The matching negative margin gives the space straight back
-   to the layout: net height per line is lh + 0.04em, which is what it was
-   before any of this, and the measured title box is 221.2px either way. This
-   buys descender room INSIDE the mask, not a looser setting. */
+   The first fix measured the descender against the desktop title — 122.9px,
+   where "Out to the edge." needs 0.068em — and assumed one em value would
+   therefore hold across the whole clamp. It does not. Measured again at the
+   44px floor the same string needs 0.093em: the face is hinted, and at small
+   sizes the descender takes proportionally more of the em than it does at
+   display size. 0.1em left 3.9px of headroom on a desktop and 0.32px on a
+   phone, and 0.32px is zero once the compositor has rounded it — which is
+   exactly where Jack found the 'g' still clipped, on his phone, after it had
+   been fixed on the desktop.
+
+   0.14em is the 44px requirement plus about 2px, and the top of the clamp
+   gets ~9px it does not need but is not harmed by. Sized from the SMALL end
+   for that reason: whatever clears the floor clears everything above it, and
+   the reverse is what just failed. It also stays clear of the fallback stack
+   during a webfont swap — Helvetica Neue wants 0.125em at this line-height.
+
+   The matching negative margin gives the space straight back to the layout:
+   net height per line is lh + 0.04em, which is what it was before any of
+   this. This buys descender room INSIDE the mask, not a looser setting. */
 .v2-hero .v2-line {
   display: block;
   overflow: hidden;
-  padding-bottom: 0.1em;
-  margin-bottom: -0.06em;
+  padding-bottom: 0.14em;
+  margin-bottom: -0.10em;
 }
 .v2-hero .v2-line-in {
   display: block;

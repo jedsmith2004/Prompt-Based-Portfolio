@@ -241,7 +241,29 @@ export default function V2Page() {
    * and the closing one are the two that are mostly type and air, which is
    * where a field has room to be the subject rather than the noise.
    */
-  const particles = active === 'top' || active === 'contact';
+  /*
+   * AND NOT ON A PHONE AT ALL. Jack, 2026-08-27: "Get rid of the particles on
+   * mobile, only have them on desktop."
+   *
+   * The field is a full-viewport particle simulation on a WebGL context, and a
+   * phone is the device least able to afford one — it is also the device where
+   * the argument for the field is weakest, because a tall frame gives it no
+   * room to be a picture rather than a texture behind the type. Both hero
+   * dressings of the ridgeline go with it: `dress` in lib/v2/shapes.ts is now
+   * only ever asked for 'wide', and the 'tall' arrangement it grew on 2026-08-27
+   * is unreachable from here. It is left in that file rather than deleted,
+   * because it is the answer to "what if the band comes back on a phone" and
+   * the arithmetic for it is not obvious enough to want to redo.
+   *
+   * `narrow` is false for the first client render, since the server has no
+   * viewport to measure — so on a phone the field mounts once, is handed
+   * `dormant` on that very first render, and unmounts before it has animated a
+   * frame. It never runs; it just costs one context that is created and thrown
+   * away. Guessing `true` instead would make every desktop reader pay a frame
+   * without the field, which is the more visible of the two mistakes.
+   */
+  const narrow = useNarrow();
+  const particles = !narrow && (active === 'top' || active === 'contact');
 
   /* Only the three the field draws with, and memoised on the values rather
      than the object, so a re-render for any other reason does not look like a
@@ -293,11 +315,6 @@ export default function V2Page() {
     return s?.shape ?? 'ridgeline';
   }, [active]);
 
-  /* The hero's ridgeline is dressed differently on a phone: a tall frame has
-     no middle to put a band across. See THE PHONE TAKES THE BAND OFF THE TYPE
-     in lib/v2/shapes.ts. */
-  const narrow = useNarrow();
-
   const painter: ShapePainter = useMemo(() => {
     switch (shapeName) {
       case 'wordmark':
@@ -316,9 +333,11 @@ export default function V2Page() {
         return scatter();
       case 'ridgeline':
       default:
-        return ridgeline(1, narrow ? 'tall' : 'wide');
+        /* Always 'wide': the field does not run at the width the 'tall'
+           dressing was drawn for. See the note on `particles`. */
+        return ridgeline(1, 'wide');
     }
-  }, [shapeName, route, narrow]);
+  }, [shapeName, route]);
 
   const ask = useCallback((q: string) => askJack(q), []);
 
@@ -349,15 +368,17 @@ export default function V2Page() {
           plate's colours or it paints the hero's over the top of them. That
           is what made the closing plate light. See the palette prop in
           InkField.tsx. */}
-      <div className="v2-field" aria-hidden="true" data-dormant={!particles}>
-        <InkField
-          shape={painter}
-          shapeKey={shapeName}
-          density="auto"
-          palette={fieldPalette}
-          dormant={!particles}
-        />
-      </div>
+      {!narrow && (
+        <div className="v2-field" aria-hidden="true" data-dormant={!particles}>
+          <InkField
+            shape={painter}
+            shapeKey={shapeName}
+            density="auto"
+            palette={fieldPalette}
+            dormant={!particles}
+          />
+        </div>
+      )}
 
       {/* The section worlds, between the ink field and the type. One alive at
           a time plus the one fading out: see SectionBackdrops.tsx for why that
