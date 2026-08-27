@@ -5,6 +5,15 @@
    components append their own blocks to it.
    ========================================================================== */
 
+/* The closing ribbon, full bleed above the foot. It sits OUTSIDE the paper
+   band below it on purpose: the band is where the page lands, and the ribbon
+   is the last thing that happens over the field. */
+.v2-home-ribbon {
+  position: relative;
+  z-index: 2;
+  margin-top: clamp(40px, 7vw, 90px);
+}
+
 /* --------------------------------------------------------------------------
    THE FOOT SITS ON PAPER, NOT ON THE FIELD.
 
@@ -100,7 +109,14 @@
   text-decoration: none;
   border-bottom: 1px solid var(--rule-firm);
   padding-bottom: 3px;
-  transition: color 0.16s var(--ease), border-color 0.16s var(--ease);
+  /* `background-size` is in here because this file loads AFTER v2.css and a
+     bare `transition` there would silently drop the sweep declared with the
+     rest of the link treatments. See "links are underlined by hand" in
+     v2.css — the gradient itself is declared there; only the timing is here. */
+  transition:
+    color 0.16s var(--ease),
+    border-color 0.16s var(--ease),
+    background-size 0.36s var(--ease);
 }
 .v2-foot-links a:hover { color: var(--verm-text); border-color: currentColor; }
 .v2-foot-links a.is-lead { color: var(--verm-text); }

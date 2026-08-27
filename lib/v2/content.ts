@@ -182,7 +182,7 @@ export const SECTIONS: Section[] = [
     eyebrow: '04 / DO NOT LEAVE IT BROKEN',
     title: 'Shipped, handed over, still running',
     lede:
-      'I run a small web studio, started while I was at university, covering requirements, design, deployment and the domain transfer nobody enjoys. Two weeks at an early-stage AI startup in London were enough to leave an internal API over their disjoint systems, rewritten Cloudflare Workers, a dashboard, a CLI and an MCP server.',
+      'I ran a small web studio with my housemate, started while we were at university, covering requirements, design, deployment and the domain transfer nobody enjoys. Two weeks at an early-stage AI startup in London were enough to leave an internal API over their disjoint systems, rewritten Cloudflare Workers, a dashboard, a CLI and an MCP server.',
     shape: 'scatter',
     stats: [
       { value: '1st', label: 'hackSheffield 9, best repository', tone: 'verm' },

@@ -662,11 +662,11 @@ export const PROJECT_STORIES: Record<string, ProjectStoryContent> = {
       {
         heading: 'The studio behind it',
         body: [
-          'This came out of UCD, the small web studio I founded and ran on my own, ' +
-          'delivering websites and SEO to local Sheffield businesses while I was still ' +
-          'at university. I carried the whole lifecycle on those jobs: client ' +
-          'discovery, design, the full-stack build, deployment, and the maintenance ' +
-          'afterwards. The studio ran for 2025 and is closed.',
+          'This came out of UCD, the small web studio I founded and ran with my ' +
+          'housemate, delivering websites and SEO to local Sheffield businesses while ' +
+          'we were still at university. We carried the whole lifecycle on those jobs: ' +
+          'client discovery, design, the full-stack build, deployment, and the ' +
+          'maintenance afterwards. The studio ran for 2025 and is closed.',
         ]
       },
     ],

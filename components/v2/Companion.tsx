@@ -939,6 +939,58 @@ const MEASURE_QUIET_MS = 150;
  */
 const CALM_BURN = 3;
 
+/* ==========================================================================
+   HOW BUSY HE IS
+
+   Jack, 2026-08-27: "Make all of pip's animations far less frequent, make him
+   jump around less (unless he's in the top or bottom undesirable areas)."
+
+   THE BRACKET IS THE LOAD-BEARING HALF OF THAT SENTENCE, and it is why none of
+   these numbers touch the code that gets him out of trouble. There are two
+   completely separate reasons this bird ever moves:
+
+     1. He WANTS to — an idle from the table, a wander to another perch, an
+        unprompted line. This is decoration, it is what "far less frequent"
+        means, and every constant below paces it.
+
+     2. He HAS to — the perch he is standing on has scrolled into the top or
+        bottom margin of the screen, or off it entirely. That is the
+        `bandUrgency()` block in the idle case, and it is deliberately NOT
+        paced by anything here. A bird who politely waits ninety seconds before
+        noticing he is off the bottom of the reader's screen is not calmer, he
+        is broken, and the whole transit system exists because that case used
+        to strand him.
+
+   So: he sits still for much longer stretches, wanders roughly a fifth as
+   often, and still leaves an edge as fast as he ever did.
+   ========================================================================== */
+
+/** Chance of taking a rest after an idle finishes, rather than starting another. */
+const IDLE_REST_CHANCE = 0.88;
+/** Multiplies IDLE_REST_MS and its jitter. A rest is now a pause, not a beat. */
+const IDLE_REST_SCALE = 2.8;
+/**
+ * Multiplies the authored cooldown on LOCOMOTION idles only.
+ *
+ * It was 0.86 — shortening them, deliberately, to answer an older note that he
+ * did not move about enough. That note has been superseded: below 1 the
+ * locomotion pool is almost always eligible and he hops somewhere every few
+ * seconds. Above 1 most of it is on cooldown at any instant and the stationary
+ * idles carry the time, which is the quiet bird.
+ */
+const LOCOMOTION_COOLDOWN_SCALE = 2.4;
+/** Seconds of standing still before moving house is even considered. */
+const WANDER_MIN_S = 26;
+/** Per-second odds of moving house once eligible. Was 0.12, about one in 12s. */
+const WANDER_RATE = 0.022;
+/** Quiet between unprompted lines, ms. */
+const CHATTER_MIN_MS = 55000;
+const CHATTER_JITTER_MS = 55000;
+/** How settled the page has to be before the lawn is in the hat, ms. */
+const LAWN_SETTLED_MS = 22000;
+/** Per-second odds once it is. */
+const LAWN_RATE = 0.008;
+
 /** Move `cur` toward `target` by at most one frame of travel. */
 function approach(cur: number, target: number, dt: number, speed = CORRECT_SPEED): number {
   const d = target - cur;
@@ -3708,12 +3760,9 @@ export default function Companion({
     const POOL: typeof IDLE_TABLE[number][] = [];
 
     function chooseIdle(now: number) {
-      /* There are 22 stationary idles against 9 locomotion ones, so at any
-         instant most of the locomotion pool is sitting on cooldown and the
-         picker has little to choose from but stillness. Shortening the
-         locomotion cooldowns keeps enough of them eligible for the bird to
-         actually move about as often as it sits, which is the brief. */
-      const LOCOMOTION_COOLDOWN_SCALE = 0.86;
+      /* See HOW BUSY HE IS. The scale is above 1 now, which keeps most of the
+         locomotion pool on cooldown at any instant so the stationary idles
+         carry the time. */
       POOL.length = 0;
       for (let i = 0; i < IDLE_TABLE.length; i++) {
         const e = IDLE_TABLE[i];
@@ -3721,7 +3770,10 @@ export default function Companion({
         const cd = e.group === 'locomotion' ? e.cooldownMs * LOCOMOTION_COOLDOWN_SCALE : e.cooldownMs;
         if (now - last < cd) continue;
         const gap = recent.indexOf(e.name);
-        const minGap = e.group === 'locomotion' ? Math.min(e.minGap, 3) : e.minGap;
+        /* The locomotion minGap override went with the cooldown scale: capping
+           it at 3 was the other half of keeping him moving, and it re-admitted
+           a hop three picks after the last one. Authored gaps now stand. */
+        const minGap = e.minGap;
         if (gap !== -1 && recent.length - gap <= minGap) continue;
         POOL.push(e);
       }
@@ -5399,11 +5451,17 @@ export default function Companion({
               startAnim('breathe', 260 + Math.random() * 220);
             } else {
               chooseIdle(bird.clock);
-              /* Rest only some of the time. Resting after every single idle is
-                 what buried the repertoire under breathing. */
+              /* He rests after nearly every idle now, and for longer. The old
+                 note here said resting after every idle "buried the repertoire
+                 under breathing" — that was the right call when the brief was
+                 to see the repertoire. The brief is now the opposite: the
+                 repertoire is signed off and he should be still most of the
+                 time. See HOW BUSY HE IS. */
               bird.restUntil =
-                Math.random() < 0.45
-                  ? bird.clock + IDLE_REST_MS * 0.5 + Math.random() * IDLE_REST_JITTER_MS * 0.4
+                Math.random() < IDLE_REST_CHANCE
+                  ? bird.clock +
+                    IDLE_REST_MS * IDLE_REST_SCALE +
+                    Math.random() * IDLE_REST_JITTER_MS * IDLE_REST_SCALE
                   : 0;
             }
           }
@@ -5416,14 +5474,24 @@ export default function Companion({
           if (Math.abs(vel) < 2 && (!pointerOnScreen() || pointer.stillMs > 2600))
             bird.settledMs += dt * 1000;
           else bird.settledMs = 0;
-          if (bird.settledMs > 11000 && bird.clock > pvz.gate && Math.random() < dt * 0.02) {
+          if (
+            bird.settledMs > LAWN_SETTLED_MS &&
+            bird.clock > pvz.gate &&
+            Math.random() < dt * LAWN_RATE
+          ) {
             startPvz();
             break;
           }
 
-          /* every so often, move house — roughly once every twelve seconds */
+          /* Move house, and rarely: this is the wander, not the escape. The
+             drive that pulls him off a screen edge is the bandUrgency() block
+             above and is not gated by any of this. See HOW BUSY HE IS. */
           bird.sinceMove += dt;
-          if (bird.sinceMove > 7 && Math.random() < dt * 0.12 && !onErrand()) {
+          if (
+            bird.sinceMove > WANDER_MIN_S &&
+            Math.random() < dt * WANDER_RATE &&
+            !onErrand()
+          ) {
             const t = pickBandPerch(0);
             if (t && t !== bird.perch) {
               bird.sinceMove = 0;
@@ -5433,7 +5501,7 @@ export default function Companion({
 
           /* unprompted chatter */
           if (bird.clock > gate.chatter && bubble.until < bird.clock) {
-            gate.chatter = bird.clock + 22000 + Math.random() * 20000;
+            gate.chatter = bird.clock + CHATTER_MIN_MS + Math.random() * CHATTER_JITTER_MS;
             say(pickLine(RANDOM_LINES), 5000);
           }
           break;

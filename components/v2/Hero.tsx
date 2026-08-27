@@ -15,6 +15,7 @@ import CvPlanks from './CvPlanks';
 import CountUp from './text/CountUp';
 import RotatingText from './text/RotatingText';
 import { StrokeText } from './text/MaskedText';
+import ShinyText from './text/ShinyText';
 
 export interface HeroProps {
   eyebrowLeft: string;
@@ -155,7 +156,9 @@ export default function Hero({
           data-perch
           data-perch-inset="0.38em"
         >
-          <span>Read on</span>
+          <span>
+            <ShinyText>Read on</ShinyText>
+          </span>
           <svg width="11" height="26" viewBox="0 0 11 26" aria-hidden="true">
             <path
               d="M5.5 0 v20 M1 16 l4.5 5 L10 16"

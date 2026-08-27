@@ -5531,22 +5531,55 @@ html.v2-palette-driven.v2-mode-transition body {
    KineticTitle in components/v2/SpineSection.tsx for why it is words rather
    than characters, and why the mask is padded. */
 
+/* --------------------------------------------------------------------------
+   THE HEADINGS DO NOT MOVE.
+
+   Jack, three times now, most recently 2026-08-27: "The headings still are
+   different sizes when they're in an animation compared to when they're not."
+
+   THE CAUSE, finally pinned down. It was never a size rule — the heading's
+   box, font-size and variation settings measure byte-identical in both states.
+   It is ANTIALIASING, and specifically the moment the compositor layer is
+   thrown away.
+
+   Chrome draws text with subpixel antialiasing (ClearType on Windows) only
+   when it can be sure what is behind it, which means only when the text is NOT
+   on its own compositor layer. Animating a transform puts it on one. So for
+   the length of the animation the words were drawn with greyscale AA — less
+   ink, thinner strokes, which reads exactly as "smaller and a different
+   colour" — and the instant the transform settled to identity the layer was
+   discarded and the same words were repainted with subpixel AA.
+
+   `will-change` did not save it and was part of the problem: `.v2-reveal`
+   declares `will-change: opacity, transform` and the resting transform is
+   `none`, so Chrome is free to drop the layer once nothing is animating, which
+   is precisely when the flip happens. Two earlier attempts at this — removing
+   the h2's redundant opacity fade, then leaning on `will-change` to hold the
+   layer — both left the transform in place, and the transform was the thing.
+
+   SO THE TEXT IS NEVER TRANSFORMED AND NEVER HINTED. The reveal is a clip
+   wipe on the mask, which is the same treatment the eyebrow directly above it
+   has had all along and is the one entrance on this plate that has never been
+   reported as changing how the type looks. The word-by-word rhythm survives:
+   `--k` moved onto the mask with it.
+
+   Do not put a transform, an opacity transition, or a `will-change` back on
+   any of these three selectors.
+   -------------------------------------------------------------------------- */
 .v2-kin {
   display: inline-block;
-  overflow: hidden;
-  /* room for descenders, then taken straight back off the layout: without this
-     the mask cuts the tails off g, y, p and j */
+  /* room for descenders, then taken straight back off the layout, so the clip
+     below cannot cut the tails off g, y, p and j */
   padding-bottom: 0.2em;
   margin-bottom: -0.2em;
   vertical-align: bottom;
+  /* Negative top inset gives the ascenders and the accent on a capital the
+     same headroom the padding gives the descenders. */
+  clip-path: inset(-0.16em 100% 0 0);
+  transition: clip-path 0.62s var(--ease) calc(var(--d, 0ms) + var(--k, 0ms));
 }
-.v2-kin-i {
-  display: inline-block;
-  transform: translateY(106%);
-  transition: transform 0.78s var(--ease) calc(var(--d, 0ms) + var(--k, 0ms));
-  will-change: transform;
-}
-.v2-section.is-in .v2-kin-i { transform: none; }
+.v2-section.is-in .v2-kin { clip-path: inset(-0.16em 0 0 0); }
+.v2-kin-i { display: inline-block; }
 
 /* --------------------------------------------------------------------------
    THE HEADING DOES NOT FADE, AND THAT IS THE FIX FOR IT CHANGING WEIGHT.
@@ -5582,10 +5615,14 @@ html.v2-palette-driven.v2-mode-transition body {
   transform: none;
   opacity: 1;
   transition: none;
+  /* The hint comes from `.v2-reveal` and there is nothing left here for it to
+     optimise: promoting a heading that never animates is how it ends up on a
+     layer, which is the whole bug above. */
+  will-change: auto;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .v2-kin-i { transform: none; transition: none; }
+  .v2-kin { clip-path: none; transition: none; }
 }
 
 /* ==========================================================================
@@ -6132,6 +6169,94 @@ html.v2-palette-driven.v2-mode-transition body {
   100% { background-position: 0% 0; }
 }
 
+/* --- 1b. the figures get ruled under -------------------------------------
+   A short vermilion rule draws itself under each figure on a shelf, left to
+   right, chasing the wipe that sets the numeral. It is the mark somebody makes
+   under a number they want you to look at.
+
+   A PSEUDO-ELEMENT, NOT THE TEXT. Everything in this block obeys the rule the
+   headings taught us the hard way: animating a transform on type promotes it
+   to a compositor layer and changes how it is antialiased for the duration.
+   So the rule is its own box, scaled on its own axis, and no letterform on the
+   shelf is transformed at any point. See THE HEADINGS DO NOT MOVE.
+
+   Staggered off the same `--fd` the numeral's wipe uses, plus a beat, so the
+   rule arrives just behind the figure rather than with it.
+   -------------------------------------------------------------------------- */
+.v2-shelf-cell b { position: relative; display: inline-block; }
+.v2-shelf-cell b::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -0.12em;
+  height: 2px;
+  background: var(--verm);
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+  transition: transform 0.5s var(--ease) calc(var(--fd, 0ms) + 260ms);
+}
+.v2-section.is-in .v2-shelf-cell b::after { transform: scaleX(1); }
+/* The tinted figures already carry their own colour; the rule matches whatever
+   the numeral is set in so the pair reads as one mark. */
+.v2-shelf-cell b.is-blue::after { background: var(--blue); }
+
+/* --- 1c. links are underlined by hand ------------------------------------
+   Every mono link on the site already sits on a hairline. On hover a second
+   rule in vermilion draws across it from the left, at reading speed rather
+   than instantly, so following a link feels like being led somewhere.
+
+   `background-size` on a gradient rather than a transformed pseudo-element:
+   this animates on the main thread as a paint, which leaves the anchor's TEXT
+   un-composited and therefore identically antialiased hovered or not. A
+   `scaleX` pseudo would have been cheaper per frame and would have made every
+   link on the page flicker its weight on mouseover.
+   -------------------------------------------------------------------------- */
+.v2-foot-links a,
+.v2-story-links a,
+.v2-proj-links a,
+.v2-story-foot a,
+.v2-proj-back,
+.v2-story-back {
+  background-image: linear-gradient(var(--verm), var(--verm));
+  background-repeat: no-repeat;
+  background-position: 0 100%;
+  background-size: 0 1.5px;
+  transition: background-size 0.36s var(--ease), color 0.16s var(--ease);
+}
+.v2-foot-links a:hover,
+.v2-foot-links a:focus-visible,
+.v2-story-links a:hover,
+.v2-story-links a:focus-visible,
+.v2-proj-links a:hover,
+.v2-proj-links a:focus-visible,
+.v2-story-foot a:hover,
+.v2-story-foot a:focus-visible,
+.v2-proj-back:hover,
+.v2-proj-back:focus-visible,
+.v2-story-back:hover,
+.v2-story-back:focus-visible { background-size: 100% 1.5px; }
+
+/* --- 1d. the chips warm rather than lift ---------------------------------
+   The technology chips and the cutting's tags take a tint and a firmer border
+   on hover. Deliberately NOT a `translateY`: eleven and a half pixel mono is
+   exactly the size at which the antialiasing change from being composited is
+   most obvious, and there are ninety of these on the projects index alone.
+   -------------------------------------------------------------------------- */
+.v2-proj-tech li,
+.v2-story-tech li,
+.v2-clip-tags li {
+  transition: background-color 0.2s var(--ease), border-color 0.2s var(--ease),
+    color 0.2s var(--ease);
+}
+.v2-proj-tech li:hover,
+.v2-story-tech li:hover,
+.v2-clip-tags li:hover {
+  background-color: color-mix(in srgb, var(--verm) 10%, transparent);
+  border-color: var(--verm);
+  color: var(--verm-text);
+}
+
 /* --- 2. the eyebrows print -----------------------------------------------
    Mono, uppercase, eleven and a half pixels: a line that already looks like it
    was struck rather than typeset. So it arrives struck -- wiped in from the
@@ -6187,6 +6312,18 @@ html.v2-palette-driven.v2-mode-transition body {
     clip-path: none;
     transition: none;
   }
+  /* The rule under a figure is a mark, not a movement: it stays, it just
+     arrives already drawn. */
+  .v2-shelf-cell b::after { transform: scaleX(1); transition: none; }
+  .v2-foot-links a,
+  .v2-story-links a,
+  .v2-proj-links a,
+  .v2-story-foot a,
+  .v2-proj-back,
+  .v2-story-back,
+  .v2-proj-tech li,
+  .v2-story-tech li,
+  .v2-clip-tags li { transition: none; }
 }
 
 /* ==========================================================================

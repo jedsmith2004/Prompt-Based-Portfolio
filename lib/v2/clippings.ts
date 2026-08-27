@@ -389,7 +389,7 @@ export const POSTINGS: Posting[] = [
     role: 'Full Stack Developer',
     company: 'UCD',
     period: '2025',
-    line: 'Founded a web studio. Discovery and design through deployment.'
+    line: 'Co-founded a web studio. Discovery and design through deployment.'
   },
   {
     role: 'Software Engineer',

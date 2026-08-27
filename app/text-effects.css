@@ -84,13 +84,30 @@
 }
 
 /* ---------------------------------------------------------------- rotator */
+/*
+   NO `overflow: hidden`, and this is a real rule rather than a tidy-up.
+
+   Jack, 2026-08-27: "the switching title on the splash page is slightly higher
+   than everything else."
+
+   It was, by about a third of a line, and `overflow: hidden` was the whole
+   reason. An inline-block whose overflow is not `visible` establishes a block
+   formatting context, and the CSS baseline rules say such a box uses its BOTTOM
+   MARGIN EDGE as its baseline instead of the baseline of its last line box. So
+   the browser was lining the bottom of this box up with the baseline of the
+   text either side of it, which lifts everything inside by a descender's depth.
+   It is the same bug that makes an `overflow: auto` inline-block jump in a
+   sentence, and it is invisible until you set it next to type that has not
+   moved — which is exactly what the hero's metadata line does.
+
+   Dropping the clip fixes the alignment and costs nothing: the items are
+   absolutely positioned and carry `opacity: 0` when they are not the live one,
+   so there was never anything visible for the clip to hide.
+*/
 .v2-rotate {
   position: relative;
   display: inline-block;
   vertical-align: baseline;
-  /* Nothing hangs outside the slot, so a phrase on its way out cannot overlap
-     the rule under the eyebrow. */
-  overflow: hidden;
 }
 .v2-rotate-item {
   position: absolute;

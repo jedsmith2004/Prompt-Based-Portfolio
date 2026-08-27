@@ -31,11 +31,16 @@ export interface Stat {
  * making them.
  *
  * Restrained on purpose, because this is an engineering journal and not a
- * showreel: the words arrive in reading order, 55ms apart, from behind the
- * line they belong on. Nothing rotates, nothing scales, no character is set
- * individually. A per-character stagger on a display face at this size reads
- * as a ransom note, and it also multiplies the element count on a page that
- * already runs six canvases.
+ * showreel: the words arrive in reading order, 55ms apart. Nothing rotates,
+ * nothing scales, no character is set individually. A per-character stagger on
+ * a display face at this size reads as a ransom note, and it also multiplies
+ * the element count on a page that already runs six canvases.
+ *
+ * THE WORDS ARE WIPED IN, NOT LIFTED IN, and that is not a style preference:
+ * transforming display type promotes it to a compositor layer, which changes
+ * how it is antialiased for the length of the animation. See THE HEADINGS DO
+ * NOT MOVE in v2.css. The wrapper is still called a mask because it still is
+ * one; it is a clip rather than an overflow now.
  *
  * TWO THINGS THAT WOULD BE BUGS WITHOUT CARE.
  *
@@ -57,10 +62,11 @@ function KineticTitle({ text }: { text: string }) {
     <>
       {words.map((w, i) => (
         <Fragment key={`${w}-${i}`}>
-          <span className="v2-kin">
-            <span className="v2-kin-i" style={{ '--k': `${i * 55}ms` } as React.CSSProperties}>
-              {w}
-            </span>
+          {/* `--k` moved OUT to the mask. The word itself is no longer the
+              animated element — see THE HEADINGS DO NOT MOVE in v2.css — so
+              the per-word delay has to live on the thing that does. */}
+          <span className="v2-kin" style={{ '--k': `${i * 55}ms` } as React.CSSProperties}>
+            <span className="v2-kin-i">{w}</span>
           </span>
           {i < words.length - 1 ? ' ' : null}
         </Fragment>

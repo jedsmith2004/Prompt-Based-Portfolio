@@ -202,14 +202,14 @@ const ROLES: readonly Role[] = [
      */
     id: 'ucd',
     index: '02',
-    short: 'UCD, my own studio',
+    short: 'UCD, our studio',
     from: 2025,
     to: 2025,
     period: '2025',
     role: 'Full Stack Developer',
-    org: 'UCD, my own web studio',
+    org: 'UCD, a web studio run with my housemate',
     note:
-      'My own studio, run for real clients. Discovery, design, the full-stack build, deployment and the maintenance afterwards, the whole lifecycle on one pair of hands.',
+      'A studio my housemate and I ran together, for real clients. Discovery, design, the full-stack build, deployment and the maintenance afterwards, the whole lifecycle between the two of us.',
   },
   {
     id: 'startup',

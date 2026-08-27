@@ -3,11 +3,15 @@
 /* ============================================================================
    CurvedLoop — a marquee running along a curve, set on an SVG text path.
 
-   One instance, on the projects index, carrying the technologies that appear
-   in the record more than once. It does two jobs for the price of one: it is
-   the ribbon that separates the case from the catalogue, and it is a list of
-   what the fifteen projects are actually built out of, which is the one thing
-   the index above it never says in one place.
+   Two instances, and each carries something the page it is on does not
+   otherwise state in one place:
+
+     /projects   the technologies that appear in the record more than once. It
+                 is also the rule between the case and the catalogue, so it
+                 does the dividing and the listing for the price of one.
+     /           the six DO NOTs and the SO, on the way out. The eyebrows are
+                 an anaphora and they are the only device holding the spine's
+                 argument together; set in a row they are the page's thesis.
 
    THE SEAM IS THE ONLY HARD PART, and it is why this measures itself.
 
@@ -69,23 +73,108 @@ export default function CurvedLoop({
 
   const phrase = items.length ? items.join(separator) + separator : '';
 
+  /*
+   * MEASURED ON A ResizeObserver, NOT ONCE ON MOUNT.
+   *
+   * `getComputedTextLength()` returns 0 for an SVG that has not been laid out
+   * yet, and the effect can easily run before that has happened — which is
+   * exactly what went wrong on the home page's ribbon while the projects
+   * page's, higher up the document, measured fine. A single measurement that
+   * silently returns zero leaves `fit` null forever: no `<animate>` is
+   * rendered, and the ribbon sits there showing one static repeat.
+   *
+   * Three triggers, because no one of them is sufficient: a bounded retry for
+   * "layout does not exist yet", `document.fonts.ready` for "the face it was
+   * measured in is about to change", and a ResizeObserver for "the container
+   * is a different width now". Each is commented where it is set up.
+   */
   useEffect(() => {
     if (!phrase) return;
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       setReduced(true);
       return;
     }
-    const ruler = rulerRef.current;
-    const path = pathRef.current;
-    if (!ruler || !path) return;
+    const svg = svgRef.current;
+    if (!svg) return;
 
-    const len = ruler.getComputedTextLength();
-    if (!(len > 0)) return;
-    const total = path.getTotalLength();
-    /* Overfill by one repeat beyond the path, plus one more to cover the
-       distance the run travels backwards over a cycle. */
-    const repeats = Math.ceil(total / len) + 2;
-    setFit({ len, repeats });
+    /** Returns true once it has a usable measurement. */
+    const measure = (): boolean => {
+      const ruler = rulerRef.current;
+      const path = pathRef.current;
+      if (!ruler || !path) return false;
+      let len = 0;
+      try {
+        len = ruler.getComputedTextLength();
+      } catch {
+        /* Firefox throws rather than returning 0 for an SVG text node that has
+           not been laid out. Same meaning: not ready, ask again. */
+        return false;
+      }
+      if (!(len > 0)) return false;
+      const total = path.getTotalLength();
+      /* Overfill by one repeat beyond the path, plus one more to cover the
+         distance the run travels backwards over a cycle. */
+      const repeats = Math.ceil(total / len) + 2;
+      setFit((prev) =>
+        prev && prev.repeats === repeats && Math.abs(prev.len - len) < 0.5
+          ? prev
+          : { len, repeats }
+      );
+      return true;
+    };
+
+    /*
+     * A BOUNDED RETRY, for the case where layout does not exist yet.
+     *
+     * `getComputedTextLength()` returns 0 (or throws, in Firefox) until the SVG
+     * has been laid out, and a measurement of 0 is unrecoverable on its own:
+     * `fit` stays null, no `<animate>` is rendered, and the marquee sits there
+     * showing one static repeat. The ResizeObserver below does not reliably
+     * rescue it, because RO notifications are delivered during "update the
+     * rendering", which a browser skips for a document that is not being
+     * displayed.
+     *
+     * `setTimeout` keeps running in that state, so it is the backstop. Twelve
+     * attempts at 120ms covers about a second and a half and then gives up,
+     * and it stops the instant one succeeds — in the ordinary case the very
+     * first synchronous call does, and this costs nothing.
+     */
+    let tries = 0;
+    let retry = 0;
+    const attempt = () => {
+      if (measure() || ++tries >= 12) return;
+      retry = window.setTimeout(attempt, 120);
+    };
+    attempt();
+
+    const ro = new ResizeObserver(() => measure());
+    ro.observe(svg);
+
+    /*
+     * AND AGAIN WHEN THE FONTS LAND, which is the trigger that actually
+     * matters and is not optional.
+     *
+     * A ResizeObserver fires once when observation starts and then only when
+     * the box changes — and this box does not change when a webfont arrives,
+     * because the SVG is sized by its container. So an observer alone leaves
+     * two holes: a first measurement taken before layout exists sticks at zero
+     * forever (the home page's ribbon never animated at all), and a
+     * measurement taken in the fallback face is simply WRONG once Bricolage
+     * and JetBrains Mono swap in. The second one is the more insidious: the
+     * repeat length is what makes the loop seamless, so a stale measurement
+     * does not fail loudly, it just puts a visible jump in the marquee once a
+     * cycle.
+     */
+    let cancelled = false;
+    document.fonts?.ready.then(() => {
+      if (!cancelled) measure();
+    });
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(retry);
+      ro.disconnect();
+    };
   }, [phrase]);
 
   /* The reader is allowed to stop it and read one. `pauseAnimations` is on the
@@ -130,7 +219,8 @@ export default function CurvedLoop({
           />
         </defs>
 
-        {/* The ruler. One repeat, never painted, measured once. */}
+        {/* The ruler. One repeat, never painted, re-measured on every box
+            change — see the observer above. */}
         <text ref={rulerRef} className="v2-curveloop-text" visibility="hidden" x="0" y="-999">
           {phrase}
         </text>

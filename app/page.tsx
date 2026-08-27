@@ -32,6 +32,7 @@ import ContactPlate, { type ContactPlateHandle } from '@/components/v2/ContactPl
 import CurriculumVitae from '@/components/v2/CurriculumVitae';
 import { askJack } from '@/lib/v2/ask';
 import ShinyText from '@/components/v2/text/ShinyText';
+import CurvedLoop from '@/components/v2/text/CurvedLoop';
 import { HERO, SECTIONS, SECTION_WORLDS, WHISPERS, type SectionShape } from '@/lib/v2/content';
 import {
   ridgeline,
@@ -429,6 +430,27 @@ export default function V2Page() {
             )}
           </SpineSection>
         ))}
+        {/*
+          THE ARGUMENT, ON A RIBBON, on the way out.
+
+          Six DO NOTs and a SO: the eyebrows are an anaphora and they are the
+          only device holding the spine's argument together, so setting them in
+          a row is the one place the page states its own thesis in a single
+          line. Read from SECTIONS rather than written out, so a plate that is
+          added or reworded cannot leave this saying something the page no
+          longer argues.
+        */}
+        <CurvedLoop
+          items={SECTIONS.map((sec) =>
+            sec.eyebrow.includes('/')
+              ? sec.eyebrow.slice(sec.eyebrow.indexOf('/') + 1).trim()
+              : sec.eyebrow
+          )}
+          className="v2-home-ribbon"
+          duration={38}
+          curve={-24}
+        />
+
         <footer className="v2-foot">
           <div className="v2-wrap">
             <hr className="v2-rule-hard" data-perch />
