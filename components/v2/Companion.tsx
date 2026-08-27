@@ -40,6 +40,9 @@
                    hiding a real one.
    ========================================================================== */
 
+import { useRouter, usePathname } from 'next/navigation';
+import { chipFor, parseChips, type Chip } from '@/lib/v2/chips';
+import { scrollToSection } from './useSpine';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { paletteTokens, type PaletteTokens } from '@/lib/v2/paletteWatch';
 import {
@@ -1111,6 +1114,12 @@ interface Waypoint {
 interface ChatMsg {
   me: boolean;
   text: string;
+  /**
+   * Places Pip is offering to take you. Drawn as pressable rows under his
+   * message; see THE CHIPS in buildChat. Never present on the reader's own
+   * lines — he is the only one handing anything over.
+   */
+  chips?: Chip[];
 }
 
 /**
@@ -1423,20 +1432,48 @@ const CURSOR_MATRIX_OVER: readonly string[] = [
   '...KKKK.'
 ];
 /**
- * Top inset for the chat panel when it is pinned to the viewport on a touch
- * device, in CSS px.
+ * How far down the pinned (touch) chat window sits, in px.
  *
- * Deliberately the SAME 64 the desktop branch already clamps `chatUi.y` down
- * to. That number is not arbitrary there: it is the highest the panel is
- * allowed to go with the bird perched on its top edge, and the sprite stands
- * well above its own baseline, so a smaller inset would start cropping him
- * against the top of the viewport. Reusing it means the pinned layout inherits
- * a constraint that is already proven rather than guessing a new one — and it
- * still clears the phone's plate bar (3px hairline plus a 42px bar) by 19px.
+ * Jack, 2026-08-27: "On mobile put pip a little bit lower when you ask him a
+ * question."
  *
- * See ON A TOUCH DEVICE THE WINDOW GOES TO THE TOP in `layoutChat`.
+ * WHY IT WAS TOO HIGH. The pinned layout put the window at CHAT_TOP_INSET and
+ * seats him on its TOP EDGE, and a sprite's anchor is its bottom centre — so
+ * at 64 the sprite's box reached to y = -48 and the top of him was off the
+ * screen, before a phone's status bar or a notch had taken anything else. He
+ * was not perched near the top of the display, he was clipped by it.
+ *
+ * WHY NOT SIMPLY CLEAR THE WHOLE SPRITE. That would want 112 plus a margin,
+ * and every pixel the window moves down is a pixel of clearance given up to
+ * the software keyboard, which is the entire reason the window is pinned in
+ * the first place. 96 leaves 16px of the sprite's box above the fold — box,
+ * not feathers: a perch pose does not fill its own top rows — and keeps the
+ * draft line at 286, which still clears the keyboard on every common phone:
+ *
+ *     screen   draft   keyboard top (~55%)   clearance
+ *     932      286     513                   227px
+ *     844      286     464                   178px
+ *     812      286     447                   161px
+ *     736      286     405                   119px
+ *     667      286     367                    81px
+ *     568      286     312                    26px
+ *
+ * The 568 row is the floor and it is the one to watch: an iPhone SE has 26px
+ * in hand. If this ever needs to go lower, that is the number that runs out
+ * first, and the answer would be to shrink the panel rather than move it.
+ *
+ * IT REPLACES CHAT_TOP_INSET, which was 64 and is gone. That constant existed
+ * to say 64 was "the highest the panel is allowed to go with the bird perched
+ * on its top edge ... a smaller inset would start cropping him", borrowed from
+ * the literal 64 the desktop branch clamps to. The borrowed reasoning was the
+ * mistake: 64 does not sit at the edge of cropping him, it crops him by 48px
+ * already. Nothing else ever used the constant, so it has gone with the
+ * assumption.
+ *
+ * It still clears the phone's plate bar — a 3px hairline over a 42px bar — by
+ * 51px.
  */
-const CHAT_TOP_INSET = 64;
+const CHAT_PIN_TOP = 96;
 const CURSOR_SCALE = 2;
 /** Class the swap puts on <html>. The rule is injected and removed with it. */
 const CURSOR_SWAP_CLASS = 'v2-bird-cursor-swap';
@@ -1513,6 +1550,10 @@ export default function Companion({
   onErrandArriveRef.current = onErrandArrive;
   const onErrandFailRef = useRef(onErrandFail);
   onErrandFailRef.current = onErrandFail;
+  /* The frame loop is set up once and never torn down, so it cannot close over
+     a callback that changes with the route. Same arrangement as every other
+     prop the loop needs; assigned below, where takeChip exists. */
+  const takeChipRef = useRef<(key: string) => void>(() => {});
 
   const chat = useRef({
     open: false,
@@ -1542,11 +1583,51 @@ export default function Companion({
    */
   const chatMetrics = useRef({ rows: 0, room: 0 });
 
+  /* Where a chip goes. `usePathname` matters: a chip for a PLATE is a scroll
+     when the reader is already on the front page and a navigation when they
+     are not, and those are different actions rather than one with a fallback. */
+  const router = useRouter();
+  const pathname = usePathname();
+
   const closeChat = useCallback(() => {
     if (!chat.current.open) return;
     chat.current.open = false;
     setChatting(false);
   }, []);
+
+  /**
+   * Take a chip. Closes the chat first, in every branch.
+   *
+   * Jack asked for the chat to close on the way, and it has to close BEFORE
+   * the navigation rather than after: the panel is anchored in screen space and
+   * a route change under an open window leaves it hanging over a page it was
+   * never opened on, with the bird still perched in it.
+   *
+   * Three kinds of destination and they are genuinely three different actions.
+   * A PDF opens in a new tab and leaves the reader where they are, because
+   * navigating away from a conversation to a document is a worse trade than a
+   * second tab. A plate scrolls if we are on the front page and navigates to
+   * the anchor if we are not. Everything else is an ordinary route push.
+   */
+  const takeChip = useCallback(
+    (key: string) => {
+      const target = chipFor(key);
+      if (!target) return;
+      closeChat();
+      if (target.external && target.href) {
+        window.open(target.href, '_blank', 'noopener,noreferrer');
+        return;
+      }
+      if (target.section) {
+        if (pathname === '/') scrollToSection(target.section);
+        else router.push(`/#${target.section}`);
+        return;
+      }
+      if (target.href) router.push(target.href);
+    },
+    [closeChat, pathname, router]
+  );
+  takeChipRef.current = takeChip;
 
   const submit = useCallback(async (q: string) => {
     const c = chat.current;
@@ -1569,7 +1650,15 @@ export default function Companion({
     } catch {
       answer = 'That did not go through. Try me again in a moment.';
     }
-    c.log.push({ me: false, text: answer });
+    /* Chips are markers in the reply, not a side channel: the model writes
+       `[[key]]` inline and they are lifted out here so the transcript holds
+       clean prose and a list of destinations. Unknown keys are dropped by
+       parseChips rather than drawn, so an invented one shows nothing at all
+       instead of a chip that 404s. */
+    const parsed = parseChips(answer);
+    c.log.push({ me: false, text: parsed.text || answer, chips: parsed.chips });
+    /* setSrLog below copies the tail of the log, chips included, so the mirror
+       and the canvas offer the same destinations. */
     if (c.log.length > 40) c.log.splice(0, c.log.length - 40);
     c.scroll = 0;
     c.version++;
@@ -2639,6 +2728,9 @@ export default function Companion({
          both and neither is knowable outside the layout. */
       rows: 0,
       room: 0,
+      /* Chip hit targets in PANEL-LOCAL pixels, rebuilt on every repaint. Local
+         rather than screen, so a panel that moves does not invalidate them. */
+      chips: [] as Array<{ key: string; x: number; y: number; w: number; h: number }>,
       caretCells: 0,
       openedAt: 0,
       /* last written <input> geometry, so the style is only touched on a
@@ -2724,7 +2816,10 @@ export default function Companion({
            resize, so rotating the phone mid-conversation does not hand the
            panel back to the keyboard. */
         chatUi.x = Math.max(12, Math.round((W - w) * 0.5));
-        chatUi.y = Math.min(CHAT_TOP_INSET, Math.max(8, H - h - 12));
+        /* See CHAT_PIN_TOP for how far down this is and why. The clamp still
+           wins on a short screen, where there is no room to sit that far down
+           and the keyboard is the lesser problem. */
+        chatUi.y = Math.min(CHAT_PIN_TOP, Math.max(8, H - h - 12));
       } else if (freeze) {
         chatUi.x = Math.max(12, Math.min(W - w - 12, sx - w * 0.5));
         chatUi.y = Math.max(64, Math.min(H - h - 12, sy + 2));
@@ -2757,12 +2852,63 @@ export default function Companion({
     function positionInput() {
       const el = inputRef.current;
       if (!el) return;
-      const x = Math.round(chatUi.x + 10);
+      /*
+       * EVERY NUMBER HERE IS DERIVED FROM THE PANEL AS PAINTED, not from
+       * `chatUi`, and that is the fix for the box sitting off-centre sideways.
+       *
+       * The canvas is drawn at `Math.round(chatUi.x)` and is
+       * `floor(chatUi.w / FONT_PX) * FONT_PX` wide, because it is a grid of
+       * whole cells. `chatUi.w` is neither of those things: it is
+       * `min(340, max(220, W - 24))` and is ODD whenever the viewport width is
+       * odd, which is most of the time.
+       *
+       * Positioning off `chatUi.w` therefore inset the box by 10 on the left
+       * and by 9 on the right at every odd width — the panel it was being
+       * centred in was a pixel narrower than the number it was centred
+       * against. One pixel does not sound like much until it is a hard orange
+       * rectangle on a two-pixel grid.
+       *
+       * Anchoring to `Math.round(chatUi.x)` rather than rounding `x + 10`
+       * separately closes the same hole in the other direction: two
+       * independent roundings of the same fractional origin are two chances to
+       * land a pixel apart.
+       */
+      const panelX = Math.round(chatUi.x);
+      const panelY = Math.round(chatUi.y);
+      const panelW = Math.floor(chatUi.w / FONT_PX) * FONT_PX;
+      const INSET = 10;
+      const x = panelX + INSET;
       /* Off the same helper the pixels are drawn from, never off a constant
          that happens to agree with it. See chatInputRows. */
       const { inputTop } = chatInputRows(Math.floor(chatUi.h / FONT_PX));
-      const y = Math.round(chatUi.y + inputTop * FONT_PX);
-      const w = Math.round(chatUi.w - 20);
+      /*
+       * THE ELEMENT'S BOX IS CENTRED ON THE GLYPH ROW, and this is the part
+       * that is easy to get wrong because the element is invisible.
+       *
+       * It is not, quite. `.v2 :focus-visible` in v2.css puts a 2px vermilion
+       * outline at a 3px offset on anything focused inside `.v2`, and it beats
+       * `.v2-bird-input { outline: none }` on specificity — two classes to one.
+       * So while the chat is open the reader sees an orange rectangle drawn
+       * around this box, and the box therefore has to be centred on the type it
+       * stands in for rather than merely overlapping it.
+       *
+       * It used to be 22px tall with its TOP on the glyph row, which put 3px of
+       * ring above the words and 11px below: the "type a question" line sat
+       * visibly high inside its own outline. Jack reported it twice; the first
+       * fix centred the glyphs in the panel's bottom strip, which was also
+       * wrong but was not this.
+       *
+       * Sizing the box off the glyph row rather than picking a height means the
+       * two cannot drift again. The 2px of padding also lines the browser's own
+       * 16px text line up with our 14px pixel row, which is what the native
+       * selection highlight and the mobile caret are positioned against.
+       */
+      const INPUT_PAD = 2;
+      const inputH = GLYPH_H * FONT_PX + INPUT_PAD * 2;
+      const y = panelY + inputTop * FONT_PX - INPUT_PAD;
+      /* Symmetric by construction: whatever is left after taking INSET off
+         both sides of the panel that is actually painted. */
+      const w = panelW - INSET * 2;
       if (x === chatUi.inX && y === chatUi.inY && w === chatUi.inW) return;
       chatUi.inX = x;
       chatUi.inY = y;
@@ -2770,7 +2916,7 @@ export default function Companion({
       el.style.left = `${x}px`;
       el.style.top = `${y}px`;
       el.style.width = `${w}px`;
-      el.style.height = '22px';
+      el.style.height = `${inputH}px`;
     }
 
     function buildChat() {
@@ -2823,10 +2969,18 @@ export default function Companion({
        * one wrap pass over a conversation that is bounded at 14 messages by
        * the API route, and it only happens on a repaint.
        */
-      const rows: Array<{ text: string; me: boolean }> = [];
+      const rows: Array<{ text: string; me: boolean; chip?: Chip }> = [];
       const log = chat.current.log;
       for (let i = log.length - 1; i >= 0; i--) {
         const m = log[i];
+        /* CHIPS BEFORE TEXT, because this list is built bottom-up: index 0 is
+           the newest line and is drawn lowest. Pushing a message's chips first
+           puts them under its words, which is where an offer belongs. */
+        if (m.chips) {
+          for (let k = m.chips.length - 1; k >= 0; k--) {
+            rows.push({ text: m.chips[k].label, me: m.me, chip: m.chips[k] });
+          }
+        }
         const n = wrapText(m.text, maxChars, CHAT_LINES);
         for (let k = n - 1; k >= 0; k--) rows.push({ text: CHAT_LINES[k], me: m.me });
       }
@@ -2843,11 +2997,38 @@ export default function Companion({
       chatMetrics.current.rows = rows.length;
       chatMetrics.current.room = room;
 
+      chatUi.chips.length = 0;
       const take = Math.min(room, rows.length - scroll);
       for (let i = 0; i < take; i++) {
         const row = rows[scroll + take - 1 - i];
         const y = logTop + i * LINE_CELLS;
-        if (row.me) {
+        if (row.chip) {
+          /*
+           * THE CHIPS. A pressable label under one of his answers: a chevron,
+           * the words, and a rule under the lot in vermilion so it reads as
+           * something you do rather than something he said.
+           *
+           * The hit box is deliberately a whole LINE tall rather than the
+           * glyphs' seven cells. This is a 2px pixel grid and the label is
+           * eleven pixels of ink; a target measured off the letterforms is a
+           * target nobody hits on the first go.
+           */
+          const label = row.chip.label;
+          const trimmed =
+            label.length > maxChars - 3 ? label.slice(0, maxChars - 4) + '…' : label;
+          const cells = textCells(trimmed) + 2;
+          blitText(g, '›', 6, y, P, theme.verm);
+          blitText(g, trimmed, 8, y, P, theme.verm);
+          g.fillStyle = theme.verm;
+          g.fillRect(6 * P, (y + GLYPH_H + 1) * P, cells * P, P);
+          chatUi.chips.push({
+            key: row.chip.key,
+            x: 4 * P,
+            y: (y - 1) * P,
+            w: (cells + 4) * P,
+            h: LINE_CELLS * P
+          });
+        } else if (row.me) {
           const x = wCells - 4 - textCells(row.text);
           blitText(g, row.text, x, y, P, theme.ink);
           g.fillStyle = theme.ink3;
@@ -4402,6 +4583,32 @@ export default function Companion({
     function onDown(e: PointerEvent) {
       /* outside the frame: the cursor is live, so the scroll must be too */
       readScroll();
+
+      /*
+       * A CHIP IS PRESSED BEFORE ANYTHING ELSE IS CONSIDERED.
+       *
+       * The chat panel is painted on the shared canvas, so a chip has no
+       * element to hang a listener on and has to be hit-tested by hand. It goes
+       * first because everything below it — the drag, the cursor handover, the
+       * poke — treats a press as being aimed at the bird, and a press inside
+       * his own chat window plainly is not.
+       *
+       * Rects are panel-local, so the pointer is moved into the panel's frame
+       * rather than the rects into the screen's; the panel moves and they do
+       * not.
+       */
+      if (chat.current.open && inChatBox(e.clientX, e.clientY)) {
+        const lx = e.clientX - chatUi.x;
+        const ly = e.clientY - chatUi.y;
+        for (let i = 0; i < chatUi.chips.length; i++) {
+          const c = chatUi.chips[i];
+          if (lx >= c.x && lx <= c.x + c.w && ly >= c.y && ly <= c.y + c.h) {
+            e.preventDefault();
+            takeChipRef.current(c.key);
+            return;
+          }
+        }
+      }
       /* Any click at all hands the cursor back. He is annoying, not a denial
          of service: the moment the reader tries to USE the pointer they get
          it, wherever the bird had got to with it. */
@@ -7677,6 +7884,30 @@ export default function Companion({
              is pretending to be — is the half that is missing. */
           setChatting(true);
         },
+        /*
+         * Push a reply through the REAL parse path, so the chip markers, the
+         * text they are stripped from, the drawn rows and the hit rects are all
+         * exercised exactly as they are for a live answer. Without a
+         * DEEPSEEK_API_KEY there is no other way to see a chip at all.
+         */
+        chatReply: (text: string) => {
+          const parsed = parseChips(text);
+          chat.current.open = true;
+          chat.current.log.push({
+            me: false,
+            text: parsed.text || text,
+            chips: parsed.chips
+          });
+          chat.current.scroll = 0;
+          chat.current.version++;
+          setMode('chat');
+          startAnim(chat.current.perch, 0);
+          layoutChat(true);
+          setChatting(true);
+          return { text: parsed.text, chips: parsed.chips };
+        },
+        /** The chip hit rects as last drawn, in panel-local pixels. */
+        chatChips: () => chatUi.chips.map((c) => ({ ...c })),
         /** Read or set the scrollback, in wrapped lines from the bottom. */
         chatScroll: (n?: number) => {
           if (typeof n === 'number') chat.current.scroll = Math.max(0, n);
@@ -7981,7 +8212,25 @@ export default function Companion({
       ) : null}
       <div className="v2-bird-sr" role="log" aria-live="polite">
         {srLog.map((m, i) => (
-          <p key={i}>{(m.me ? 'You: ' : 'Sparrow: ') + m.text}</p>
+          <p key={i}>
+            {(m.me ? 'You: ' : 'Sparrow: ') + m.text}
+            {/* THE CHIPS, AS REAL BUTTONS. On the canvas they are painted rows
+                hit-tested by hand, which a keyboard cannot reach and a screen
+                reader cannot see at all. Mirroring them here as real controls
+                is the same bargain the transcript already makes and the same
+                one the draft input makes: the picture is ours, the semantics
+                are the platform's. `.v2-bird-sr` is visually hidden and never
+                hidden from assistive technology. */}
+            {m.chips?.map((c) => (
+              <button
+                type="button"
+                key={c.key}
+                onClick={() => takeChip(c.key)}
+              >
+                {`Go to ${c.label}`}
+              </button>
+            ))}
+          </p>
         ))}
       </div>
     </div>
