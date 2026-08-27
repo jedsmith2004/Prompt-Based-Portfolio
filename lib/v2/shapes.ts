@@ -275,6 +275,14 @@ const PRESSURE_MEAN = 0.80;
 /* -------------------------------------------------------------------------- */
 
 /**
+ * How the ridge is dressed for the frame it is drawn in.
+ *
+ * 'wide' is the desktop hero. 'tall' is the phone, where the far band goes to
+ * the very top — see THE PHONE TAKES THE BAND OFF THE TYPE inside the painter.
+ */
+export type RidgelineDress = 'wide' | 'tall';
+
+/**
  * A gritstone moorland ridge, in the manner of the Kinder plateau: flat topped,
  * shouldered, with tors sitting proud of the near crest.
  *
@@ -292,6 +300,9 @@ const PRESSURE_MEAN = 0.80;
  * alpha the caller set rather than overwriting it.
  *
  * @param seed  varies the terrain while staying stable across resizes
+ * @param dress which plate this is drawn on. 'wide' is the desktop hero.
+ *              'tall' is the phone, where the far band goes to the very top
+ *              of the frame — see THE PHONE TAKES THE BAND OFF THE TYPE.
  * @returns a ShapePainter
  *
  * Coverage: measured 20.5 / 20.5 / 20.6% at 640x400, 640x320 and 640x640 for
@@ -301,7 +312,7 @@ const PRESSURE_MEAN = 0.80;
  * Aspect independent, since every dimension is a fraction of h; the seed
  * spread is the terrain itself.
  */
-export function ridgeline(seed: number = 1): ShapePainter {
+export function ridgeline(seed: number = 1, dress: RidgelineDress = 'wide'): ShapePainter {
   return function paintRidgeline(ctx: CanvasRenderingContext2D, w: number, h: number): void {
     if (!usable(w, h)) return;
     const rand = mulberry32(0x51ed * (seed | 0) + 0x9e3779b9);
@@ -332,18 +343,51 @@ export function ridgeline(seed: number = 1): ShapePainter {
      * this size reads as ground behind a sign. It no longer crosses a word
      * anyone has to read.
      *
-     *   far band  0.500 - 0.130 .. 0.500 + 0.130 + 0.082  =  0.370 .. 0.712
-     *   near bank 0.945 - 0.045 .. floor                  =  0.900 .. 1
+     *   far band  0.450 - 0.130 .. 0.450 + 0.130 + 0.082  =  0.320 .. 0.662
+     *   near bank 0.895 - 0.045 .. floor                  =  0.850 .. 1
      *
      * The near layer also had to move: it is a fill to the floor, so lowering
      * its crest is what turns it from a mass covering the bottom third into a
      * bank along the bottom edge. Coverage drops from about 20.5% to about
      * 13%, which is still inside the 8-25% band the file asks for, and the
      * particle budget is fixed, so what is left simply reads denser.
+     *
+     * Both bases are 0.05 above where that note left them. Jack, 2026-08-27:
+     * "Move both splash page particle bands up just a little bit, maybe 5% of
+     * the page height." Taken literally, as a rigid translation of the whole
+     * profile rather than a re-tune: the two crests keep the gap between them
+     * that the note above was written to open, and the near bank keeps its
+     * fill to the floor, so nothing here needs re-measuring.
+     *
+     * THE PHONE TAKES THE BAND OFF THE TYPE ENTIRELY.
+     *
+     * Jack, 2026-08-27: "The splash page does not look good on mobile, mostly
+     * because of the top particle band, maybe move it right to the top (only
+     * on mobile)."
+     *
+     * The arithmetic above is all fractions of the frame, and a phone frame is
+     * about twice as tall as it is wide. The same 0.32..0.66 that clears the
+     * hero's reading matter on a 1265x800 desktop is, on a 375x812 phone, a
+     * 275px-deep stipple sitting across the middle of a title that has gone to
+     * four or five lines to fit the width. The band is not in the wrong place
+     * by a margin that tuning would fix; it is in the one place a tall frame
+     * has no room for.
+     *
+     * So on the phone it goes to the ceiling: base 0.085 with the same amp
+     * puts the crest between 0 and 0.215 and the band's floor at 0.297, which
+     * reads as weather along the top edge above everything, rather than as
+     * ground drawn through the middle of the name. The near bank stays where
+     * the desktop leaves it — it is a bank along the bottom edge in either
+     * frame, and it is the horizon the plate stands on.
      */
+    const far =
+      dress === 'tall'
+        ? { base: 0.085, amp: 0.130, depth: 0.082, rough: 0.52, alpha: 0.78, oct: 7 }
+        : { base: 0.450, amp: 0.130, depth: 0.082, rough: 0.52, alpha: 0.78, oct: 7 };
+
     const layers = [
-      { base: 0.500, amp: 0.130, depth: 0.082, rough: 0.52, alpha: 0.78, oct: 7 },
-      { base: 0.945, amp: 0.045, depth: -1, rough: 0.48, alpha: 1.0, oct: 7 }
+      far,
+      { base: 0.895, amp: 0.045, depth: -1, rough: 0.48, alpha: 1.0, oct: 7 }
     ];
 
     const prevAlpha = ctx.globalAlpha;

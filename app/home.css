@@ -33,10 +33,22 @@
    a box drawn round the credits, and a box is what the alternative would have
    been.
 
-   `width: 100vw` with the centring translate rather than `inset: 0`, because
-   `.v2-foot` is inside the page's measure and a band that stopped at the
-   column edge would draw a visible vertical seam down both sides of the
-   screen.
+   The band has to reach both screen edges, because `.v2-foot` is inside the
+   page's measure and a band that stopped at the column edge would draw a
+   visible vertical seam down both sides of the screen.
+
+   It reaches them by growing out of its own box by exactly the rail inset,
+   NOT by `width: 100vw` with a centring translate, which is what it used to
+   do and which was wrong twice over. `100vw` counts the scrollbar the page
+   already has, so the band was 15px wider than the space it could occupy;
+   and the box it was centred on is the foot, which the rail had pushed 31px
+   right of the viewport centre, so the translate put half that overhang on
+   one side and the rest off the other. Together they were the whole of the
+   page's horizontal scroll: 1265px of viewport against 1304px of document.
+
+   `--rail` is the one number `.v2-above` is inset by, so `-var(--rail)` on
+   each side lands on the screen edge by construction, at any width, with no
+   reference to the viewport at all. It follows the token to 0 at 760px.
    -------------------------------------------------------------------------- */
 .v2-foot {
   position: relative;
@@ -53,9 +65,8 @@
   z-index: -1;
   top: 0;
   bottom: 0;
-  left: 50%;
-  width: 100vw;
-  transform: translateX(-50%);
+  left: calc(-1 * var(--rail));
+  right: calc(-1 * var(--rail));
   pointer-events: none;
   /* `transparent` rather than a zero-percent color-mix. CSS gradients
      interpolate PREMULTIPLIED, so transparent-to-paper never develops the grey

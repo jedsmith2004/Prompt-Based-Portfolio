@@ -1422,6 +1422,21 @@ const CURSOR_MATRIX_OVER: readonly string[] = [
   'KK.KVVK.',
   '...KKKK.'
 ];
+/**
+ * Top inset for the chat panel when it is pinned to the viewport on a touch
+ * device, in CSS px.
+ *
+ * Deliberately the SAME 64 the desktop branch already clamps `chatUi.y` down
+ * to. That number is not arbitrary there: it is the highest the panel is
+ * allowed to go with the bird perched on its top edge, and the sprite stands
+ * well above its own baseline, so a smaller inset would start cropping him
+ * against the top of the viewport. Reusing it means the pinned layout inherits
+ * a constraint that is already proven rather than guessing a new one — and it
+ * still clears the phone's plate bar (3px hairline plus a 42px bar) by 19px.
+ *
+ * See ON A TOUCH DEVICE THE WINDOW GOES TO THE TOP in `layoutChat`.
+ */
+const CHAT_TOP_INSET = 64;
 const CURSOR_SCALE = 2;
 /** Class the swap puts on <html>. The rule is injected and removed with it. */
 const CURSOR_SWAP_CLASS = 'v2-bird-cursor-swap';
@@ -1698,6 +1713,39 @@ export default function Companion({
       if (reduced) restoreCursor();
     };
     if (motionQuery.addEventListener) motionQuery.addEventListener('change', onMotion);
+
+    /*
+     * THERE IS NO POINTER TO STEAL ON A PHONE.
+     *
+     * Jack, 2026-08-27: "the mouse keeps appearing and it's very jarring,
+     * make it go away on mobile."
+     *
+     * The drawn cursor is a swap: the system pointer is hidden and an
+     * identical pixel one is painted at its coordinates, so that the bird can
+     * pick it up. On a touch screen there is no system pointer to hide and
+     * nothing for the drawing to be identical TO — but a touch still emits
+     * pointer events with real coordinates, so `pointer.seen` went true on
+     * the first tap and an arrow appeared under the reader's thumb, sat
+     * wherever they last touched, and reappeared on the next tap somewhere
+     * else. The joke needs a mouse to be a joke about.
+     *
+     * Queried rather than assumed from the width: a desktop window dragged
+     * narrow still has a mouse and should keep the cursor, and a tablet at
+     * 1024px has none and should not. This is the same test as
+     * `useCoarsePointer` in components/v2/useNarrow.ts, which is the React
+     * side of the same question.
+     *
+     * Live, not read once: a tablet with a keyboard case attached gains a
+     * trackpad mid-session, and restoring the real cursor on the way INTO
+     * coarse is the direction that must never be missed.
+     */
+    const coarseQuery = window.matchMedia('(hover: none), (pointer: coarse)');
+    let coarsePointer = coarseQuery.matches;
+    const onCoarse = () => {
+      coarsePointer = coarseQuery.matches;
+      if (coarsePointer) restoreCursor();
+    };
+    if (coarseQuery.addEventListener) coarseQuery.addEventListener('change', onCoarse);
 
     const atlas = buildAtlas();
     /* Mojang's unmodified 16×16 item texture. It is kept as an image rather
@@ -2633,6 +2681,37 @@ export default function Companion({
       return el ? el.value : '';
     }
 
+    /*
+     * ON A TOUCH DEVICE THE WINDOW GOES TO THE TOP AND HE GOES WITH IT.
+     *
+     * Jack, 2026-08-27: "on mobile, when you click on pip to talk to him,
+     * make him go to the top of the screen, if he does what he does on
+     * desktop and stops where he is, you can't see what you're typing."
+     *
+     * The window opens WHERE HE IS, which is the right rule on a desktop —
+     * the panel belongs to the bird and appearing anywhere else would break
+     * that — and the wrong one the moment a software keyboard exists. He is
+     * usually in the lower half of the screen, the panel is 214px tall with
+     * its input row at the very bottom, and the keyboard takes roughly the
+     * bottom 40% on open. The reader was typing into a row they could not
+     * see, which is the one failure a chat window cannot have.
+     *
+     * Pinning the panel to the top of the viewport fixes it without any
+     * measurement of the keyboard, which is the point: `visualViewport`
+     * reports the inset inconsistently across iOS and Android and not at all
+     * in some in-app browsers, so a layout that reacts to the keyboard is a
+     * layout that is wrong on whichever browser lies. On an 812px screen the
+     * panel is 214 tall, so pinning it at 64 puts its foot at 278 and — via
+     * `chatInputRows` — the draft line at 252, which no keyboard reaches.
+     *
+     * He follows because the seat IS the window's top edge — `seatY` is
+     * `chatUi.y` in both branches — so the glide in the 'chat' case carries
+     * him up there over 0.26s with no extra flight to schedule. Moving the
+     * window is moving the bird.
+     *
+     * Gated on the pointer rather than the width: a tablet at 1024px has the
+     * same keyboard problem and a desktop window dragged to 500px has none.
+     */
     function layoutChat(freeze: boolean) {
       const w = Math.min(340, Math.max(220, W - 24));
       const h = Math.min(214, Math.max(150, H - 150));
@@ -2640,14 +2719,26 @@ export default function Companion({
       chatUi.h = h;
       const sx = bird.x - scrollXNow;
       const sy = bird.y - scrollYNow;
-      if (freeze) {
+      if (coarsePointer) {
+        /* Centred and pinned, every time it is laid out — including on a
+           resize, so rotating the phone mid-conversation does not hand the
+           panel back to the keyboard. */
+        chatUi.x = Math.max(12, Math.round((W - w) * 0.5));
+        chatUi.y = Math.min(CHAT_TOP_INSET, Math.max(8, H - h - 12));
+      } else if (freeze) {
         chatUi.x = Math.max(12, Math.min(W - w - 12, sx - w * 0.5));
         chatUi.y = Math.max(64, Math.min(H - h - 12, sy + 2));
       } else {
         chatUi.x = Math.max(12, Math.min(W - w - 12, chatUi.x));
         chatUi.y = Math.max(64, Math.min(H - h - 12, chatUi.y));
       }
-      chatUi.seatX = Math.max(chatUi.x + 30, Math.min(chatUi.x + w - 30, sx));
+      /* He sits on the middle of the top edge when the panel is pinned: with
+         the window centred rather than dropped under him, clamping his own x
+         into it would seat him wherever he happened to be standing, which on
+         a phone is usually hard against one end of the rail. */
+      chatUi.seatX = coarsePointer
+        ? chatUi.x + w * 0.5
+        : Math.max(chatUi.x + 30, Math.min(chatUi.x + w - 30, sx));
       chatUi.seatY = chatUi.y;
       chatUi.dirty = true;
       positionInput();
@@ -6428,6 +6519,8 @@ export default function Companion({
      */
     function cursorWanted(): boolean {
       if (reduced) return false;
+      /* No mouse, no swap. See THERE IS NO POINTER TO STEAL ON A PHONE. */
+      if (coarsePointer) return false;
       if (document.hidden) return false;
       if (!pointer.seen || !pointerOnScreen()) return false;
       /* NOT `if (pointer.overUi) return false` any more. The swap used to
@@ -7821,6 +7914,7 @@ export default function Companion({
       document.removeEventListener('animationend', onAnimationEnd, true);
       document.removeEventListener('visibilitychange', onVis);
       if (motionQuery.removeEventListener) motionQuery.removeEventListener('change', onMotion);
+      if (coarseQuery.removeEventListener) coarseQuery.removeEventListener('change', onCoarse);
       themeObserver.disconnect();
       ro.disconnect();
       byEl.clear();

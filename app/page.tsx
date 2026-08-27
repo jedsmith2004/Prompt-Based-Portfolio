@@ -18,6 +18,8 @@ import Companion, { type CompanionErrand } from '@/components/v2/Companion';
 import LightSwitch, { type LightSwitchHandle } from '@/components/v2/LightSwitch';
 import DayDial from '@/components/v2/DayDial';
 import { useMode } from '@/components/v2/useMode';
+import { useNarrow } from '@/components/v2/useNarrow';
+import PlateIndex, { splitEyebrow } from '@/components/v2/PlateIndex';
 import ClimbingWall from '@/components/v2/ClimbingWall';
 import Polaroids from '@/components/v2/Polaroids';
 import NeuralPlayground from '@/components/v2/NeuralPlayground';
@@ -291,6 +293,11 @@ export default function V2Page() {
     return s?.shape ?? 'ridgeline';
   }, [active]);
 
+  /* The hero's ridgeline is dressed differently on a phone: a tall frame has
+     no middle to put a band across. See THE PHONE TAKES THE BAND OFF THE TYPE
+     in lib/v2/shapes.ts. */
+  const narrow = useNarrow();
+
   const painter: ShapePainter = useMemo(() => {
     switch (shapeName) {
       case 'wordmark':
@@ -309,9 +316,9 @@ export default function V2Page() {
         return scatter();
       case 'ridgeline':
       default:
-        return ridgeline(1);
+        return ridgeline(1, narrow ? 'tall' : 'wide');
     }
-  }, [shapeName, route]);
+  }, [shapeName, route, narrow]);
 
   const ask = useCallback((q: string) => askJack(q), []);
 
@@ -371,16 +378,35 @@ export default function V2Page() {
           opening seat, because the top of the screen is not a place on the
           page. Its top edge is where the tinted rail begins, so no inset. */}
       <nav className="v2-nav" aria-label="Sections" data-perch>
-        <span className="v2-nav-mark">JS</span>
+        {/*
+          THE MARK IS THE WAY BACK TO THE TOP. Jack, 2026-08-27: "make the JS
+          in the top left go to the splash page."
+
+          It was a `<span>`: a monogram sitting at the head of a column of
+          controls, looking exactly like the one thing in the rail that does
+          nothing. A mark in that position is read as a home button on every
+          site that has one, and this one is at the top of a rail whose entire
+          job is jumping between plates, so the reading was not a mistake.
+
+          `top` is the hero's id, which is why it is also the first entry in
+          `spineIds` — the splash is a plate, and the rail can go there.
+        */}
+        <button
+          type="button"
+          className="v2-nav-mark"
+          onClick={() => jump('top')}
+          aria-label="Back to the top"
+          aria-current={active === 'top' ? 'true' : undefined}
+        >
+          JS
+        </button>
         <ol>
           {SECTIONS.map((s, i) => {
             /* eyebrows arrive pre-numbered, e.g. "01 / FROM THE METAL UP".
                Split so the rail shows the plate number and the tooltip the
-               label, instead of printing the number twice. */
-            const [num, label] = s.eyebrow.includes('/')
-              ? [s.eyebrow.slice(0, s.eyebrow.indexOf('/')).trim(),
-                 s.eyebrow.slice(s.eyebrow.indexOf('/') + 1).trim()]
-              : [String(i + 1).padStart(2, '0'), s.eyebrow];
+               label, instead of printing the number twice. Shared with the
+               phone's sheet so the two indexes cannot disagree. */
+            const [num, label] = splitEyebrow(s.eyebrow, i);
             return (
               <li key={s.id}>
                 <button
@@ -401,6 +427,11 @@ export default function V2Page() {
           <div style={{ '--p': progress } as React.CSSProperties} />
         </div>
       </nav>
+
+      {/* The same index, for the screen the rail is not on. Hidden above the
+          breakpoint by the stylesheet rather than by a condition, so first
+          paint is the same on the server and the client. See PlateIndex.tsx. */}
+      <PlateIndex sections={SECTIONS} active={active} onJump={jump} />
 
       <main className="v2-above">
         <Hero

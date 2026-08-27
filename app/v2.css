@@ -62,6 +62,13 @@
   --sec:  clamp(72px, 11vw, 168px);
   --maxw: 1240px;
 
+  /* Width of the fixed section rail on the left. The page is inset by this on
+     BOTH sides, so the measure stays centred in the viewport rather than
+     centred in what is left of it: a column pushed 62px right of centre reads
+     as a mistake at every width, and it also put every full-bleed band off
+     centre by half that. Zeroed with the rail itself at 760px. */
+  --rail: 62px;
+
   /* --- motion --- */
   --ease: cubic-bezier(0.22, 0.9, 0.28, 1);
 }
@@ -465,7 +472,9 @@ html { overflow-x: hidden; }
   left: 0;
   top: 0;
   bottom: 0;
-  width: 62px;
+  /* the same token the page insets itself by, so the rail and the gutter it
+     is owed cannot drift apart */
+  width: var(--rail);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -475,14 +484,25 @@ html { overflow-x: hidden; }
   backdrop-filter: blur(7px);
   -webkit-backdrop-filter: blur(7px);
 }
+/* A control now, not a monogram: it goes to the splash. The reset is here
+   rather than on the shared button rule because this one keeps display type
+   while every other control in the rail is mono. */
 .v2-nav-mark {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 2px 4px;
+  cursor: pointer;
   font-family: var(--f-display);
   font-variation-settings: "wdth" 84;
   font-weight: 800;
   font-size: 15px;
   letter-spacing: -0.04em;
   color: var(--ink);
+  transition: color 0.18s var(--ease);
 }
+.v2-nav-mark:hover { color: var(--verm-text); }
+.v2-nav-mark[aria-current='true'] { color: var(--verm-text); }
 .v2-nav ol {
   list-style: none;
   margin: auto 0;
@@ -547,8 +567,32 @@ html { overflow-x: hidden; }
   transform: scaleY(var(--p, 0));
 }
 
-/* give the page room for the rail */
-.v2-above, .v2-hero { padding-left: 62px; }
+/*
+   GIVE THE PAGE ROOM FOR THE RAIL — ON BOTH SIDES.
+
+   Jack, 2026-08-27: "Some things are not even on the left and right."
+
+   They were not. The rail is 62px of fixed furniture down the left edge, and
+   the page used to clear it with `padding-left` alone. That does keep the
+   type off the rail, but it also means the measure is centred inside the
+   1203px that is left rather than inside the 1265px viewport: measured at
+   1265 wide, the column sat 119.6px from the left edge and 57.6px from the
+   right. Exactly the rail, in one gutter and not the other.
+
+   Padding on both sides costs 62px of measure at the widest end and buys back
+   a column that is actually centred — and with it every full-bleed band on
+   the page, which was inheriting the same 31px offset from the box it was
+   drawn against. `--maxw` already caps the line length well before this
+   matters to the reading measure.
+
+   `.v2-hero` is NOT in this selector any more. It is a child of `.v2-above`,
+   so naming both applied the inset twice and the hero's own column sat 181.6
+   from the left against 57.6 from the right — the widest offender on the page
+   and the first thing anybody sees. */
+.v2-above {
+  padding-left: var(--rail);
+  padding-right: var(--rail);
+}
 
 @media (max-width: 760px) {
   .v2-nav {
@@ -573,7 +617,195 @@ html { overflow-x: hidden; }
     transform-origin: 0 50%;
     transform: scaleX(var(--p, 0));
   }
-  .v2-above, .v2-hero { padding-left: 0; }
+  /* the rail is a 3px bar across the top down here, so it owes the page no
+     gutter: --rail goes to zero and both insets collapse with it */
+  :root { --rail: 0px; }
+  .v2-above { padding-left: 0; padding-right: 0; }
+}
+
+/* ==========================================================================
+   the plate index, on a phone
+   See components/v2/PlateIndex.tsx for why this is a sheet and not a strip of
+   numbers. Everything here is off above the breakpoint: the rail is the index
+   at that width and two of them would be one too many.
+   ========================================================================== */
+.v2-platebar { display: none; }
+.v2-platesheet { display: none; }
+
+@media (max-width: 760px) {
+  /* The bar sits UNDER the 3px progress hairline, which is why the hairline
+     keeps z-index 3 and this takes 2: progress is the one piece of the rail
+     that survived down here and it should not be covered by its replacement. */
+  .v2-platebar {
+    position: fixed;
+    z-index: 2;
+    top: 3px;
+    left: 0;
+    right: 0;
+    height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 0 14px;
+    border-bottom: 1px solid var(--rule);
+    background: color-mix(in srgb, var(--paper) 82%, transparent);
+    backdrop-filter: blur(7px);
+    -webkit-backdrop-filter: blur(7px);
+  }
+
+  .v2-platebar-mark {
+    appearance: none;
+    background: none;
+    border: 0;
+    padding: 4px 6px;
+    margin-left: -6px;
+    cursor: pointer;
+    font-family: var(--f-display);
+    font-variation-settings: "wdth" 84;
+    font-weight: 800;
+    font-size: 15px;
+    letter-spacing: -0.04em;
+    color: var(--ink);
+  }
+
+  /* The current plate, and the control that opens the rest. One target rather
+     than a label beside a button: the whole right-hand half of the bar is the
+     thing you tap, which is the only size worth having on a phone. */
+  .v2-platebar-open {
+    appearance: none;
+    background: none;
+    border: 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    padding: 6px 2px 6px 10px;
+    font-family: var(--f-mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+  }
+  .v2-platebar-open i {
+    font-style: normal;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--verm-text);
+  }
+  /* The plate names run long. The number and the chevron are fixed, so the
+     name is the part that gives, and it ellipsises rather than wrapping the
+     bar to two lines. */
+  .v2-platebar-open span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .v2-platebar-open svg { flex: none; color: var(--ink-3); }
+  .v2-platebar-open[aria-expanded='true'] svg { transform: scaleY(-1); }
+
+  /* --- the sheet --------------------------------------------------------- */
+  .v2-platesheet {
+    display: block;
+    position: fixed;
+    z-index: 40;
+    inset: 0;
+  }
+  .v2-platesheet-scrim {
+    appearance: none;
+    border: 0;
+    padding: 0;
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    background: color-mix(in srgb, var(--ink) 42%, transparent);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+  }
+  .v2-platesheet-panel {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    /* Never taller than the screen, and scrollable if the list outgrows it.
+       svh rather than vh so a mobile browser's collapsing toolbar cannot push
+       the last plate under the chrome. */
+    max-height: 100svh;
+    overflow-y: auto;
+    background: var(--paper);
+    border-bottom: 2px solid var(--rule-hard);
+    padding: 14px 16px calc(18px + env(safe-area-inset-bottom, 0px));
+    animation: v2-platesheet-in 0.24s var(--ease) both;
+  }
+  @keyframes v2-platesheet-in {
+    from { transform: translateY(-8px); opacity: 0; }
+    to   { transform: none; opacity: 1; }
+  }
+
+  .v2-platesheet-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 10px;
+    border-bottom: 2px solid var(--rule-hard);
+    font-family: var(--f-mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+  .v2-platesheet-close {
+    appearance: none;
+    background: none;
+    border: 0;
+    cursor: pointer;
+    padding: 8px;
+    margin: -8px -8px -8px 0;
+    color: var(--ink-2);
+  }
+
+  .v2-platesheet-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .v2-platesheet-list button {
+    appearance: none;
+    background: none;
+    border: 0;
+    cursor: pointer;
+    width: 100%;
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    /* 44px of target once the padding is counted, which is the floor for a
+       thumb and the reason the list is not set tighter. */
+    padding: 13px 2px;
+    border-bottom: 1px solid var(--rule);
+    text-align: left;
+    font-family: var(--f-mono);
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+  }
+  .v2-platesheet-list li:last-child button { border-bottom: 0; }
+  .v2-platesheet-list i {
+    font-style: normal;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-3);
+    flex: none;
+  }
+  .v2-platesheet-list button[aria-current='true'] { color: var(--verm-text); }
+  .v2-platesheet-list button[aria-current='true'] i { color: var(--verm-text); }
+}
+
+@media (max-width: 760px) and (prefers-reduced-motion: reduce) {
+  .v2-platesheet-panel { animation: none; }
 }
 
 /* ---- the CV, offered at the top ----------------------------------------
@@ -659,10 +891,39 @@ html { overflow-x: hidden; }
   margin: clamp(26px, 4vw, 50px) 0 0;
   font-size: clamp(44px, 9.6vw, 132px);
 }
-/* each line is masked, then lifted out of the mask on load */
+/*
+   EACH LINE IS MASKED, THEN LIFTED OUT OF THE MASK ON LOAD.
+
+   Jack, 2026-08-27: "on the splash page the 'g' in 'edge' is cut off on the
+   bottom."
+
+   The mask is `overflow: hidden` on a box whose height is the line box, and
+   `.v2-display` sets a line-height of 0.86 — tighter than the em, which is
+   the whole point of the setting and also means the font's descenders reach
+   below the box that clips them. Measured at the 122.9px the title takes at
+   1265 wide: the baseline sits 93.3px down, the descender ink runs 20px past
+   it, and the mask closed at 110.6px. "Out to the edge." overshot by 3.4px —
+   the 'g', plus the 0.7px half of the 1.4px stroke the second line is set in,
+   which the solid first line does not pay. "From the metal up." overshot by
+   1.7px on the 'p', which is the same bug one letter quieter.
+
+   Measured against the loaded face, "Out to the edge." wants 0.068em of
+   padding to clear its own ink. 0.1em is that plus about 4px of headroom at
+   the top of the clamp, which is the margin the fallback stack needs during
+   the moment before the webfont lands — Helvetica Neue's descenders sit
+   0.125em below this line-height and system-ui's 0.227em, so a value tuned
+   exactly to Bricolage would clip on the way in and then stop clipping.
+
+   Both numbers are ems, so one value holds from the 44px end of the clamp to
+   the 210px end. The matching negative margin gives the space straight back
+   to the layout: net height per line is lh + 0.04em, which is what it was
+   before any of this, and the measured title box is 221.2px either way. This
+   buys descender room INSIDE the mask, not a looser setting. */
 .v2-hero .v2-line {
   display: block;
   overflow: hidden;
+  padding-bottom: 0.1em;
+  margin-bottom: -0.06em;
 }
 .v2-hero .v2-line-in {
   display: block;
@@ -895,6 +1156,30 @@ html { overflow-x: hidden; }
 /* alternate columns hang a little lower, so the set reads as dropped rather
    than as a grid of thumbnails */
 .v2-polas .v2-pola:nth-child(even) { margin-top: clamp(12px, 2.6vw, 38px); }
+
+/*
+   THREE ON A PHONE, SIX ON A DESKTOP.
+
+   Jack, 2026-08-27: "for the polaroid highlights under the map, only show
+   three on mobile, but all 6 on desktop."
+
+   The shelf is a grid that reflows to one column below about 640px, so on a
+   phone the six do not read as a scattered set at all — they are a vertical
+   stack of six large photographs between the route map and the next plate,
+   and the reader scrolls past four of them to get out. Three is a shelf; six
+   is a gallery nobody asked to open.
+
+   Cut in CSS rather than by slicing the array in the component, for one
+   reason that matters: `useNarrow` cannot know the answer until after the
+   first paint, so slicing would render six on the phone and then take three
+   away in front of the reader. `display: none` is correct from the first
+   frame, on the server as well, and it takes the hidden three out of the
+   accessibility tree with it. The photographs are `loading="lazy"`, so the
+   three that are never displayed are never fetched either — which is the
+   saving that matters on the connection a phone is likely to be on. */
+@media (max-width: 760px) {
+  .v2-polas .v2-pola:nth-child(n + 4) { display: none; }
+}
 
 .v2-pola {
   position: relative;
@@ -4689,10 +4974,28 @@ html[data-v2-theme='dark']  body { background: #15130E; }
   border-right: 1px solid var(--verm-text);
   border-bottom: 1px solid var(--verm-text);
 }
+/*
+   THE LABEL HANGS OFF THE RIGHT EDGE OF THE INTERVAL, INWARDS.
+
+   It is `nowrap` because "Graduated, first class" is one phrase and breaking
+   it mid-clause under a one-year interval reads as two facts. But the box it
+   sits in is one year cell wide, and a nowrap line longer than its box
+   overflows to the RIGHT whatever `text-align` says — text-align only places
+   a line that already fits. At 375px the cell is 74px against 167px of label,
+   so the last word ran to x=408 on a 375px screen and dragged the whole
+   document's scroll width with it. That was the horizontal scrollbar on
+   phones, and it was this one line of type.
+
+   Pinning it to `right: 0` instead of letting it start at `left: 0` gives the
+   same right-aligned reading and sends the overflow leftwards, into the empty
+   paper over the degree band where there is nothing to collide with. Nothing
+   depends on this element's height — the band is a fixed 106px and the
+   interval is absolutely placed inside it — so taking it out of flow costs
+   the plate nothing. */
 .v2-career-grad-label {
-  display: block;
-  margin-top: 7px;
-  text-align: right;
+  position: absolute;
+  top: 16px;
+  right: 0;
   white-space: nowrap;
   font-family: var(--f-mono);
   font-size: 11.5px;
@@ -6482,6 +6785,87 @@ html.v2-palette-driven.v2-mode-transition body {
 }
 
 /* --------------------------------------------------------------------------
+   ON A PHONE THE BOARDS HANG ABOVE THE TYPE, NOT ACROSS IT.
+
+   Jack, 2026-08-27: "on my phone the CV banners hang over my name."
+
+   They did, by 32px. The hanger is pinned to the top of the hero and the
+   hero centres its inner box, so the two were measured from opposite ends of
+   the plate and nothing held them apart: measured at 375x812 the boards ran
+   to y=194 and the metadata line carrying his name started at y=162. On a
+   desktop the same arithmetic has 400px of slack and the collision never
+   happens, which is why it survived.
+
+   Three things are fixed here and they are one fix:
+
+   1. THE BOARDS GET OUT OF THE WAY OF THE BAR. The phone now has a plate bar
+      across the top (see PlateIndex.tsx), and the hanger's `top: 0` put the
+      boards straight over it. `--cv-drop` starts them below it.
+
+   2. THEY GET SMALLER. Two 45px boards on 110px of rope is a desktop object
+      rendered on a phone. At this width they are furniture at the top of the
+      plate, not the subject of it.
+
+   3. THE HERO MEASURES FROM THE TOP. `align-items: center` is why adding
+      clearance to `.v2-hero-inner` used to buy only half of itself: growing
+      the inner box moves its own centre up as the padding pushes the content
+      down. Top-aligning at this width means the padding below is the gap,
+      exactly, and the plate is taller than the screen here anyway — there is
+      nothing left to centre.
+
+   The clearance is arithmetic, not a guess: rail (5) + the longer rope (72) +
+   the board (34) = 111, so the hanger is 112 tall and its foot lands at
+   --cv-drop + 112 = 162.
+
+   `.v2-hero` already contributes its own `padding-top` of 8vh (65px at 812),
+   and the inner's padding sits INSIDE that, so the two add. 116 here puts the
+   metadata line at 181 and leaves 19px of air under the boards. Budget the
+   gap against 65 + this number, not against this number alone — the first
+   pass used 178 and bought 81px of dead air at the top of a phone screen,
+   which pushed the scroll cue off the bottom of it. If you change a rope
+   here, change the height and this padding with it.
+   -------------------------------------------------------------------------- */
+@media (max-width: 760px) {
+  /*
+     The plate also has to FIT. With the boards clear of the type the splash
+     still ran 66px past the screen, which put "Read on" just under the fold —
+     the one element on the plate whose whole job is to be seen without
+     scrolling. The two bottom paddings, the hero's and the inner's, were
+     9vh and 5vh: 114px of air below a scroll cue on a screen with none to
+     spare. They come back to a phone's scale here and the plate lands inside
+     100svh.
+  */
+  .v2-hero {
+    align-items: flex-start;
+    padding-bottom: clamp(16px, 2.5vh, 28px);
+  }
+
+  .v2-cv-hanger {
+    --cv-drop: 50px;
+    top: var(--cv-drop);
+    left: 10px;
+    width: 106px;
+    height: 112px;
+  }
+  .v2-cv-swing.is-0 { --rope: 34px; }
+  .v2-cv-swing.is-1 { --rope: 72px; }
+  .v2-cv-hanger a {
+    left: 6px;
+    width: 94px;
+    min-height: 34px;
+    padding: 4px 6px;
+    gap: 4px;
+  }
+  .v2-cv-hanger strong { font-size: 17px; }
+  .v2-cv-hanger span { font-size: 9px; }
+
+  .v2-hero-inner {
+    padding-top: 116px;
+    padding-bottom: clamp(14px, 2.5vh, 28px);
+  }
+}
+
+/* --------------------------------------------------------------------------
    EMPHASIS. Two marks per plate, and only two kinds of mark.
 
    The old third treatment, `.v2-em-3`, was a wavy underline with a chromatic
@@ -6693,7 +7077,24 @@ html.v2-palette-driven.v2-mode-transition body {
   font: 800 17px/1 var(--f-display);
   font-style: normal;
   opacity: 0;
-  transform: scale(2.1) rotate(14deg);
+  /*
+     THE WIND-UP LIVES IN THE KEYFRAME, NOT IN THE RESTING STATE.
+
+     The stamp slams down from 2.1x, and this rule used to hold that 2.1x as
+     its resting transform so the animation had somewhere to come from. But
+     rest is where this element spends all of its time, `opacity: 0` does not
+     take an element out of the scrollable overflow, and a 58px box scaled 2.1
+     is 147.6px wide: sitting 20.8px off the envelope's right edge, the
+     invisible stamp reached x=385 on a 375px screen. Ten of the phone's
+     thirty-four pixels of horizontal scroll were a stamp nobody could see.
+
+     Declaring the same 2.1x as the keyframe's `from` plays the identical
+     280ms — an animation with an explicit `from` does not need the element to
+     be sitting in it — and leaves rest at the size the stamp actually is.
+     What overflow remains is confined to the seal itself, where the backstop
+     on `html` covers it and where the reader is watching an envelope rather
+     than the page edge. */
+  transform: scale(1) rotate(14deg);
 }
 .v2-note-stage.is-sealing .v2-mail {
   animation: v2-mail-pack 2.1s var(--ease) forwards;
@@ -6739,7 +7140,10 @@ html.v2-palette-driven.v2-mode-transition body {
   100% { transform: scale(0.24); }
 }
 @keyframes v2-envelope-close { to { transform: rotateX(0deg); } }
-@keyframes v2-stamp { to { opacity: 1; transform: scale(1) rotate(-5deg); } }
+@keyframes v2-stamp {
+  from { opacity: 0; transform: scale(2.1) rotate(14deg); }
+  to   { opacity: 1; transform: scale(1) rotate(-5deg); }
+}
 @keyframes v2-mail-away {
   0%, 99% { opacity: 1; }
   0% { transform: translate(0, 0) scale(0.24); }
